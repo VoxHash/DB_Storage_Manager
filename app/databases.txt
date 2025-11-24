@@ -1,2 +1,0 @@
-URL_TO_PHP/db_master_storage.php?dbname=DBNAME1
-URL_TO_PHP/db_master_storage.php?dbname=DBNAME2
