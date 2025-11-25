@@ -1,15 +1,16 @@
 # 🗺️ DB Storage Manager Roadmap
 
-## 🎯 Current Version: 1.0.0
+## 🎯 Current Version: 1.0.0 (Python/PyQt6)
 
 ### ✅ Completed Features
 - Multi-database support (PostgreSQL, MySQL, SQLite, MongoDB, Redis)
 - Storage analysis dashboard with visualizations
-- Secure connection management with encryption
-- Advanced query console with Monaco editor
+- Secure connection management with encryption (cryptography)
+- Advanced query console with safe mode
 - Backup and restore system with scheduling
-- Cross-platform desktop application
-- Demo environment with Docker stack
+- Cross-platform desktop application (PyQt6)
+- Local, S3, and Google Drive backup adapters
+- Scheduled backup manager
 
 ## 🚀 Upcoming Features
 
@@ -32,6 +33,11 @@
   - Storage growth predictions
   - Capacity planning tools
 
+- **SSH Tunneling**
+  - Secure remote database access
+  - Key-based authentication
+  - Tunnel management
+
 ### Phase 2: Advanced Features (Q2 2025)
 - **Plugin System**
   - Plugin API development
@@ -48,6 +54,11 @@
   - Schema migration tools
   - Data synchronization
 
+- **Enhanced Visualizations**
+  - Interactive charts with PyQt6-Charts
+  - Custom dashboard widgets
+  - Export to PNG/PDF
+
 ### Phase 3: Platform Expansion (Q3 2025)
 - **Mobile Companion App**
   - iOS and Android support
@@ -58,6 +69,11 @@
   - Browser-based access
   - Real-time collaboration
   - Cloud deployment
+
+- **API Server**
+  - REST API for integrations
+  - WebSocket support
+  - API documentation
 
 ### Phase 4: Professional Features (Q4 2025)
 - **Enterprise Features**
@@ -70,27 +86,54 @@
   - Scripting support
   - API for integrations
 
+- **Professional Tools**
+  - Advanced analytics
+  - Usage reporting
+  - Performance monitoring
+
 ## 🎯 Priority Focus
 
 ### High Priority
-1. Additional database support
-2. Real-time monitoring
-3. Advanced security features
-4. Plugin system
-5. Cloud integration
+1. SSH tunneling support
+2. Additional database support (Oracle, SQL Server)
+3. Real-time monitoring
+4. Advanced security features
+5. Enhanced visualizations
 
 ### Medium Priority
-1. Advanced dashboard customization
-2. Query optimization features
-3. Data management tools
-4. Web interface
-5. Mobile app
+1. Plugin system
+2. Cloud integration
+3. Advanced dashboard customization
+4. Query optimization features
+5. Data management tools
 
 ### Low Priority
-1. Enterprise features
-2. Advanced data management
-3. Professional tools
-4. Developer SDK
+1. Web interface
+2. Mobile app
+3. Enterprise features
+4. Advanced data management
+5. Professional tools
+
+## 🔧 Technical Improvements
+
+### Performance
+- Connection pooling
+- Query result caching
+- Optimized UI rendering
+- Background processing improvements
+
+### User Experience
+- Enhanced error messages
+- Progress indicators
+- Keyboard shortcuts
+- Context menus
+- Drag and drop support
+
+### Developer Experience
+- Comprehensive test suite
+- API documentation
+- Developer guides
+- Plugin development tools
 
 ---
 

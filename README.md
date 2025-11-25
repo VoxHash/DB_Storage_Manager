@@ -1,16 +1,16 @@
 # 🗄️ DB Storage Manager v1.0.0
 
-> **DB Storage Manager** - A professional desktop application for visualizing and managing database storage, growth, and backups across multiple database engines. Built with Electron, React, and TypeScript for cross-platform excellence.
+> **DB Storage Manager** - A professional desktop application for visualizing and managing database storage, growth, and backups across multiple database engines. Built with Python and PyQt6 for cross-platform excellence.
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/voxhash/db-storage-manager)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Electron](https://img.shields.io/badge/electron-31+-blue.svg)](https://electronjs.org/)
-[![React](https://img.shields.io/badge/react-18+-blue.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/typescript-5.0+-blue.svg)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![PyQt6](https://img.shields.io/badge/PyQt6-6.6+-blue.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 
 ## ✨ Features
 
 ### 🗄️ **Multi-Database Support**
+
 - **PostgreSQL** - Full driver with pg_stat analysis and pg_dump/pg_restore
 - **MySQL/MariaDB** - Complete INFORMATION_SCHEMA support with mysqldump
 - **SQLite** - File-based operations with PRAGMA analysis
@@ -18,109 +18,123 @@
 - **Redis** - Key-value analysis and memory usage tracking
 
 ### 📊 **Storage Analysis Dashboard**
+
 - **Comprehensive Metrics** - Per-database and per-table size analysis
-- **Visual Charts** - Interactive bar charts, pie charts, and treemaps
+- **Visual Charts** - Interactive charts and visualizations
 - **Growth Trends** - Historical storage growth tracking
 - **Index Analysis** - Index size and bloat estimation
-- **Export Capabilities** - PNG charts and CSV data export
+- **Export Capabilities** - CSV data export
 
 ### 🔐 **Secure Connection Management**
-- **Encrypted Storage** - All credentials encrypted using libsodium
-- **SSH Tunneling** - Secure remote database access
+
+- **Encrypted Storage** - All credentials encrypted using cryptography (Fernet)
+- **SSH Tunneling** - Secure remote database access (planned)
 - **Safe Mode** - Blocks dangerous operations by default
 - **Connection Testing** - One-click connection validation
 
 ### 🖥️ **Advanced Query Console**
-- **Monaco Editor** - Professional code editor with syntax highlighting
-- **Multi-Tab Interface** - Manage multiple queries simultaneously
-- **Query History** - Persistent query history and favorites
-- **Explain Plans** - SQL query optimization analysis
+
+- **Multi-Database Support** - Execute queries across different database types
 - **Safe Execution** - User-controlled write operations
+- **Query Results** - Tabular result display
+- **Explain Plans** - Query optimization analysis
 
 ### 💾 **Backup & Restore System**
+
 - **Local Backups** - File-based backup with compression
 - **S3 Integration** - Cloud backup with S3-compatible storage
-- **Scheduled Backups** - Cron-based backup scheduling
+- **Google Drive Integration** - Backup to Google Drive
+- **Scheduled Backups** - Automated backup scheduling
 - **Encrypted Storage** - Secure backup encryption
 - **One-Click Restore** - Easy database restoration
 
 ### 🎨 **Modern User Interface**
-- **Auto Theme Detection** - System light/dark theme support
-- **Professional Design** - Clean, modern interface with shadcn/ui
-- **Responsive Layout** - Optimized for all screen sizes
-- **Cross-Platform** - Native look and feel on Windows, macOS, and Linux
 
-### 🐳 **Demo Environment**
-- **Docker Stack** - Complete demo database environment
-- **Pre-seeded Data** - Sample data for immediate testing
-- **All Database Types** - PostgreSQL, MySQL, MongoDB, Redis
-- **Easy Setup** - Single command to start demo stack
+- **Native Look** - PyQt6 provides native look and feel
+- **Professional Design** - Clean, modern interface
+- **Cross-Platform** - Windows, macOS, and Linux support
+- **Theme Support** - Light, dark, and system themes
+
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18.0.0 or higher
-- pnpm 8.0.0 or higher
-- Docker (for demo stack)
+
+- Python 3.10 or higher
+- pip or pipenv
 
 ### Installation
 
-#### Method 1: Development Setup (Recommended)
+#### Method 1: Using pip (Recommended)
 
 1. **Clone Repository**
+
    ```bash
    git clone https://github.com/voxhash/db-storage-manager.git
    cd db-storage-manager
    ```
 
 2. **Install Dependencies**
+
    ```bash
-   pnpm install
+   pip install -r requirements.txt
    ```
 
-3. **Start Demo Stack (Optional)**
+3. **Run Application**
    ```bash
-   pnpm demo:up
+   python -m db_storage_manager.main
    ```
 
-4. **Run Application**
+#### Method 2: Using setup.py
+
+1. **Install Package**
+
    ```bash
-   pnpm dev
+   pip install -e .
    ```
 
-#### Method 2: Production Build
-
-1. **Build Application**
+2. **Run Application**
    ```bash
-   pnpm build
+   db-storage-manager
    ```
 
-2. **Create Distribution**
+#### Method 3: Development Setup
+
+1. **Create Virtual Environment**
+
    ```bash
-   pnpm dist
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
-3. **Install Application**
-   - **Windows**: Run the generated installer
-   - **macOS**: Mount the DMG and drag to Applications
-   - **Linux**: Install the appropriate package (.deb, .rpm, .pkg.tar.zst)
+2. **Install Dependencies**
+
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run Application**
+   ```bash
+   python -m db_storage_manager.main
+   ```
 
 ## 🎯 Usage
 
 ### Adding Database Connections
 
 1. **Open Application** - Launch DB Storage Manager
-2. **Add Connection** - Click "Add Connection" button
-3. **Configure Settings** - Enter database details and credentials
-4. **Test Connection** - Verify connectivity before saving
-5. **Save Connection** - Encrypted credentials are stored securely
+2. **Navigate to Connections** - Click "Connections" tab
+3. **Add Connection** - Click "Add Connection" button
+4. **Configure Settings** - Enter database details and credentials
+5. **Test Connection** - Click "Test Connection" to verify connectivity
+6. **Save Connection** - Encrypted credentials are stored securely
 
 ### Analyzing Storage
 
-1. **Select Connection** - Choose from your saved connections
+1. **Select Connection** - Choose from your saved connections in Dashboard
 2. **Run Analysis** - Click "Analyze" to scan database storage
-3. **View Results** - Explore detailed storage metrics and charts
-4. **Export Data** - Save charts and data for reporting
+3. **View Results** - Explore detailed storage metrics and tables
+4. **Export Data** - Save data for reporting (planned)
 
 ### Managing Backups
 
@@ -132,15 +146,17 @@
 ### Using Query Console
 
 1. **Open Console** - Navigate to Query Console tab
-2. **Write Queries** - Use Monaco editor for SQL/NoSQL queries
-3. **Execute Safely** - Safe mode blocks dangerous operations
-4. **View Results** - Analyze query results and explain plans
+2. **Select Connection** - Choose database connection
+3. **Write Queries** - Enter SQL/NoSQL queries
+4. **Execute Safely** - Safe mode blocks dangerous operations
+5. **View Results** - Analyze query results
 
 ## 🔧 Configuration
 
 ### Settings
 
-Access via **Settings** menu:
+Access via **Settings** tab:
+
 - **Theme** - Light, dark, or system theme
 - **Language** - Internationalization support
 - **Safe Mode** - Enable/disable write operations
@@ -149,84 +165,90 @@ Access via **Settings** menu:
 
 ### Security
 
-- **Encrypted Storage** - All credentials encrypted with libsodium
+- **Encrypted Storage** - All credentials encrypted with cryptography (Fernet)
 - **Local-Only** - No external data transmission
 - **Safe Mode** - Prevents accidental data modification
-- **SSH Tunneling** - Secure remote connections
+- **SSH Tunneling** - Secure remote connections (planned)
 
 ## 📁 Supported Databases
 
 ### Relational Databases
+
 - **PostgreSQL** 12+ - Full feature support
 - **MySQL** 8+ - Complete compatibility
 - **MariaDB** 10+ - MySQL-compatible features
 - **SQLite** 3+ - File-based database support
 
 ### NoSQL Databases
+
 - **MongoDB** 4+ - Document database analysis
 - **Redis** 6+ - Key-value store management
 
 ## 🛠️ Development
 
 ### Project Structure
+
 ```
-DB_Storage_Manager/
-├── apps/
-│   ├── desktop/              # Main Electron application
-│   │   ├── electron/         # Main process and database drivers
-│   │   ├── src/              # React frontend
-│   │   └── public/           # Static assets
-│   └── demo/                 # Demo database stack
-├── docs/                     # Documentation
-├── .github/workflows/        # CI/CD pipelines
-└── package.json              # Root configuration
+db_storage_manager/
+├── db/                    # Database connection modules
+│   ├── base.py           # Base connection interface
+│   ├── factory.py        # Connection factory
+│   ├── postgres.py       # PostgreSQL connection
+│   ├── mysql.py          # MySQL connection
+│   ├── sqlite.py         # SQLite connection
+│   ├── mongo.py          # MongoDB connection
+│   └── redis.py          # Redis connection
+├── backups/              # Backup system
+│   ├── base.py           # Base backup adapter
+│   ├── manager.py        # Backup manager
+│   ├── local.py          # Local backup adapter
+│   ├── s3.py             # S3 backup adapter
+│   ├── googledrive.py    # Google Drive adapter
+│   └── scheduler.py      # Scheduled backup manager
+├── security/             # Security modules
+│   └── store.py          # Encrypted storage
+├── gui/                  # PyQt6 GUI components
+│   ├── main_window.py    # Main window
+│   ├── dashboard.py      # Dashboard widget
+│   ├── connections.py    # Connections widget
+│   ├── query.py          # Query console widget
+│   ├── backups.py        # Backups widget
+│   └── settings.py       # Settings widget
+├── config.py            # Configuration
+└── main.py              # Application entry point
 ```
 
-### Available Scripts
+### Available Commands
 
 ```bash
 # Development
-pnpm dev                     # Start development server
-pnpm build                   # Build application
-pnpm dist                    # Create distribution packages
-
-# Demo Stack
-pnpm demo:up                 # Start demo databases
-pnpm demo:down               # Stop demo databases
-
-# Testing
-pnpm test                    # Run tests
-pnpm test:ui                 # Run tests with UI
-pnpm test:coverage           # Run tests with coverage
+python -m db_storage_manager.main    # Run application
+python -m pytest                     # Run tests
 
 # Code Quality
-pnpm lint                    # Run linter
-pnpm lint:fix                # Fix linting issues
-pnpm typecheck               # Type checking
-pnpm format                  # Format code
+black .                              # Format code
+flake8 .                            # Lint code
+mypy .                              # Type checking
 ```
 
 ### Building from Source
 
 1. **Clone Repository**
+
    ```bash
    git clone https://github.com/voxhash/db-storage-manager.git
    cd db-storage-manager
    ```
 
 2. **Install Dependencies**
+
    ```bash
-   pnpm install
+   pip install -r requirements.txt
    ```
 
-3. **Build Application**
+3. **Run Application**
    ```bash
-   pnpm build
-   ```
-
-4. **Create Distribution**
-   ```bash
-   pnpm dist
+   python -m db_storage_manager.main
    ```
 
 ## 🔧 Troubleshooting
@@ -234,21 +256,31 @@ pnpm format                  # Format code
 ### Common Issues
 
 **Application won't start:**
-- Ensure Node.js 18+ is installed
-- Run `pnpm install` to install dependencies
+
+- Ensure Python 3.10+ is installed
+- Run `pip install -r requirements.txt` to install dependencies
 - Check system requirements
 
 **Database connection fails:**
+
 - Verify database credentials
 - Check network connectivity
 - Ensure database server is running
 
 **Backup operations fail:**
+
 - Check disk space availability
 - Verify backup directory permissions
 - Ensure database is accessible
 
+**PyQt6 installation issues:**
+
+- On Linux: `sudo apt-get install python3-pyqt6` or `sudo yum install python3-qt6`
+- On macOS: `brew install pyqt6`
+- On Windows: pip should work directly
+
 **Performance issues:**
+
 - Close unnecessary applications
 - Check system memory usage
 - Restart the application
@@ -280,15 +312,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎉 Acknowledgments
 
-- **Electron** - Cross-platform desktop framework
-- **React** - Modern UI library
-- **TypeScript** - Type-safe development
-- **shadcn/ui** - Beautiful UI components
-- **Database Drivers** - pg, mysql2, better-sqlite3, mongodb, redis
+- **PyQt6** - Cross-platform GUI framework
+- **Python** - Programming language
+- **Database Drivers** - psycopg2, pymysql, aiosqlite, pymongo, redis
 - **Community** - Feedback and contributions
 
 ---
 
 **Made with ❤️ by VoxHash**
 
-*DB Storage Manager - Professional database management made simple!* 🗄️✨
+_DB Storage Manager - Professional database management made simple!_ 🗄️✨

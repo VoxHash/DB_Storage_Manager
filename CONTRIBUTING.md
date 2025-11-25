@@ -29,45 +29,54 @@ Want to contribute code? Awesome! Here's how:
    cd db-storage-manager
    ```
 
-3. **Create a feature branch**
+3. **Create a virtual environment**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+4. **Create a feature branch**
    ```bash
    git checkout -b feature/amazing-feature
    ```
 
-4. **Install dependencies**
+5. **Install dependencies**
    ```bash
-   pnpm install
+   pip install -r requirements.txt
+   pip install -r requirements.txt -e ".[dev]"  # For development dependencies
    ```
 
-5. **Make your changes**
-6. **Test your changes**
+6. **Make your changes**
+7. **Test your changes**
    ```bash
-   pnpm test
-   pnpm lint
-   pnpm typecheck
+   pytest
+   black . --check
+   flake8 .
+   mypy .
    ```
 
-7. **Commit your changes**
+8. **Commit your changes**
    ```bash
    git commit -m "✨ Add amazing feature"
    ```
 
-8. **Push to your fork**
+9. **Push to your fork**
    ```bash
    git push origin feature/amazing-feature
    ```
 
-9. **Create a Pull Request**
+10. **Create a Pull Request**
 
 ## 📋 Development Guidelines
 
 ### 🎨 Code Style
-- Use **TypeScript** for all new code
-- Follow **React** best practices and hooks
-- Use **ESLint** and **Prettier** for formatting
+- Use **Python 3.10+** for all new code
+- Follow **PEP 8** style guide
+- Use **black** for code formatting
 - Write **clear, self-documenting code**
 - Keep functions focused and small
 - Use meaningful variable and function names
+- Add type hints where appropriate
 
 ### 🧪 Testing
 - Test all new features thoroughly
@@ -76,13 +85,15 @@ Want to contribute code? Awesome! Here's how:
 - Test on Windows, macOS, and Linux
 - Test backup and restore operations
 - Test query console functionality
+- Aim for high test coverage
 
 ### 📚 Documentation
 - Update documentation for new features
-- Add JSDoc comments for new functions
+- Add docstrings for new functions and classes
 - Update README if needed
 - Include examples in your code
 - Update changelog for significant changes
+- Follow Google or NumPy docstring style
 
 ## 🎯 Contribution Areas
 
@@ -117,39 +128,55 @@ Want to contribute code? Awesome! Here's how:
 ## 🏗️ Project Structure
 
 ```
-db-storage-manager/
-├── apps/
-│   ├── desktop/              # Main Electron application
-│   │   ├── electron/         # Main process and database drivers
-│   │   ├── src/              # React frontend
-│   │   └── public/           # Static assets
-│   └── demo/                 # Demo database stack
-├── docs/                     # Documentation
-├── .github/workflows/        # CI/CD pipelines
-└── package.json              # Root configuration
+db_storage_manager/
+├── db/                    # Database connection modules
+│   ├── base.py           # Base connection interface
+│   ├── factory.py        # Connection factory
+│   ├── postgres.py       # PostgreSQL connection
+│   ├── mysql.py          # MySQL connection
+│   ├── sqlite.py         # SQLite connection
+│   ├── mongo.py          # MongoDB connection
+│   └── redis.py          # Redis connection
+├── backups/              # Backup system
+│   ├── base.py           # Base backup adapter
+│   ├── manager.py        # Backup manager
+│   ├── local.py          # Local backup adapter
+│   ├── s3.py             # S3 backup adapter
+│   ├── googledrive.py    # Google Drive adapter
+│   └── scheduler.py      # Scheduled backup manager
+├── security/             # Security modules
+│   └── store.py          # Encrypted storage
+├── gui/                  # PyQt6 GUI components
+│   ├── main_window.py    # Main window
+│   ├── dashboard.py      # Dashboard widget
+│   ├── connections.py    # Connections widget
+│   ├── query.py          # Query console widget
+│   ├── backups.py        # Backups widget
+│   └── settings.py       # Settings widget
+├── config.py            # Configuration
+└── main.py              # Application entry point
 ```
 
 ## 🧪 Testing Guidelines
 
 ### 🔍 Unit Tests
 ```bash
-pnpm test
+pytest
 ```
 
 ### 🗄️ Database Tests
 ```bash
-# Test with demo stack
-pnpm demo:up
-pnpm test
+# Test with demo stack (if available)
+pytest tests/
 ```
 
 ### 🏗️ Build Tests
 ```bash
-# Test build process
-pnpm build
+# Test installation
+pip install -e .
 
-# Test distribution
-pnpm dist
+# Test application
+python -m db_storage_manager.main
 ```
 
 ## 📝 Commit Convention
@@ -176,12 +203,12 @@ We use [Conventional Commits](https://www.conventionalcommits.org/):
 ### Examples:
 ```
 feat(dashboard): add storage visualization charts
-fix(connections): resolve SSH tunnel authentication issue
+fix(connections): resolve database connection timeout issue
 docs: update README with new features
-style: format code with prettier
+style: format code with black
 refactor(ui): improve dashboard component
 test: add database connection tests
-chore: update build scripts
+chore: update requirements.txt
 ```
 
 ## 🎨 DB Storage Manager Design Guidelines
@@ -195,6 +222,8 @@ When contributing to DB Storage Manager's design or features:
 - Ensure cross-platform compatibility
 - Keep performance as priority
 - Follow security best practices
+- Use async/await for database operations
+- Add proper error handling
 
 ### ❌ Don't:
 - Add unnecessary UI elements
@@ -203,6 +232,8 @@ When contributing to DB Storage Manager's design or features:
 - Break database connections
 - Ignore platform standards
 - Compromise security
+- Block the UI thread with long operations
+- Skip error handling
 
 ## 🚀 Release Process
 
@@ -246,7 +277,7 @@ We use [Semantic Versioning](https://semver.org/):
 
 Before submitting a PR, make sure:
 
-- [ ] Code follows the style guidelines
+- [ ] Code follows the style guidelines (PEP 8, black)
 - [ ] Tests pass locally
 - [ ] Documentation is updated
 - [ ] Changes are tested with different databases
@@ -256,6 +287,8 @@ Before submitting a PR, make sure:
 - [ ] PR description is clear and detailed
 - [ ] Related issues are linked
 - [ ] DB Storage Manager's design philosophy is maintained
+- [ ] Type hints are added where appropriate
+- [ ] Error handling is comprehensive
 
 ## 🎯 Quick Start for New Contributors
 
@@ -276,6 +309,7 @@ DB Storage Manager is designed with these core principles:
 - **Comprehensive**: Support for multiple database engines
 - **Reliable**: Stable, consistent, and dependable
 - **User-Friendly**: Intuitive and easy to use
+- **Pythonic**: Follows Python best practices and idioms
 
 When contributing, please keep these principles in mind and help us maintain DB Storage Manager's high standards!
 
