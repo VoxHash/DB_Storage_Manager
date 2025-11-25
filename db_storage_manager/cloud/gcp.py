@@ -3,14 +3,22 @@ Google Cloud SQL integration
 """
 
 from typing import List, Dict, Any, Optional
-from google.cloud import sqladmin_v1
-from google.oauth2 import service_account
+try:
+    from google.cloud import sqladmin_v1
+    from google.oauth2 import service_account
+    GCP_AVAILABLE = True
+except ImportError:
+    GCP_AVAILABLE = False
+    sqladmin_v1 = None
+    service_account = None
 
 
 class GCPCloudSQLProvider:
     """Google Cloud SQL provider"""
 
     def __init__(self, project_id: str, credentials_path: Optional[str] = None):
+        if not GCP_AVAILABLE:
+            raise ImportError("google-cloud-sqladmin is required for GCP Cloud SQL support. Install it with: pip install google-cloud-sqladmin")
         self.project_id = project_id
         if credentials_path:
             credentials = service_account.Credentials.from_service_account_file(credentials_path)
