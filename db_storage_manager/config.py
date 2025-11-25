@@ -48,5 +48,10 @@ DEFAULT_PORT = {
     "sqlite": None,
     "mongodb": 27017,
     "redis": 6379,
+    "oracle": 1521,
+    "sqlserver": 1433,
+    "mssql": 1433,
+    "clickhouse": 9000,
+    "influxdb": 8086,
 }
 

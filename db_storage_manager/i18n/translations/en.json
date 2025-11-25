@@ -11,6 +11,7 @@
     "connections": "&Connections",
     "query_console": "&Query Console",
     "backups": "&Backups",
+    "monitoring": "&Monitoring",
     "settings": "&Settings",
     "help": "&Help",
     "about": "&About"
@@ -149,7 +150,12 @@
     "mysql": "MySQL",
     "sqlite": "SQLite",
     "mongodb": "MongoDB",
-    "redis": "Redis"
+    "redis": "Redis",
+    "oracle": "Oracle Database",
+    "sqlserver": "Microsoft SQL Server",
+    "mssql": "Microsoft SQL Server",
+    "clickhouse": "ClickHouse",
+    "influxdb": "InfluxDB"
   },
   "errors": {
     "connection_failed": "Connection failed",
@@ -159,6 +165,48 @@
     "invalid_credentials": "Invalid credentials",
     "database_not_found": "Database not found",
     "permission_denied": "Permission denied"
+  },
+  "monitoring": {
+    "connection": "Connection:",
+    "select_connection": "Select a connection...",
+    "start_monitoring": "Start Monitoring",
+    "stop_monitoring": "Stop Monitoring",
+    "metrics": "Metrics",
+    "alerts": "Alerts",
+    "performance": "Performance",
+    "health": "Health",
+    "metric": "Metric",
+    "value": "Value",
+    "alert_time": "Time",
+    "severity": "Severity",
+    "title": "Title",
+    "message": "Message",
+    "check": "Check",
+    "status": "Status"
+  },
+  "analysis": {
+    "query_performance": "Query Performance",
+    "index_optimization": "Index Optimization",
+    "storage_growth": "Storage Growth",
+    "capacity_planning": "Capacity Planning",
+    "slow_queries": "Slow Queries",
+    "optimization_suggestions": "Optimization Suggestions",
+    "growth_prediction": "Growth Prediction",
+    "capacity_report": "Capacity Report"
+  },
+  "ssh": {
+    "tunnel": "SSH Tunnel",
+    "ssh_host": "SSH Host:",
+    "ssh_port": "SSH Port:",
+    "ssh_username": "SSH Username:",
+    "ssh_password": "SSH Password:",
+    "ssh_key_path": "SSH Key Path:",
+    "remote_host": "Remote Host:",
+    "remote_port": "Remote Port:",
+    "create_tunnel": "Create Tunnel",
+    "close_tunnel": "Close Tunnel",
+    "tunnel_active": "Tunnel Active",
+    "tunnel_inactive": "Tunnel Inactive"
   }
 }
 

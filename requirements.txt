@@ -10,6 +10,10 @@ pymysql>=1.1.0
 aiosqlite>=0.19.0
 pymongo>=4.6.0
 redis>=5.0.0
+cx_Oracle>=8.3.0  # Oracle Database
+pyodbc>=5.0.0  # Microsoft SQL Server
+clickhouse-driver>=0.2.6  # ClickHouse
+influxdb-client>=1.38.0  # InfluxDB
 
 # Backup & Cloud Storage
 boto3>=1.34.0
@@ -32,6 +36,17 @@ numpy>=1.26.0
 
 # Charts & Visualization
 matplotlib>=3.8.0
+Pillow>=10.0.0  # For image export
+
+# Authentication & Security
+ldap3>=2.9.1  # LDAP integration
+pyotp>=2.9.0  # Multi-factor authentication
+qrcode>=7.4.2  # QR codes for MFA
+
+# Cloud Providers (additional)
+google-cloud-sql-connector>=1.11.0  # Google Cloud SQL
+azure-identity>=1.15.0  # Azure authentication
+azure-mgmt-sql>=3.0.1  # Azure SQL management
 
 # Development
 pytest>=7.4.0

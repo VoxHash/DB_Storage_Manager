@@ -50,7 +50,10 @@ class ConnectionDialog(QDialog):
         layout.addRow(f"{t('connections.name')}", self.name_edit)
 
         self.type_combo = QComboBox()
-        self.type_combo.addItems(["postgresql", "mysql", "sqlite", "mongodb", "redis"])
+        self.type_combo.addItems([
+            "postgresql", "mysql", "sqlite", "mongodb", "redis",
+            "oracle", "sqlserver", "clickhouse", "influxdb"
+        ])
         layout.addRow(f"{t('connections.type')}", self.type_combo)
 
         self.host_edit = QLineEdit()

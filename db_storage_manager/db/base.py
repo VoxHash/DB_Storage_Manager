@@ -12,7 +12,7 @@ class ConnectionConfig:
     """Database connection configuration"""
     id: str
     name: str
-    type: str  # postgresql, mysql, sqlite, mongodb, redis
+    type: str  # postgresql, mysql, sqlite, mongodb, redis, oracle, sqlserver, clickhouse, influxdb
     host: Optional[str] = None
     port: Optional[int] = None
     database: Optional[str] = None
@@ -75,9 +75,12 @@ class TableSchema(TypedDict):
     indexes: List[Dict[str, Any]]
 
 
-class SchemaInfo(TypedDict):
+class SchemaInfo(TypedDict, total=False):
     """Database schema information"""
-    schemas: List[Dict[str, TableSchema]]
+    tables: List[str]
+    views: List[str]
+    procedures: List[str]
+    schemas: List[Dict[str, Any]]  # For databases with schema support (PostgreSQL)
 
 
 class DatabaseConnection(ABC):

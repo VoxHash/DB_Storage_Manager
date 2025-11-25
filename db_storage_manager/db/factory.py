@@ -9,6 +9,10 @@ from .mysql import MySQLConnection
 from .sqlite import SQLiteConnection
 from .mongo import MongoDBConnection
 from .redis import RedisConnection
+from .oracle import OracleConnection
+from .sqlserver import SQLServerConnection
+from .clickhouse import ClickHouseConnection
+from .influxdb import InfluxDBConnection
 
 
 class DatabaseConnectionFactory:
@@ -29,6 +33,14 @@ class DatabaseConnectionFactory:
             return MongoDBConnection(config)
         elif db_type == "redis":
             return RedisConnection(config)
+        elif db_type == "oracle":
+            return OracleConnection(config)
+        elif db_type == "sqlserver" or db_type == "mssql" or db_type == "sql-server":
+            return SQLServerConnection(config)
+        elif db_type == "clickhouse":
+            return ClickHouseConnection(config)
+        elif db_type == "influxdb" or db_type == "influx":
+            return InfluxDBConnection(config)
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
 

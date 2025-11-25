@@ -16,6 +16,7 @@ from .connections import ConnectionsWidget
 from .query import QueryWidget
 from .backups import BackupsWidget
 from .settings import SettingsWidget
+from .monitoring import MonitoringWidget
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self.connections_widget = ConnectionsWidget()
         self.query_widget = QueryWidget(self.connections)
         self.backups_widget = BackupsWidget(self.connections)
+        self.monitoring_widget = MonitoringWidget(self.connections)
         self.settings_widget = SettingsWidget()
 
         # Connect settings widget signals
@@ -62,6 +64,7 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.connections_widget, "")
         self.tab_widget.addTab(self.query_widget, "")
         self.tab_widget.addTab(self.backups_widget, "")
+        self.tab_widget.addTab(self.monitoring_widget, "")
         self.tab_widget.addTab(self.settings_widget, "")
 
         self._update_tabs()
@@ -121,6 +124,11 @@ class MainWindow(QMainWindow):
         backups_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(3))
         view_menu.addAction(backups_action)
 
+        monitoring_action = QAction(t("menu.monitoring"), self)
+        monitoring_action.setShortcut("Ctrl+5")
+        monitoring_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(4))
+        view_menu.addAction(monitoring_action)
+
         # Help menu
         help_menu = menubar.addMenu(t("menu.help"))
         about_action = QAction(t("menu.about"), self)
@@ -146,7 +154,8 @@ class MainWindow(QMainWindow):
         self.tab_widget.setTabText(1, t("tabs.connections"))
         self.tab_widget.setTabText(2, t("tabs.query_console"))
         self.tab_widget.setTabText(3, t("tabs.backups"))
-        self.tab_widget.setTabText(4, t("tabs.settings"))
+        self.tab_widget.setTabText(4, t("tabs.monitoring"))
+        self.tab_widget.setTabText(5, t("tabs.settings"))
 
     def _apply_theme(self):
         """Apply theme to application"""
@@ -188,6 +197,7 @@ class MainWindow(QMainWindow):
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
+        self.monitoring_widget.update_connections(self.connections)
 
     def _on_connection_updated(self, connection):
         """Handle connection updated"""
@@ -199,6 +209,7 @@ class MainWindow(QMainWindow):
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
+        self.monitoring_widget.update_connections(self.connections)
 
     def _on_connection_deleted(self, connection_id):
         """Handle connection deleted"""
@@ -207,4 +218,5 @@ class MainWindow(QMainWindow):
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
+        self.monitoring_widget.update_connections(self.connections)
 
