@@ -61,7 +61,9 @@ class SettingsWidget(QWidget):
         self.language_label = QLabel()
         self.language_combo = QComboBox()
         for lang_code, lang_data in SUPPORTED_LANGUAGES.items():
-            self.language_combo.addItem(f"{lang_data['name']} ({lang_data['native']})", lang_code)
+            self.language_combo.addItem(
+                f"{lang_data['name']} ({lang_data['native']})", lang_code
+            )
         current_lang = self.i18n.current_language
         index = self.language_combo.findData(current_lang)
         if index >= 0:
@@ -114,7 +116,7 @@ class SettingsWidget(QWidget):
         self.auto_connect_label.setText(f"{t('settings.auto_connect')}:")
         self.notifications_label.setText(f"{t('settings.notifications')}:")
         self.telemetry_label.setText(f"{t('settings.telemetry')}:")
-        self.save_button.setText(t('settings.save'))
+        self.save_button.setText(t("settings.save"))
 
     def _on_theme_changed(self, index):
         """Handle theme change"""
@@ -145,6 +147,5 @@ class SettingsWidget(QWidget):
         QMessageBox.information(
             self,
             self.i18n.translate("common.success"),
-            self.i18n.translate("settings.settings_saved")
+            self.i18n.translate("settings.settings_saved"),
         )
-

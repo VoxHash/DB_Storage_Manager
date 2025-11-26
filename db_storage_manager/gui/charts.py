@@ -3,7 +3,16 @@ Chart visualization components using PyQt6-Charts
 """
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox
-from PyQt6.QtCharts import QChart, QChartView, QLineSeries, QBarSeries, QBarSet, QPieSeries, QValueAxis, QBarCategoryAxis
+from PyQt6.QtCharts import (
+    QChart,
+    QChartView,
+    QLineSeries,
+    QBarSeries,
+    QBarSet,
+    QPieSeries,
+    QValueAxis,
+    QBarCategoryAxis,
+)
 from PyQt6.QtCore import Qt, QPointF
 from PyQt6.QtGui import QPainter, QColor
 from typing import List, Dict, Any, Optional
@@ -18,10 +27,10 @@ class ChartWidget(QWidget):
         self.chart.setTitle(title)
         self.chart_view = QChartView(self.chart)
         self.chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Toolbar
         toolbar = QHBoxLayout()
         self.export_png_btn = QPushButton("Export PNG")
@@ -32,18 +41,22 @@ class ChartWidget(QWidget):
         toolbar.addWidget(self.export_pdf_btn)
         toolbar.addStretch()
         layout.addLayout(toolbar)
-        
+
         layout.addWidget(self.chart_view)
 
     def export_png(self, filename: Optional[str] = None):
         """Export chart to PNG"""
         from PyQt6.QtGui import QPixmap
+
         pixmap = self.chart_view.grab()
         if filename:
             pixmap.save(filename, "PNG")
         else:
             from PyQt6.QtWidgets import QFileDialog
-            filename, _ = QFileDialog.getSaveFileName(self, "Save PNG", "", "PNG Files (*.png)")
+
+            filename, _ = QFileDialog.getSaveFileName(
+                self, "Save PNG", "", "PNG Files (*.png)"
+            )
             if filename:
                 pixmap.save(filename, "PNG")
 
@@ -51,18 +64,22 @@ class ChartWidget(QWidget):
         """Export chart to PDF"""
         from PyQt6.QtPrintSupport import QPrinter
         from PyQt6.QtGui import QPainter
+
         printer = QPrinter(QPrinter.PrinterMode.HighResolution)
         printer.setOutputFormat(QPrinter.OutputFormat.PdfFormat)
         if filename:
             printer.setOutputFileName(filename)
         else:
             from PyQt6.QtWidgets import QFileDialog
-            filename, _ = QFileDialog.getSaveFileName(self, "Save PDF", "", "PDF Files (*.pdf)")
+
+            filename, _ = QFileDialog.getSaveFileName(
+                self, "Save PDF", "", "PDF Files (*.pdf)"
+            )
             if filename:
                 printer.setOutputFileName(filename)
             else:
                 return
-        
+
         painter = QPainter(printer)
         self.chart_view.render(painter)
         painter.end()
@@ -85,7 +102,7 @@ class LineChartWidget(ChartWidget):
             series.append(point)
         self.chart.addSeries(series)
         self.series_list.append(series)
-        
+
         # Create axes
         axis_x = QValueAxis()
         axis_x.setTitleText(self.x_label)
@@ -93,11 +110,11 @@ class LineChartWidget(ChartWidget):
         axis_y.setTitleText(self.y_label)
         self.chart.addAxis(axis_x, Qt.AlignmentFlag.AlignBottom)
         self.chart.addAxis(axis_y, Qt.AlignmentFlag.AlignLeft)
-        
+
         for series in self.series_list:
             series.attachAxis(axis_x)
             series.attachAxis(axis_y)
-        
+
         self.chart.createDefaultAxes()
 
 
@@ -116,7 +133,7 @@ class BarChartWidget(ChartWidget):
             bar_set.append(value)
         self.bar_series.append(bar_set)
         self.chart.addSeries(self.bar_series)
-        
+
         # Create axes
         axis_x = QBarCategoryAxis()
         axis_x.append(self.categories)
@@ -138,4 +155,3 @@ class PieChartWidget(ChartWidget):
     def add_slice(self, label: str, value: float):
         """Add a slice to the pie chart"""
         self.pie_series.append(label, value)
-

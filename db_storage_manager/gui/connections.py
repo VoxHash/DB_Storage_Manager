@@ -35,7 +35,11 @@ class ConnectionDialog(QDialog):
         self.connection = connection
         self.i18n = get_i18n_manager()
         t = self.i18n.translate
-        self.setWindowTitle(t("connections.add_dialog_title") if not connection else t("connections.edit_dialog_title"))
+        self.setWindowTitle(
+            t("connections.add_dialog_title")
+            if not connection
+            else t("connections.edit_dialog_title")
+        )
         self.setModal(True)
         self.init_ui()
         apply_glassmorphism(self)
@@ -50,10 +54,19 @@ class ConnectionDialog(QDialog):
         layout.addRow(f"{t('connections.name')}", self.name_edit)
 
         self.type_combo = QComboBox()
-        self.type_combo.addItems([
-            "postgresql", "mysql", "sqlite", "mongodb", "redis",
-            "oracle", "sqlserver", "clickhouse", "influxdb"
-        ])
+        self.type_combo.addItems(
+            [
+                "postgresql",
+                "mysql",
+                "sqlite",
+                "mongodb",
+                "redis",
+                "oracle",
+                "sqlserver",
+                "clickhouse",
+                "influxdb",
+            ]
+        )
         layout.addRow(f"{t('connections.type')}", self.type_combo)
 
         self.host_edit = QLineEdit()
@@ -156,13 +169,17 @@ class ConnectionsWidget(QWidget):
         # Connections table
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels([
-            t("connections.name").rstrip(":"),
-            t("connections.type").rstrip(":"),
-            t("connections.host").rstrip(":"),
-            t("connections.database").rstrip(":")
-        ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.table.setHorizontalHeaderLabels(
+            [
+                t("connections.name").rstrip(":"),
+                t("connections.type").rstrip(":"),
+                t("connections.host").rstrip(":"),
+                t("connections.database").rstrip(":"),
+            ]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         layout.addWidget(self.table)
 
@@ -228,6 +245,7 @@ class ConnectionsWidget(QWidget):
             db = DatabaseConnectionFactory.create_connection(config)
 
             import asyncio
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             result = loop.run_until_complete(db.test_connection())
@@ -235,12 +253,18 @@ class ConnectionsWidget(QWidget):
 
             t = self.i18n.translate
             if result:
-                QMessageBox.information(self, t("common.success"), t("connections.test_success"))
+                QMessageBox.information(
+                    self, t("common.success"), t("connections.test_success")
+                )
             else:
-                QMessageBox.warning(self, t("common.error"), t("connections.test_failed"))
+                QMessageBox.warning(
+                    self, t("common.error"), t("connections.test_failed")
+                )
         except Exception as e:
             t = self.i18n.translate
-            QMessageBox.critical(self, t("common.error"), f"{t('errors.connection_failed')}:\n{str(e)}")
+            QMessageBox.critical(
+                self, t("common.error"), f"{t('errors.connection_failed')}:\n{str(e)}"
+            )
 
     def _update_table(self):
         """Update connections table"""
@@ -250,4 +274,3 @@ class ConnectionsWidget(QWidget):
             self.table.setItem(row, 1, QTableWidgetItem(conn.get("type", "")))
             self.table.setItem(row, 2, QTableWidgetItem(conn.get("host", "")))
             self.table.setItem(row, 3, QTableWidgetItem(conn.get("database", "")))
-

@@ -29,7 +29,9 @@ class LocalBackupAdapter(BackupAdapter):
 
         source_path = Path(options.backupPath)
         if not source_path.exists():
-            raise FileNotFoundError(f"Backup source file not found: {options.backupPath}")
+            raise FileNotFoundError(
+                f"Backup source file not found: {options.backupPath}"
+            )
 
         processed_path = source_path
 
@@ -78,6 +80,7 @@ class LocalBackupAdapter(BackupAdapter):
         # Handle decompression
         if backup_info.metadata.get("compression") == "gzip":
             import tempfile
+
             temp_path = Path(tempfile.mktemp(suffix=".backup"))
             with gzip.open(backup_path, "rb") as f_in:
                 with open(temp_path, "wb") as f_out:
@@ -93,18 +96,22 @@ class LocalBackupAdapter(BackupAdapter):
         for backup_file in self.base_path.glob("*.backup*"):
             if backup_file.is_file():
                 backup_id = str(uuid.uuid4())  # Generate ID from filename or metadata
-                backups.append(BackupInfo(
-                    id=backup_id,
-                    name=backup_file.name,
-                    path=str(backup_file),
-                    size=backup_file.stat().st_size,
-                    createdAt=datetime.fromtimestamp(backup_file.stat().st_mtime),
-                    status="completed",
-                    metadata={
-                        "compression": "gzip" if backup_file.suffix == ".gz" else "none",
-                        "encryption": backup_file.suffix == ".enc",
-                    },
-                ))
+                backups.append(
+                    BackupInfo(
+                        id=backup_id,
+                        name=backup_file.name,
+                        path=str(backup_file),
+                        size=backup_file.stat().st_size,
+                        createdAt=datetime.fromtimestamp(backup_file.stat().st_mtime),
+                        status="completed",
+                        metadata={
+                            "compression": (
+                                "gzip" if backup_file.suffix == ".gz" else "none"
+                            ),
+                            "encryption": backup_file.suffix == ".enc",
+                        },
+                    )
+                )
 
         return backups
 
@@ -121,4 +128,3 @@ class LocalBackupAdapter(BackupAdapter):
     async def validate_options(self, options: BackupOptions) -> bool:
         """Validate backup options"""
         return self.base_path.exists() and self.base_path.is_dir()
-

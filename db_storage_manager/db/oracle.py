@@ -4,6 +4,7 @@ Oracle Database connection
 
 import asyncio
 from typing import Any, Dict, List
+
 try:
     import cx_Oracle
 except ImportError:
@@ -25,7 +26,9 @@ class OracleConnection(DatabaseConnection):
         super().__init__(config)
         self.connection = None
         if cx_Oracle is None:
-            raise ImportError("cx_Oracle is required for Oracle support. Install it with: pip install cx_Oracle")
+            raise ImportError(
+                "cx_Oracle is required for Oracle support. Install it with: pip install cx_Oracle"
+            )
 
     async def connect(self) -> None:
         """Connect to Oracle database"""
@@ -35,12 +38,10 @@ class OracleConnection(DatabaseConnection):
             dsn = cx_Oracle.makedsn(
                 self.config.host or "localhost",
                 self.config.port or 1521,
-                service_name=self.config.database or "ORCL"
+                service_name=self.config.database or "ORCL",
             )
             self.connection = cx_Oracle.connect(
-                user=self.config.username,
-                password=self.config.password,
-                dsn=dsn
+                user=self.config.username, password=self.config.password, dsn=dsn
             )
         self.connected = True
 
@@ -59,7 +60,8 @@ class OracleConnection(DatabaseConnection):
         cursor = self.connection.cursor()
 
         # Get table sizes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 owner || '.' || table_name as name,
                 num_rows as row_count,
@@ -67,48 +69,57 @@ class OracleConnection(DatabaseConnection):
             FROM all_tables
             WHERE owner NOT IN ('SYS', 'SYSTEM', 'SYSAUX')
             ORDER BY blocks DESC
-        """)
+        """
+        )
 
         tables = []
         total_size = 0
         for row in cursor.fetchall():
             table_size = row[2] or 0
-            tables.append({
-                "name": row[0],
-                "size": table_size,
-                "rowCount": row[1] or 0,
-                "indexSize": 0,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": row[0],
+                    "size": table_size,
+                    "rowCount": row[1] or 0,
+                    "indexSize": 0,
+                    "bloat": 0.0,
+                }
+            )
             total_size += table_size
 
         # Get indexes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 owner || '.' || index_name as name,
                 table_name,
                 leaf_blocks * (SELECT value FROM v$parameter WHERE name = 'db_block_size') as size
             FROM all_indexes
             WHERE owner NOT IN ('SYS', 'SYSTEM', 'SYSAUX')
-        """)
+        """
+        )
 
         indexes = []
         index_total = 0
         for row in cursor.fetchall():
             index_size = row[2] or 0
-            indexes.append({
-                "name": row[0],
-                "tableName": row[1],
-                "size": index_size,
-                "bloat": 0.0,
-            })
+            indexes.append(
+                {
+                    "name": row[0],
+                    "tableName": row[1],
+                    "size": index_size,
+                    "bloat": 0.0,
+                }
+            )
             index_total += index_size
 
         cursor.close()
 
-        largest_table = max(tables, key=lambda t: t["size"]) if tables else {
-            "name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0
-        }
+        largest_table = (
+            max(tables, key=lambda t: t["size"])
+            if tables
+            else {"name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0}
+        )
 
         return {
             "totalSize": total_size + index_total,
@@ -130,7 +141,7 @@ class OracleConnection(DatabaseConnection):
         cursor = self.connection.cursor()
         try:
             cursor.execute(query)
-            
+
             if query.strip().upper().startswith("SELECT"):
                 columns = [desc[0] for desc in cursor.description]
                 rows = []
@@ -159,21 +170,25 @@ class OracleConnection(DatabaseConnection):
         cursor = self.connection.cursor()
 
         # Get tables
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT table_name
             FROM all_tables
             WHERE owner = USER
             ORDER BY table_name
-        """)
+        """
+        )
         tables = [row[0] for row in cursor.fetchall()]
 
         # Get views
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT view_name
             FROM all_views
             WHERE owner = USER
             ORDER BY view_name
-        """)
+        """
+        )
         views = [row[0] for row in cursor.fetchall()]
 
         cursor.close()
@@ -197,14 +212,14 @@ class OracleConnection(DatabaseConnection):
         """Create Oracle backup using expdp"""
         import subprocess
         import os
-        
+
         if not self.connection:
             await self.connect()
 
         # Use expdp for Oracle backup
         backup_file = f"{backup_path}.dmp"
         log_file = f"{backup_path}.log"
-        
+
         # Build expdp command
         cmd = [
             "expdp",
@@ -212,19 +227,19 @@ class OracleConnection(DatabaseConnection):
             f"DIRECTORY=DATA_PUMP_DIR",
             f"DUMPFILE={os.path.basename(backup_file)}",
             f"LOGFILE={os.path.basename(log_file)}",
-            "SCHEMAS=" + self.config.username
+            "SCHEMAS=" + self.config.username,
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise Exception(f"Oracle backup failed: {result.stderr}")
-        
+
         return backup_file
 
     async def restore_backup(self, backup_path: str) -> None:
         """Restore Oracle backup using impdp"""
         import subprocess
-        
+
         if not self.connection:
             await self.connect()
 
@@ -234,10 +249,9 @@ class OracleConnection(DatabaseConnection):
             f"{self.config.username}/{self.config.password}@{self.config.host}:{self.config.port or 1521}/{self.config.database}",
             f"DIRECTORY=DATA_PUMP_DIR",
             f"DUMPFILE={os.path.basename(backup_path)}",
-            "SCHEMAS=" + self.config.username
+            "SCHEMAS=" + self.config.username,
         ]
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
             raise Exception(f"Oracle restore failed: {result.stderr}")
-

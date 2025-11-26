@@ -59,7 +59,8 @@ class MySQLConnection(DatabaseConnection):
         cursor = self.connection.cursor(DictCursor)
 
         # Get table sizes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 table_schema,
                 table_name,
@@ -70,7 +71,9 @@ class MySQLConnection(DatabaseConnection):
             FROM information_schema.tables
             WHERE table_schema = %s
             ORDER BY total_size DESC
-        """, (self.config.database,))
+        """,
+            (self.config.database,),
+        )
 
         tables = []
         total_size = 0
@@ -80,17 +83,20 @@ class MySQLConnection(DatabaseConnection):
             index_size = int(row["index_size"] or 0)
             row_count = int(row["row_count"] or 0)
 
-            tables.append({
-                "name": table_name,
-                "size": table_size,
-                "rowCount": row_count,
-                "indexSize": index_size,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": table_name,
+                    "size": table_size,
+                    "rowCount": row_count,
+                    "indexSize": index_size,
+                    "bloat": 0.0,
+                }
+            )
             total_size += int(row["total_size"] or 0)
 
         # Get indexes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 index_name,
                 table_name,
@@ -98,18 +104,24 @@ class MySQLConnection(DatabaseConnection):
             FROM information_schema.statistics
             WHERE table_schema = %s
             GROUP BY index_name, table_name
-        """, (self.config.database,))
+        """,
+            (self.config.database,),
+        )
 
         indexes = []
         for row in cursor.fetchall():
-            indexes.append({
-                "name": row["index_name"],
-                "tableName": row["table_name"],
-                "size": int(row["size"] or 0),
-                "bloat": 0.0,
-            })
+            indexes.append(
+                {
+                    "name": row["index_name"],
+                    "tableName": row["table_name"],
+                    "size": int(row["size"] or 0),
+                    "bloat": 0.0,
+                }
+            )
 
-        largest_table = tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        largest_table = (
+            tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        )
 
         return {
             "totalSize": total_size,
@@ -131,6 +143,7 @@ class MySQLConnection(DatabaseConnection):
 
         cursor = self.connection.cursor(DictCursor)
         import time
+
         start_time = time.time()
 
         try:
@@ -171,18 +184,22 @@ class MySQLConnection(DatabaseConnection):
         cursor = self.connection.cursor(DictCursor)
 
         # Get tables
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = %s
-        """, (self.config.database,))
+        """,
+            (self.config.database,),
+        )
 
         tables = []
         for table_row in cursor.fetchall():
             table_name = table_row["table_name"]
 
             # Get columns
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 
                     column_name,
                     data_type,
@@ -191,26 +208,33 @@ class MySQLConnection(DatabaseConnection):
                 FROM information_schema.columns
                 WHERE table_schema = %s AND table_name = %s
                 ORDER BY ordinal_position
-            """, (self.config.database, table_name))
+            """,
+                (self.config.database, table_name),
+            )
 
             columns = []
             for col in cursor.fetchall():
-                columns.append({
-                    "name": col["column_name"],
-                    "type": col["data_type"],
-                    "nullable": col["is_nullable"] == "YES",
-                    "defaultValue": col["column_default"],
-                })
+                columns.append(
+                    {
+                        "name": col["column_name"],
+                        "type": col["data_type"],
+                        "nullable": col["is_nullable"] == "YES",
+                        "defaultValue": col["column_default"],
+                    }
+                )
 
             # Get indexes
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 
                     index_name,
                     non_unique,
                     column_name
                 FROM information_schema.statistics
                 WHERE table_schema = %s AND table_name = %s
-            """, (self.config.database, table_name))
+            """,
+                (self.config.database, table_name),
+            )
 
             indexes_dict = {}
             for idx in cursor.fetchall():
@@ -225,17 +249,21 @@ class MySQLConnection(DatabaseConnection):
 
             indexes = list(indexes_dict.values())
 
-            tables.append({
-                "name": table_name,
-                "columns": columns,
-                "indexes": indexes,
-            })
+            tables.append(
+                {
+                    "name": table_name,
+                    "columns": columns,
+                    "indexes": indexes,
+                }
+            )
 
         return {
-            "schemas": [{
-                "name": self.config.database or "default",
-                "tables": tables,
-            }]
+            "schemas": [
+                {
+                    "name": self.config.database or "default",
+                    "tables": tables,
+                }
+            ]
         }
 
     async def create_backup(self, backup_path: str) -> Dict[str, Any]:
@@ -306,4 +334,3 @@ class MySQLConnection(DatabaseConnection):
 
         if process.returncode != 0:
             raise RuntimeError(f"mysql restore failed: {stderr.decode()}")
-

@@ -105,14 +105,18 @@ class DashboardWidget(QWidget):
         # Tables table
         self.tables_table = QTableWidget()
         self.tables_table.setColumnCount(5)
-        self.tables_table.setHorizontalHeaderLabels([
-            t("dashboard.table_name"),
-            t("dashboard.table_size"),
-            t("dashboard.table_rows"),
-            t("dashboard.table_index_size"),
-            t("dashboard.table_bloat")
-        ])
-        self.tables_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.tables_table.setHorizontalHeaderLabels(
+            [
+                t("dashboard.table_name"),
+                t("dashboard.table_size"),
+                t("dashboard.table_rows"),
+                t("dashboard.table_index_size"),
+                t("dashboard.table_bloat"),
+            ]
+        )
+        self.tables_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         layout.addWidget(self.tables_table)
 
     def _on_connection_changed(self, index):
@@ -152,9 +156,7 @@ class DashboardWidget(QWidget):
         """Handle analysis error"""
         t = self.i18n.translate
         QMessageBox.critical(
-            self,
-            t("common.error"),
-            f"{t('dashboard.analysis_failed')}:\n{error}"
+            self, t("common.error"), f"{t('dashboard.analysis_failed')}:\n{error}"
         )
         self.analyze_button.setEnabled(True)
         self.analyze_button.setText(t("dashboard.analyze"))
@@ -164,9 +166,15 @@ class DashboardWidget(QWidget):
         t = self.i18n.translate
         # Update summary
         total_size = analysis.get("totalSize", 0)
-        self.total_size_label.setText(t("dashboard.total_size", size=self._format_size(total_size)))
-        self.table_count_label.setText(t("dashboard.tables", count=analysis.get('tableCount', 0)))
-        self.index_count_label.setText(t("dashboard.indexes", count=analysis.get('indexCount', 0)))
+        self.total_size_label.setText(
+            t("dashboard.total_size", size=self._format_size(total_size))
+        )
+        self.table_count_label.setText(
+            t("dashboard.tables", count=analysis.get("tableCount", 0))
+        )
+        self.index_count_label.setText(
+            t("dashboard.indexes", count=analysis.get("indexCount", 0))
+        )
 
         # Update tables table
         tables = analysis.get("tables", [])
@@ -174,10 +182,16 @@ class DashboardWidget(QWidget):
 
         for row, table in enumerate(tables):
             self.tables_table.setItem(row, 0, QTableWidgetItem(table["name"]))
-            self.tables_table.setItem(row, 1, QTableWidgetItem(self._format_size(table["size"])))
+            self.tables_table.setItem(
+                row, 1, QTableWidgetItem(self._format_size(table["size"]))
+            )
             self.tables_table.setItem(row, 2, QTableWidgetItem(str(table["rowCount"])))
-            self.tables_table.setItem(row, 3, QTableWidgetItem(self._format_size(table["indexSize"])))
-            self.tables_table.setItem(row, 4, QTableWidgetItem(f"{table['bloat']:.2f}%"))
+            self.tables_table.setItem(
+                row, 3, QTableWidgetItem(self._format_size(table["indexSize"]))
+            )
+            self.tables_table.setItem(
+                row, 4, QTableWidgetItem(f"{table['bloat']:.2f}%")
+            )
 
     def _format_size(self, size_bytes):
         """Format size in bytes to human-readable format"""
@@ -191,7 +205,8 @@ class DashboardWidget(QWidget):
         """Update connections list"""
         self.connections = connections
         self.connection_combo.clear()
-        self.connection_combo.addItem(self.i18n.translate("dashboard.select_connection"))
+        self.connection_combo.addItem(
+            self.i18n.translate("dashboard.select_connection")
+        )
         for conn in self.connections:
             self.connection_combo.addItem(conn["name"], conn)
-

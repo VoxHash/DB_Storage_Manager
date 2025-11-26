@@ -61,4 +61,3 @@ class BackupsWidget(QWidget):
     def update_connections(self, connections):
         """Update connections list"""
         self.connections = connections
-

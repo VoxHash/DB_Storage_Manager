@@ -22,7 +22,12 @@ from typing import Dict, List, Any
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..monitoring import DatabaseMonitor, Alert
-from ..analysis import QueryPerformanceAnalyzer, IndexOptimizer, StorageGrowthPredictor, CapacityPlanner
+from ..analysis import (
+    QueryPerformanceAnalyzer,
+    IndexOptimizer,
+    StorageGrowthPredictor,
+    CapacityPlanner,
+)
 from ..i18n.manager import get_i18n_manager
 from .utils import apply_glassmorphism
 
@@ -74,14 +79,18 @@ class MonitoringWidget(QWidget):
 
         # Create tabs for different monitoring views
         tabs = QTabWidget()
-        
+
         # Metrics tab
         metrics_widget = QWidget()
         metrics_layout = QVBoxLayout(metrics_widget)
         self.metrics_table = QTableWidget()
         self.metrics_table.setColumnCount(2)
-        self.metrics_table.setHorizontalHeaderLabels([t("monitoring.metric"), t("monitoring.value")])
-        self.metrics_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.metrics_table.setHorizontalHeaderLabels(
+            [t("monitoring.metric"), t("monitoring.value")]
+        )
+        self.metrics_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         metrics_layout.addWidget(self.metrics_table)
         tabs.addTab(metrics_widget, t("monitoring.metrics"))
 
@@ -90,13 +99,17 @@ class MonitoringWidget(QWidget):
         alerts_layout = QVBoxLayout(alerts_widget)
         self.alerts_table = QTableWidget()
         self.alerts_table.setColumnCount(4)
-        self.alerts_table.setHorizontalHeaderLabels([
-            t("monitoring.alert_time"),
-            t("monitoring.severity"),
-            t("monitoring.title"),
-            t("monitoring.message")
-        ])
-        self.alerts_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.alerts_table.setHorizontalHeaderLabels(
+            [
+                t("monitoring.alert_time"),
+                t("monitoring.severity"),
+                t("monitoring.title"),
+                t("monitoring.message"),
+            ]
+        )
+        self.alerts_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         alerts_layout.addWidget(self.alerts_table)
         tabs.addTab(alerts_widget, t("monitoring.alerts"))
 
@@ -113,8 +126,12 @@ class MonitoringWidget(QWidget):
         health_layout = QVBoxLayout(health_widget)
         self.health_table = QTableWidget()
         self.health_table.setColumnCount(2)
-        self.health_table.setHorizontalHeaderLabels([t("monitoring.check"), t("monitoring.status")])
-        self.health_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.health_table.setHorizontalHeaderLabels(
+            [t("monitoring.check"), t("monitoring.status")]
+        )
+        self.health_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         health_layout.addWidget(self.health_table)
         tabs.addTab(health_widget, t("monitoring.health"))
 
@@ -142,37 +159,41 @@ class MonitoringWidget(QWidget):
         try:
             config = ConnectionConfig(**self.current_connection)
             db = DatabaseConnectionFactory.create_connection(config)
-            
+
             self.monitor = DatabaseMonitor(db)
             self.performance_analyzer = QueryPerformanceAnalyzer(db)
             self.index_optimizer = IndexOptimizer(db)
             self.growth_predictor = StorageGrowthPredictor(db)
             self.capacity_planner = CapacityPlanner(db)
-            
+
             # Start monitoring
             import asyncio
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.monitor.start_monitoring(
-                on_alert=self._on_alert,
-                on_metrics=self._on_metrics
-            ))
-            
+            loop.run_until_complete(
+                self.monitor.start_monitoring(
+                    on_alert=self._on_alert, on_metrics=self._on_metrics
+                )
+            )
+
             self.start_button.setEnabled(False)
             self.stop_button.setEnabled(True)
             self.update_timer.start()
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
+
             QMessageBox.critical(self, self.i18n.translate("common.error"), str(e))
 
     def _stop_monitoring(self):
         """Stop monitoring"""
         if self.monitor:
             import asyncio
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(self.monitor.stop_monitoring())
-        
+
         self.update_timer.stop()
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
@@ -193,7 +214,7 @@ class MonitoringWidget(QWidget):
             return
 
         dashboard_data = self.monitor.get_dashboard_data()
-        
+
         # Update metrics
         metrics = dashboard_data.get("metrics", {})
         self.metrics_table.setRowCount(len(metrics))
@@ -208,7 +229,9 @@ class MonitoringWidget(QWidget):
         alerts = dashboard_data.get("alerts", [])
         self.alerts_table.setRowCount(len(alerts))
         for i, alert in enumerate(alerts):
-            self.alerts_table.setItem(i, 0, QTableWidgetItem(alert.get("timestamp", "")))
+            self.alerts_table.setItem(
+                i, 0, QTableWidgetItem(alert.get("timestamp", ""))
+            )
             self.alerts_table.setItem(i, 1, QTableWidgetItem(alert.get("severity", "")))
             self.alerts_table.setItem(i, 2, QTableWidgetItem(alert.get("title", "")))
             self.alerts_table.setItem(i, 3, QTableWidgetItem(alert.get("message", "")))
@@ -239,7 +262,8 @@ class MonitoringWidget(QWidget):
         """Update connections list"""
         self.connections = connections
         self.connection_combo.clear()
-        self.connection_combo.addItem(self.i18n.translate("monitoring.select_connection"))
+        self.connection_combo.addItem(
+            self.i18n.translate("monitoring.select_connection")
+        )
         for conn in self.connections:
             self.connection_combo.addItem(conn["name"], conn)
-

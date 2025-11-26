@@ -75,4 +75,3 @@ def get_theme_manager() -> ThemeManager:
     if _theme_manager is None:
         _theme_manager = ThemeManager()
     return _theme_manager
-

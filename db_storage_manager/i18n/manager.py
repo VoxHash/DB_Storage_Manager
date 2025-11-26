@@ -70,11 +70,11 @@ class I18nManager:
 
     def translate(self, key: str, default: Optional[str] = None, **kwargs) -> str:
         """Translate a key to current language with optional format arguments
-        
+
         Supports nested keys like 'dashboard.connection' or 'common.ok'
         """
         translations = self.translations.get(self.current_language, {})
-        
+
         # Handle nested keys (e.g., "dashboard.connection")
         keys = key.split(".")
         text = translations
@@ -86,17 +86,17 @@ class I18nManager:
             else:
                 text = None
                 break
-        
+
         if text is None:
             text = default or key
-        
+
         # Support format strings like {size}, {count}, etc.
         if kwargs and isinstance(text, str):
             try:
                 text = text.format(**kwargs)
             except (KeyError, ValueError):
                 pass  # If formatting fails, return original text
-        
+
         return text
 
     def is_rtl(self) -> bool:
@@ -124,4 +124,3 @@ def get_translator():
     """Get translator function"""
     manager = get_i18n_manager()
     return manager.translate
-

@@ -9,6 +9,7 @@ from enum import Enum
 
 class AlertSeverity(Enum):
     """Alert severity levels"""
+
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
@@ -17,7 +18,9 @@ class AlertSeverity(Enum):
 class Alert:
     """Database alert"""
 
-    def __init__(self, title: str, message: str, severity: AlertSeverity, source: str = "system"):
+    def __init__(
+        self, title: str, message: str, severity: AlertSeverity, source: str = "system"
+    ):
         self.title = title
         self.message = message
         self.severity = severity
@@ -57,7 +60,7 @@ class AlertManager:
     def check_metrics(self, metrics: Dict[str, Any]) -> List[Alert]:
         """Check metrics against thresholds and generate alerts"""
         new_alerts = []
-        
+
         # Check connection count
         active_connections = metrics.get("activeConnections", 0)
         if active_connections >= self.thresholds["connection_count"]["critical"]:
@@ -65,7 +68,7 @@ class AlertManager:
                 "High Connection Count",
                 f"Database has {active_connections} active connections (critical threshold: {self.thresholds['connection_count']['critical']})",
                 AlertSeverity.CRITICAL,
-                "connection_monitor"
+                "connection_monitor",
             )
             new_alerts.append(alert)
         elif active_connections >= self.thresholds["connection_count"]["warning"]:
@@ -73,10 +76,10 @@ class AlertManager:
                 "Elevated Connection Count",
                 f"Database has {active_connections} active connections (warning threshold: {self.thresholds['connection_count']['warning']})",
                 AlertSeverity.WARNING,
-                "connection_monitor"
+                "connection_monitor",
             )
             new_alerts.append(alert)
-        
+
         # Check cache hit ratio
         cache_hit_ratio = metrics.get("cacheHitRatio", 100)
         if cache_hit_ratio <= self.thresholds["cache_hit_ratio"]["critical"]:
@@ -84,7 +87,7 @@ class AlertManager:
                 "Low Cache Hit Ratio",
                 f"Cache hit ratio is {cache_hit_ratio:.2f}% (critical threshold: {self.thresholds['cache_hit_ratio']['critical']}%)",
                 AlertSeverity.CRITICAL,
-                "performance_monitor"
+                "performance_monitor",
             )
             new_alerts.append(alert)
         elif cache_hit_ratio <= self.thresholds["cache_hit_ratio"]["warning"]:
@@ -92,10 +95,10 @@ class AlertManager:
                 "Suboptimal Cache Hit Ratio",
                 f"Cache hit ratio is {cache_hit_ratio:.2f}% (warning threshold: {self.thresholds['cache_hit_ratio']['warning']}%)",
                 AlertSeverity.WARNING,
-                "performance_monitor"
+                "performance_monitor",
             )
             new_alerts.append(alert)
-        
+
         # Add new alerts
         for alert in new_alerts:
             self.alerts.append(alert)
@@ -105,7 +108,7 @@ class AlertManager:
                     callback(alert)
                 except Exception:
                     pass
-        
+
         return new_alerts
 
     def get_active_alerts(self) -> List[Alert]:
@@ -114,7 +117,11 @@ class AlertManager:
 
     def get_critical_alerts(self) -> List[Alert]:
         """Get all critical alerts"""
-        return [a for a in self.alerts if a.severity == AlertSeverity.CRITICAL and not a.acknowledged]
+        return [
+            a
+            for a in self.alerts
+            if a.severity == AlertSeverity.CRITICAL and not a.acknowledged
+        ]
 
     def acknowledge_alert(self, alert_index: int) -> None:
         """Acknowledge an alert"""
@@ -130,4 +137,3 @@ class AlertManager:
     def get_thresholds(self) -> Dict[str, Dict[str, float]]:
         """Get all thresholds"""
         return self.thresholds.copy()
-

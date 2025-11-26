@@ -4,6 +4,7 @@ ClickHouse database connection
 
 import asyncio
 from typing import Any, Dict, List
+
 try:
     from clickhouse_driver import Client
 except ImportError:
@@ -25,7 +26,9 @@ class ClickHouseConnection(DatabaseConnection):
         super().__init__(config)
         self.client = None
         if Client is None:
-            raise ImportError("clickhouse-driver is required for ClickHouse support. Install it with: pip install clickhouse-driver")
+            raise ImportError(
+                "clickhouse-driver is required for ClickHouse support. Install it with: pip install clickhouse-driver"
+            )
 
     async def connect(self) -> None:
         """Connect to ClickHouse database"""
@@ -51,7 +54,8 @@ class ClickHouseConnection(DatabaseConnection):
             await self.connect()
 
         # Get table sizes
-        result = self.client.execute("""
+        result = self.client.execute(
+            """
             SELECT 
                 database || '.' || table AS name,
                 formatReadableSize(sum(bytes)) as size_str,
@@ -61,24 +65,29 @@ class ClickHouseConnection(DatabaseConnection):
             WHERE active = 1
             GROUP BY database, table
             ORDER BY sum(bytes) DESC
-        """)
+        """
+        )
 
         tables = []
         total_size = 0
         for row in result:
             table_size = row[2] or 0
-            tables.append({
-                "name": row[0],
-                "size": table_size,
-                "rowCount": row[3] or 0,
-                "indexSize": 0,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": row[0],
+                    "size": table_size,
+                    "rowCount": row[3] or 0,
+                    "indexSize": 0,
+                    "bloat": 0.0,
+                }
+            )
             total_size += table_size
 
-        largest_table = max(tables, key=lambda t: t["size"]) if tables else {
-            "name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0
-        }
+        largest_table = (
+            max(tables, key=lambda t: t["size"])
+            if tables
+            else {"name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0}
+        )
 
         return {
             "totalSize": total_size,
@@ -98,7 +107,7 @@ class ClickHouseConnection(DatabaseConnection):
             raise ValueError("Only SELECT queries are allowed in safe mode")
 
         result = self.client.execute(query, with_column_types=True)
-        
+
         if result:
             columns = [col[0] for col in result[1]]
             rows = []
@@ -122,12 +131,14 @@ class ClickHouseConnection(DatabaseConnection):
             await self.connect()
 
         # Get tables
-        result = self.client.execute("""
+        result = self.client.execute(
+            """
             SELECT name
             FROM system.tables
             WHERE database = currentDatabase()
             ORDER BY name
-        """)
+        """
+        )
         tables = [row[0] for row in result]
 
         return {
@@ -149,16 +160,16 @@ class ClickHouseConnection(DatabaseConnection):
     async def create_backup(self, backup_path: str) -> str:
         """Create ClickHouse backup"""
         import subprocess
-        
+
         if not self.client:
             await self.connect()
 
         # Use clickhouse-backup or clickhouse-client for backup
         backup_file = f"{backup_path}.sql"
-        
+
         # Export schema and data
         tables = await self.get_schema()
-        with open(backup_file, 'w') as f:
+        with open(backup_file, "w") as f:
             for table in tables["tables"]:
                 result = self.client.execute(f"SHOW CREATE TABLE {table}")
                 f.write(f"{result[0][0]};\n")
@@ -166,7 +177,7 @@ class ClickHouseConnection(DatabaseConnection):
                 data = self.client.execute(f"SELECT * FROM {table}")
                 for row in data:
                     f.write(f"INSERT INTO {table} VALUES {row};\n")
-        
+
         return backup_file
 
     async def restore_backup(self, backup_path: str) -> None:
@@ -175,11 +186,10 @@ class ClickHouseConnection(DatabaseConnection):
             await self.connect()
 
         # Read and execute backup file
-        with open(backup_path, 'r') as f:
+        with open(backup_path, "r") as f:
             query = ""
             for line in f:
                 query += line
-                if line.strip().endswith(';'):
+                if line.strip().endswith(";"):
                     self.client.execute(query)
                     query = ""
-

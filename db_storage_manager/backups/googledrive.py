@@ -38,7 +38,9 @@ class GoogleDriveBackupAdapter(BackupAdapter):
 
         source_path = Path(options.backupPath)
         if not source_path.exists():
-            raise FileNotFoundError(f"Backup source file not found: {options.backupPath}")
+            raise FileNotFoundError(
+                f"Backup source file not found: {options.backupPath}"
+            )
 
         # Prepare file metadata
         file_metadata = {
@@ -60,11 +62,15 @@ class GoogleDriveBackupAdapter(BackupAdapter):
         media = MediaFileUpload(str(source_path), mimetype="application/octet-stream")
 
         try:
-            file = self.drive_service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields="id, name, size, createdTime, parents, properties",
-            ).execute()
+            file = (
+                self.drive_service.files()
+                .create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields="id, name, size, createdTime, parents, properties",
+                )
+                .execute()
+            )
 
             size = int(file.get("size", 0))
 
@@ -73,7 +79,9 @@ class GoogleDriveBackupAdapter(BackupAdapter):
                 name=file.get("name"),
                 path=file.get("id"),
                 size=size,
-                createdAt=datetime.fromisoformat(file.get("createdTime").replace("Z", "+00:00")),
+                createdAt=datetime.fromisoformat(
+                    file.get("createdTime").replace("Z", "+00:00")
+                ),
                 status="completed",
                 metadata={
                     "fileId": file.get("id"),
@@ -115,36 +123,52 @@ class GoogleDriveBackupAdapter(BackupAdapter):
         """List all Google Drive backups"""
         backups = []
 
-        query = f"'{self.folder_id}' in parents and trashed = false" if self.folder_id else "trashed = false"
+        query = (
+            f"'{self.folder_id}' in parents and trashed = false"
+            if self.folder_id
+            else "trashed = false"
+        )
         query += " and name contains '.backup'"
 
         try:
-            results = self.drive_service.files().list(
-                q=query,
-                fields="files(id, name, size, createdTime, parents, properties)",
-                pageSize=1000,
-            ).execute()
+            results = (
+                self.drive_service.files()
+                .list(
+                    q=query,
+                    fields="files(id, name, size, createdTime, parents, properties)",
+                    pageSize=1000,
+                )
+                .execute()
+            )
 
             files = results.get("files", [])
 
             for file in files:
                 properties = file.get("properties", {})
-                backups.append(BackupInfo(
-                    id=properties.get("backup-id", str(uuid.uuid4())),
-                    name=file.get("name"),
-                    path=file.get("id"),
-                    size=int(file.get("size", 0)),
-                    createdAt=datetime.fromisoformat(file.get("createdTime").replace("Z", "+00:00")),
-                    status="completed",
-                    metadata={
-                        "fileId": file.get("id"),
-                        "folderId": file.get("parents", [None])[0] if file.get("parents") else None,
-                        "compression": properties.get("compression", "none"),
-                        "encryption": properties.get("encryption") == "True",
-                        "databaseType": properties.get("database-type"),
-                        "connectionId": properties.get("connection-id"),
-                    },
-                ))
+                backups.append(
+                    BackupInfo(
+                        id=properties.get("backup-id", str(uuid.uuid4())),
+                        name=file.get("name"),
+                        path=file.get("id"),
+                        size=int(file.get("size", 0)),
+                        createdAt=datetime.fromisoformat(
+                            file.get("createdTime").replace("Z", "+00:00")
+                        ),
+                        status="completed",
+                        metadata={
+                            "fileId": file.get("id"),
+                            "folderId": (
+                                file.get("parents", [None])[0]
+                                if file.get("parents")
+                                else None
+                            ),
+                            "compression": properties.get("compression", "none"),
+                            "encryption": properties.get("encryption") == "True",
+                            "databaseType": properties.get("database-type"),
+                            "connectionId": properties.get("connection-id"),
+                        },
+                    )
+                )
         except HttpError as error:
             raise RuntimeError(f"Google Drive list failed: {error}")
 
@@ -171,4 +195,3 @@ class GoogleDriveBackupAdapter(BackupAdapter):
             return True
         except HttpError:
             return False
-

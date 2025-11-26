@@ -3,8 +3,17 @@ Advanced dashboard with customizable widgets and drag-and-drop
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, QLabel,
-    QMenu, QAction, QMessageBox, QLineEdit, QCheckBox
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QComboBox,
+    QLabel,
+    QMenu,
+    QAction,
+    QMessageBox,
+    QLineEdit,
+    QCheckBox,
 )
 from PyQt6.QtCore import Qt, QMimeData, pyqtSignal, QPointF
 from PyQt6.QtGui import QDrag, QPainter, QColor
@@ -60,23 +69,24 @@ class DashboardContainer(QWidget):
     def add_widget(self, widget_type: str, position: Optional[QPointF] = None):
         """Add a widget to the dashboard"""
         widget_id = f"{widget_type}_{len(self.widgets)}"
-        
+
         if widget_type == "chart":
             widget = LineChartWidget("Storage Growth")
         elif widget_type == "table":
             from .dashboard import DashboardWidget
+
             widget = DashboardWidget([])
         elif widget_type == "summary":
             widget = QLabel("Summary Widget")
         else:
             widget = QLabel(f"{widget_type} Widget")
-        
+
         self.widgets[widget_id] = widget
         if position:
             widget.move(position.x(), position.y())
         else:
             widget.show()
-        
+
         return widget_id
 
     def remove_widget(self, widget_id: str):
@@ -105,31 +115,31 @@ class AdvancedDashboardWidget(QWidget):
 
         # Toolbar
         toolbar = QHBoxLayout()
-        
+
         # Widget selector
         toolbar.addWidget(QLabel("Add Widget:"))
         self.widget_combo = QComboBox()
         self.widget_combo.addItems(["Chart", "Table", "Summary", "Metrics"])
         toolbar.addWidget(self.widget_combo)
-        
+
         add_widget_btn = QPushButton("Add Widget")
         add_widget_btn.clicked.connect(self._add_widget)
         toolbar.addWidget(add_widget_btn)
-        
+
         # Filter
         toolbar.addWidget(QLabel("Filter:"))
         self.filter_edit = QLineEdit()
         self.filter_edit.setPlaceholderText("Filter connections...")
         self.filter_edit.textChanged.connect(self._apply_filter)
         toolbar.addWidget(self.filter_edit)
-        
+
         toolbar.addStretch()
-        
+
         # Real-time update toggle
         self.realtime_check = QCheckBox("Real-time Updates")
         self.realtime_check.setChecked(False)
         toolbar.addWidget(self.realtime_check)
-        
+
         layout.addLayout(toolbar)
 
         # Dashboard container
@@ -162,4 +172,3 @@ class AdvancedDashboardWidget(QWidget):
     def update_connections(self, connections):
         """Update connections list"""
         self.connections = connections
-

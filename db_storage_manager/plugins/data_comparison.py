@@ -24,7 +24,9 @@ class DataComparisonPlugin(Plugin):
         """Initialize comparison plugin"""
         return True
 
-    def execute(self, db1: DatabaseConnection, db2: DatabaseConnection, table: str) -> Dict[str, Any]:
+    def execute(
+        self, db1: DatabaseConnection, db2: DatabaseConnection, table: str
+    ) -> Dict[str, Any]:
         """Compare data between two databases"""
         # Comparison logic would go here
         return {
@@ -40,4 +42,3 @@ class DataComparisonPlugin(Plugin):
 
 
 PLUGIN_CLASS = DataComparisonPlugin
-

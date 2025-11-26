@@ -62,7 +62,11 @@ class RedisConnection(DatabaseConnection):
         key_sizes = {}
 
         for key in keys:
-            key_type = self.client.type(key).decode() if isinstance(self.client.type(key), bytes) else self.client.type(key)
+            key_type = (
+                self.client.type(key).decode()
+                if isinstance(self.client.type(key), bytes)
+                else self.client.type(key)
+            )
             key_types[key_type] = key_types.get(key_type, 0) + 1
 
             try:
@@ -74,20 +78,26 @@ class RedisConnection(DatabaseConnection):
         # Create tables from key types
         tables = []
         for key_type, count in key_types.items():
-            tables.append({
-                "name": f"keys:{key_type}",
-                "size": 0,
-                "rowCount": count,
-                "indexSize": 0,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": f"keys:{key_type}",
+                    "size": 0,
+                    "rowCount": count,
+                    "indexSize": 0,
+                    "bloat": 0.0,
+                }
+            )
 
         # Find largest key
         largest_key = {"name": "N/A", "size": 0}
         if key_sizes:
             largest_key_name = max(key_sizes, key=key_sizes.get)
             largest_key = {
-                "name": largest_key_name.decode() if isinstance(largest_key_name, bytes) else largest_key_name,
+                "name": (
+                    largest_key_name.decode()
+                    if isinstance(largest_key_name, bytes)
+                    else largest_key_name
+                ),
                 "size": key_sizes[largest_key_name],
             }
 
@@ -108,13 +118,16 @@ class RedisConnection(DatabaseConnection):
 
         import time
         import json
+
         start_time = time.time()
 
         try:
             # Try to parse as JSON array for multi commands
             try:
                 commands = json.loads(query)
-                if isinstance(commands, list) and all(isinstance(c, list) for c in commands):
+                if isinstance(commands, list) and all(
+                    isinstance(c, list) for c in commands
+                ):
                     pipe = self.client.pipeline()
                     for cmd in commands:
                         pipe.execute_command(*cmd)
@@ -172,26 +185,44 @@ class RedisConnection(DatabaseConnection):
         key_types = {}
 
         for key in keys:
-            key_type = self.client.type(key).decode() if isinstance(self.client.type(key), bytes) else self.client.type(key)
+            key_type = (
+                self.client.type(key).decode()
+                if isinstance(self.client.type(key), bytes)
+                else self.client.type(key)
+            )
             key_types[key_type] = key_types.get(key_type, 0) + 1
 
         # Create tables from key types
         tables = []
         for key_type, count in key_types.items():
-            tables.append({
-                "name": f"keys:{key_type}",
-                "columns": [
-                    {"name": "key", "type": "string", "nullable": False, "defaultValue": None},
-                    {"name": "value", "type": key_type, "nullable": True, "defaultValue": None},
-                ],
-                "indexes": [],
-            })
+            tables.append(
+                {
+                    "name": f"keys:{key_type}",
+                    "columns": [
+                        {
+                            "name": "key",
+                            "type": "string",
+                            "nullable": False,
+                            "defaultValue": None,
+                        },
+                        {
+                            "name": "value",
+                            "type": key_type,
+                            "nullable": True,
+                            "defaultValue": None,
+                        },
+                    ],
+                    "indexes": [],
+                }
+            )
 
         return {
-            "schemas": [{
-                "name": self.config.database or "default",
-                "tables": tables,
-            }]
+            "schemas": [
+                {
+                    "name": self.config.database or "default",
+                    "tables": tables,
+                }
+            ]
         }
 
     async def create_backup(self, backup_path: str) -> Dict[str, Any]:
@@ -218,6 +249,7 @@ class RedisConnection(DatabaseConnection):
 
         # Copy RDB file
         import shutil
+
         shutil.copy2(rdb_path, backup_file)
         size = backup_file.stat().st_size
 
@@ -245,8 +277,8 @@ class RedisConnection(DatabaseConnection):
 
         # Copy backup file to Redis data directory
         import shutil
+
         shutil.copy2(backup_file, rdb_path)
 
         # Note: Redis needs to be restarted to load the new RDB file
         # This is typically done by the system administrator or Docker container restart
-

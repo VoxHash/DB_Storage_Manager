@@ -12,7 +12,9 @@ APP_VERSION = "1.0.0"
 
 # User data directory
 if os.name == "nt":  # Windows
-    USER_DATA_DIR = Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / APP_NAME
+    USER_DATA_DIR = (
+        Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / APP_NAME
+    )
 else:  # macOS/Linux
     USER_DATA_DIR = Path.home() / ".config" / APP_NAME.lower().replace(" ", "-")
 
@@ -54,4 +56,3 @@ DEFAULT_PORT = {
     "clickhouse": 9000,
     "influxdb": 8086,
 }
-

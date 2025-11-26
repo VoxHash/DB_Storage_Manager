@@ -54,7 +54,8 @@ class PostgreSQLConnection(DatabaseConnection):
         cursor = self.connection.cursor(cursor_factory=RealDictCursor)
 
         # Get table sizes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 schemaname || '.' || tablename as name,
                 pg_total_relation_size(schemaname || '.' || tablename) as size,
@@ -64,47 +65,58 @@ class PostgreSQLConnection(DatabaseConnection):
             FROM pg_tables t
             WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
             ORDER BY size DESC
-        """)
+        """
+        )
 
         tables = []
         total_size = 0
         for row in cursor.fetchall():
             # Get actual row count
-            cursor.execute(f'SELECT COUNT(*) FROM "{row["name"].split(".")[0]}"."{row["name"].split(".")[1]}"')
+            cursor.execute(
+                f'SELECT COUNT(*) FROM "{row["name"].split(".")[0]}"."{row["name"].split(".")[1]}"'
+            )
             row_count = cursor.fetchone()[0]
 
             table_size = row["table_size"] or 0
             index_size = (row["size"] or 0) - table_size
 
-            tables.append({
-                "name": row["name"],
-                "size": table_size,
-                "rowCount": row_count,
-                "indexSize": index_size,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": row["name"],
+                    "size": table_size,
+                    "rowCount": row_count,
+                    "indexSize": index_size,
+                    "bloat": 0.0,
+                }
+            )
             total_size += row["size"] or 0
 
         # Get indexes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 schemaname || '.' || indexname as name,
                 tablename as table_name,
                 pg_relation_size(indexrelid) as size
             FROM pg_indexes
             WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-        """)
+        """
+        )
 
         indexes = []
         for row in cursor.fetchall():
-            indexes.append({
-                "name": row["name"],
-                "tableName": row["table_name"],
-                "size": row["size"] or 0,
-                "bloat": 0.0,
-            })
+            indexes.append(
+                {
+                    "name": row["name"],
+                    "tableName": row["table_name"],
+                    "size": row["size"] or 0,
+                    "bloat": 0.0,
+                }
+            )
 
-        largest_table = tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        largest_table = (
+            tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        )
 
         return {
             "totalSize": total_size,
@@ -126,6 +138,7 @@ class PostgreSQLConnection(DatabaseConnection):
 
         cursor = self.connection.cursor(cursor_factory=RealDictCursor)
         import time
+
         start_time = time.time()
 
         try:
@@ -166,29 +179,35 @@ class PostgreSQLConnection(DatabaseConnection):
         cursor = self.connection.cursor(cursor_factory=RealDictCursor)
 
         # Get schemas
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT schema_name 
             FROM information_schema.schemata 
             WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
-        """)
+        """
+        )
 
         schemas = []
         for schema_row in cursor.fetchall():
             schema_name = schema_row["schema_name"]
 
             # Get tables
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT table_name 
                 FROM information_schema.tables 
                 WHERE table_schema = %s
-            """, (schema_name,))
+            """,
+                (schema_name,),
+            )
 
             tables = []
             for table_row in cursor.fetchall():
                 table_name = table_row["table_name"]
 
                 # Get columns
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT 
                         column_name,
                         data_type,
@@ -197,44 +216,57 @@ class PostgreSQLConnection(DatabaseConnection):
                     FROM information_schema.columns
                     WHERE table_schema = %s AND table_name = %s
                     ORDER BY ordinal_position
-                """, (schema_name, table_name))
+                """,
+                    (schema_name, table_name),
+                )
 
                 columns = []
                 for col in cursor.fetchall():
-                    columns.append({
-                        "name": col["column_name"],
-                        "type": col["data_type"],
-                        "nullable": col["is_nullable"] == "YES",
-                        "defaultValue": col["column_default"],
-                    })
+                    columns.append(
+                        {
+                            "name": col["column_name"],
+                            "type": col["data_type"],
+                            "nullable": col["is_nullable"] == "YES",
+                            "defaultValue": col["column_default"],
+                        }
+                    )
 
                 # Get indexes
-                cursor.execute("""
+                cursor.execute(
+                    """
                     SELECT 
                         indexname,
                         indexdef
                     FROM pg_indexes
                     WHERE schemaname = %s AND tablename = %s
-                """, (schema_name, table_name))
+                """,
+                    (schema_name, table_name),
+                )
 
                 indexes = []
                 for idx in cursor.fetchall():
-                    indexes.append({
-                        "name": idx["indexname"],
-                        "columns": [],
-                        "unique": "UNIQUE" in idx["indexdef"].upper(),
-                    })
+                    indexes.append(
+                        {
+                            "name": idx["indexname"],
+                            "columns": [],
+                            "unique": "UNIQUE" in idx["indexdef"].upper(),
+                        }
+                    )
 
-                tables.append({
-                    "name": table_name,
-                    "columns": columns,
-                    "indexes": indexes,
-                })
+                tables.append(
+                    {
+                        "name": table_name,
+                        "columns": columns,
+                        "indexes": indexes,
+                    }
+                )
 
-            schemas.append({
-                "name": schema_name,
-                "tables": tables,
-            })
+            schemas.append(
+                {
+                    "name": schema_name,
+                    "tables": tables,
+                }
+            )
 
         return {"schemas": schemas}
 
@@ -249,12 +281,18 @@ class PostgreSQLConnection(DatabaseConnection):
         # Build pg_dump command
         cmd = [
             "pg_dump",
-            "--host", self.config.host or "localhost",
-            "--port", str(self.config.port or 5432),
-            "--username", self.config.username,
-            "--dbname", self.config.database,
-            "--format", "c",
-            "--file", str(backup_file),
+            "--host",
+            self.config.host or "localhost",
+            "--port",
+            str(self.config.port or 5432),
+            "--username",
+            self.config.username,
+            "--dbname",
+            self.config.database,
+            "--format",
+            "c",
+            "--file",
+            str(backup_file),
         ]
 
         # Set password via environment variable
@@ -290,10 +328,14 @@ class PostgreSQLConnection(DatabaseConnection):
         # Build pg_restore command
         cmd = [
             "pg_restore",
-            "--host", self.config.host or "localhost",
-            "--port", str(self.config.port or 5432),
-            "--username", self.config.username,
-            "--dbname", self.config.database,
+            "--host",
+            self.config.host or "localhost",
+            "--port",
+            str(self.config.port or 5432),
+            "--username",
+            self.config.username,
+            "--dbname",
+            self.config.database,
             "--clean",
             "--if-exists",
             str(backup_file),
@@ -316,4 +358,3 @@ class PostgreSQLConnection(DatabaseConnection):
 
         if process.returncode != 0:
             raise RuntimeError(f"pg_restore failed: {stderr.decode()}")
-

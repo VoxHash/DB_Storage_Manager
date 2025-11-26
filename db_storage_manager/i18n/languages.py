@@ -20,4 +20,3 @@ DEFAULT_LANGUAGE = "en"
 
 # RTL languages (for future support)
 RTL_LANGUAGES = {"ar", "he", "fa", "ur"}  # None of our current languages, but prepared
-

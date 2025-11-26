@@ -28,24 +28,30 @@ class AWSRDSProvider:
             response = self.rds_client.describe_db_instances()
             databases = []
             for db in response.get("DBInstances", []):
-                databases.append({
-                    "id": db["DBInstanceIdentifier"],
-                    "engine": db["Engine"],
-                    "status": db["DBInstanceStatus"],
-                    "endpoint": db.get("Endpoint", {}).get("Address"),
-                    "port": db.get("Endpoint", {}).get("Port"),
-                    "size": db.get("AllocatedStorage"),
-                    "instance_class": db.get("DBInstanceClass"),
-                })
+                databases.append(
+                    {
+                        "id": db["DBInstanceIdentifier"],
+                        "engine": db["Engine"],
+                        "status": db["DBInstanceStatus"],
+                        "endpoint": db.get("Endpoint", {}).get("Address"),
+                        "port": db.get("Endpoint", {}).get("Port"),
+                        "size": db.get("AllocatedStorage"),
+                        "instance_class": db.get("DBInstanceClass"),
+                    }
+                )
             return databases
         except ClientError as e:
             print(f"AWS RDS error: {e}")
             return []
 
-    def get_database_connection_info(self, db_instance_id: str) -> Optional[Dict[str, Any]]:
+    def get_database_connection_info(
+        self, db_instance_id: str
+    ) -> Optional[Dict[str, Any]]:
         """Get connection information for a database"""
         try:
-            response = self.rds_client.describe_db_instances(DBInstanceIdentifier=db_instance_id)
+            response = self.rds_client.describe_db_instances(
+                DBInstanceIdentifier=db_instance_id
+            )
             if response.get("DBInstances"):
                 db = response["DBInstances"][0]
                 endpoint = db.get("Endpoint", {})
@@ -68,7 +74,7 @@ class AWSRDSProvider:
                 aws_secret_access_key=self.secret_key,
                 region_name=self.region,
             )
-            
+
             # Get CPU utilization
             cpu_response = cloudwatch.get_metric_statistics(
                 Namespace="AWS/RDS",
@@ -79,9 +85,13 @@ class AWSRDSProvider:
                 Period=300,
                 Statistics=["Average"],
             )
-            
+
             return {
-                "cpu_utilization": cpu_response.get("Datapoints", [{}])[-1].get("Average", 0) if cpu_response.get("Datapoints") else 0,
+                "cpu_utilization": (
+                    cpu_response.get("Datapoints", [{}])[-1].get("Average", 0)
+                    if cpu_response.get("Datapoints")
+                    else 0
+                ),
             }
         except Exception:
             return {}
@@ -93,4 +103,3 @@ class AWSRDSProvider:
             "monthly_cost": 0,
             "currency": "USD",
         }
-

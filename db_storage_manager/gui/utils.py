@@ -13,9 +13,10 @@ def apply_glassmorphism(widget: QWidget) -> None:
     theme = theme_manager.get_theme()
     glass = theme["glassmorphism"]
     colors = theme["colors"]
-    
+
     # Apply glassmorphism background to the widget itself
-    widget.setStyleSheet(f"""
+    widget.setStyleSheet(
+        f"""
         QWidget {{
             background-color: {glass['background']};
             border: 1px solid {glass['border']};
@@ -91,7 +92,8 @@ def apply_glassmorphism(widget: QWidget) -> None:
             border-radius: 6px;
             padding: 6px;
         }}
-    """)
+    """
+    )
 
 
 def apply_theme_to_app(app) -> None:
@@ -99,8 +101,9 @@ def apply_theme_to_app(app) -> None:
     theme_manager = get_theme_manager()
     theme = theme_manager.get_theme()
     colors = theme["colors"]
-    
-    app.setStyleSheet(f"""
+
+    app.setStyleSheet(
+        f"""
         QMainWindow {{
             background-color: {colors['background']};
             color: {colors['text']};
@@ -159,5 +162,5 @@ def apply_theme_to_app(app) -> None:
         QTabBar::tab:hover:!selected {{
             background-color: {colors['secondary']};
         }}
-    """)
-
+    """
+    )

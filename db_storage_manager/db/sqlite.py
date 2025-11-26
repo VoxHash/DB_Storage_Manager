@@ -46,12 +46,14 @@ class SQLiteConnection(DatabaseConnection):
             await self.connect()
 
         # Get tables
-        cursor = await self.connection.execute("""
+        cursor = await self.connection.execute(
+            """
             SELECT name
             FROM sqlite_master
             WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
-        """)
+        """
+        )
 
         tables = []
         total_size = 0
@@ -71,33 +73,41 @@ class SQLiteConnection(DatabaseConnection):
             # Approximate table size (distribute total DB size)
             table_size = db_size // table_count if table_count > 0 else 0
 
-            tables.append({
-                "name": table_name,
-                "size": table_size,
-                "rowCount": row_count,
-                "indexSize": 0,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": table_name,
+                    "size": table_size,
+                    "rowCount": row_count,
+                    "indexSize": 0,
+                    "bloat": 0.0,
+                }
+            )
             total_size += table_size
 
         # Get indexes
-        cursor = await self.connection.execute("""
+        cursor = await self.connection.execute(
+            """
             SELECT name, tbl_name
             FROM sqlite_master
             WHERE type = 'index' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
-        """)
+        """
+        )
 
         indexes = []
-        for (index_name, table_name) in await cursor.fetchall():
-            indexes.append({
-                "name": index_name,
-                "tableName": table_name,
-                "size": 0,
-                "bloat": 0.0,
-            })
+        for index_name, table_name in await cursor.fetchall():
+            indexes.append(
+                {
+                    "name": index_name,
+                    "tableName": table_name,
+                    "size": 0,
+                    "bloat": 0.0,
+                }
+            )
 
-        largest_table = tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        largest_table = (
+            tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        )
 
         return {
             "totalSize": total_size,
@@ -118,6 +128,7 @@ class SQLiteConnection(DatabaseConnection):
             raise ValueError("Only SELECT queries are allowed in safe mode")
 
         import time
+
         start_time = time.time()
 
         try:
@@ -160,12 +171,14 @@ class SQLiteConnection(DatabaseConnection):
             await self.connect()
 
         # Get tables
-        cursor = await self.connection.execute("""
+        cursor = await self.connection.execute(
+            """
             SELECT name
             FROM sqlite_master
             WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
             ORDER BY name
-        """)
+        """
+        )
 
         tables = []
         for (table_name,) in await cursor.fetchall():
@@ -177,39 +190,50 @@ class SQLiteConnection(DatabaseConnection):
 
             columns = []
             for col in columns_data:
-                columns.append({
-                    "name": col[1],  # column name
-                    "type": col[2],  # data type
-                    "nullable": col[3] == 0,  # not null flag
-                    "defaultValue": col[4],  # default value
-                })
+                columns.append(
+                    {
+                        "name": col[1],  # column name
+                        "type": col[2],  # data type
+                        "nullable": col[3] == 0,  # not null flag
+                        "defaultValue": col[4],  # default value
+                    }
+                )
 
             # Get indexes
-            index_cursor = await self.connection.execute("""
+            index_cursor = await self.connection.execute(
+                """
                 SELECT name, sql
                 FROM sqlite_master
                 WHERE type = 'index' AND tbl_name = ? AND name NOT LIKE 'sqlite_%'
-            """, (table_name,))
+            """,
+                (table_name,),
+            )
 
             indexes = []
-            for (index_name, index_sql) in await index_cursor.fetchall():
-                indexes.append({
-                    "name": index_name,
-                    "columns": [],
-                    "unique": "UNIQUE" in (index_sql or "").upper(),
-                })
+            for index_name, index_sql in await index_cursor.fetchall():
+                indexes.append(
+                    {
+                        "name": index_name,
+                        "columns": [],
+                        "unique": "UNIQUE" in (index_sql or "").upper(),
+                    }
+                )
 
-            tables.append({
-                "name": table_name,
-                "columns": columns,
-                "indexes": indexes,
-            })
+            tables.append(
+                {
+                    "name": table_name,
+                    "columns": columns,
+                    "indexes": indexes,
+                }
+            )
 
         return {
-            "schemas": [{
-                "name": self.config.database or "default",
-                "tables": tables,
-            }]
+            "schemas": [
+                {
+                    "name": self.config.database or "default",
+                    "tables": tables,
+                }
+            ]
         }
 
     async def create_backup(self, backup_path: str) -> Dict[str, Any]:
@@ -246,4 +270,3 @@ class SQLiteConnection(DatabaseConnection):
 
         # Reconnect
         await self.connect()
-

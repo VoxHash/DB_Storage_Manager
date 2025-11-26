@@ -14,6 +14,7 @@ import secrets
 
 class AuthMethod(Enum):
     """Authentication methods"""
+
     PASSWORD = "password"
     MFA = "mfa"
     LDAP = "ldap"
@@ -22,6 +23,7 @@ class AuthMethod(Enum):
 
 class UserRole(Enum):
     """User roles"""
+
     ADMIN = "admin"
     USER = "user"
     VIEWER = "viewer"
@@ -50,7 +52,9 @@ class MFAProvider:
         return pyotp.random_base32()
 
     @staticmethod
-    def generate_qr_code(secret: str, username: str, issuer: str = "DB Storage Manager") -> bytes:
+    def generate_qr_code(
+        secret: str, username: str, issuer: str = "DB Storage Manager"
+    ) -> bytes:
         """Generate QR code for MFA setup"""
         totp = pyotp.TOTP(secret)
         uri = totp.provisioning_uri(name=username, issuer_name=issuer)
@@ -82,6 +86,7 @@ class LDAPProvider:
         """Connect to LDAP server"""
         try:
             from ldap3 import Server, Connection, ALL
+
             server = Server(self.server, port=self.port, get_info=ALL)
             self.connection = Connection(server, auto_bind=True)
             return True
@@ -94,7 +99,7 @@ class LDAPProvider:
             if not self.connection:
                 if not self.connect():
                     return False
-            
+
             user_dn = f"cn={username},{self.base_dn}"
             self.connection.rebind(user=user_dn, password=password)
             return True
@@ -120,7 +125,9 @@ class SSOProvider:
         # Implementation would generate provider-specific auth URL
         return f"https://{self.provider}.com/oauth/authorize?client_id={self.client_id}&redirect_uri={redirect_uri}"
 
-    def exchange_code_for_token(self, code: str, redirect_uri: str) -> Optional[Dict[str, Any]]:
+    def exchange_code_for_token(
+        self, code: str, redirect_uri: str
+    ) -> Optional[Dict[str, Any]]:
         """Exchange authorization code for access token"""
         # Implementation would exchange code for token
         return None
@@ -173,14 +180,18 @@ class AuthenticationManager:
         self.rbac = RBACManager()
         self.current_user: Optional[User] = None
 
-    def register_user(self, username: str, email: str, password: str, role: UserRole = UserRole.USER) -> User:
+    def register_user(
+        self, username: str, email: str, password: str, role: UserRole = UserRole.USER
+    ) -> User:
         """Register a new user"""
         user = User(username, email, role)
         # In production, password would be hashed
         self.users[username] = user
         return user
 
-    def authenticate(self, username: str, password: str, mfa_token: Optional[str] = None) -> Optional[User]:
+    def authenticate(
+        self, username: str, password: str, mfa_token: Optional[str] = None
+    ) -> Optional[User]:
         """Authenticate user"""
         user = self.users.get(username)
         if not user:
@@ -201,7 +212,7 @@ class AuthenticationManager:
         """Authenticate via LDAP"""
         if not self.ldap_provider:
             return None
-        
+
         if self.ldap_provider.authenticate(username, password):
             # Create or get user
             user = self.users.get(username)
@@ -218,11 +229,11 @@ class AuthenticationManager:
         user = self.users.get(username)
         if not user:
             raise ValueError("User not found")
-        
+
         secret = self.mfa_provider.generate_secret()
         user.mfa_secret = secret
         user.mfa_enabled = True
-        
+
         qr_code = self.mfa_provider.generate_qr_code(secret, username)
         return secret, qr_code
 
@@ -233,4 +244,3 @@ class AuthenticationManager:
     def set_sso_provider(self, provider: str, client_id: str, client_secret: str):
         """Configure SSO provider"""
         self.sso_provider = SSOProvider(provider, client_id, client_secret)
-

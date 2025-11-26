@@ -69,4 +69,3 @@ THEMES = {
 }
 
 DEFAULT_THEME = "dark"
-

@@ -30,10 +30,10 @@ def main():
     from .i18n.manager import get_i18n_manager
     from .themes.manager import get_theme_manager
     from .gui.utils import apply_theme_to_app
-    
+
     get_i18n_manager()  # Initialize i18n
     get_theme_manager()  # Initialize theme
-    
+
     # Apply theme to application
     apply_theme_to_app(app)
 
@@ -47,4 +47,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -66,13 +66,15 @@ class MongoDBConnection(DatabaseConnection):
             index_size = stats.get("totalIndexSize", 0)
             row_count = stats.get("count", 0)
 
-            tables.append({
-                "name": collection_name,
-                "size": table_size,
-                "rowCount": row_count,
-                "indexSize": index_size,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": collection_name,
+                    "size": table_size,
+                    "rowCount": row_count,
+                    "indexSize": index_size,
+                    "bloat": 0.0,
+                }
+            )
             total_size += table_size + index_size
 
         # Sort by size
@@ -85,14 +87,18 @@ class MongoDBConnection(DatabaseConnection):
             index_list = collection.list_indexes()
 
             for index in index_list:
-                indexes.append({
-                    "name": index.get("name", "unnamed"),
-                    "tableName": collection_name,
-                    "size": 0,
-                    "bloat": 0.0,
-                })
+                indexes.append(
+                    {
+                        "name": index.get("name", "unnamed"),
+                        "tableName": collection_name,
+                        "size": 0,
+                        "bloat": 0.0,
+                    }
+                )
 
-        largest_table = tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        largest_table = (
+            tables[0] if tables else {"name": "N/A", "size": 0, "rowCount": 0}
+        )
 
         return {
             "totalSize": total_size,
@@ -111,6 +117,7 @@ class MongoDBConnection(DatabaseConnection):
 
         import time
         import json
+
         start_time = time.time()
 
         try:
@@ -174,34 +181,42 @@ class MongoDBConnection(DatabaseConnection):
             columns = []
             if sample_doc:
                 for key, value in sample_doc.items():
-                    columns.append({
-                        "name": key,
-                        "type": type(value).__name__,
-                        "nullable": True,
-                        "defaultValue": None,
-                    })
+                    columns.append(
+                        {
+                            "name": key,
+                            "type": type(value).__name__,
+                            "nullable": True,
+                            "defaultValue": None,
+                        }
+                    )
 
             # Get indexes
             index_list = collection.list_indexes()
             indexes = []
             for index in index_list:
-                indexes.append({
-                    "name": index.get("name", "unnamed"),
-                    "columns": list(index.get("key", {}).keys()),
-                    "unique": index.get("unique", False),
-                })
+                indexes.append(
+                    {
+                        "name": index.get("name", "unnamed"),
+                        "columns": list(index.get("key", {}).keys()),
+                        "unique": index.get("unique", False),
+                    }
+                )
 
-            tables.append({
-                "name": collection_name,
-                "columns": columns,
-                "indexes": indexes,
-            })
+            tables.append(
+                {
+                    "name": collection_name,
+                    "columns": columns,
+                    "indexes": indexes,
+                }
+            )
 
         return {
-            "schemas": [{
-                "name": self.config.database or "default",
-                "tables": tables,
-            }]
+            "schemas": [
+                {
+                    "name": self.config.database or "default",
+                    "tables": tables,
+                }
+            ]
         }
 
     async def create_backup(self, backup_path: str) -> Dict[str, Any]:
@@ -219,12 +234,18 @@ class MongoDBConnection(DatabaseConnection):
             # Build mongodump command
             cmd = [
                 "mongodump",
-                "--host", f"{self.config.host or 'localhost'}:{self.config.port or 27017}",
-                "--db", self.config.database,
-                "--username", self.config.username,
-                "--password", self.config.password,
-                "--authenticationDatabase", "admin",
-                "--out", str(temp_path),
+                "--host",
+                f"{self.config.host or 'localhost'}:{self.config.port or 27017}",
+                "--db",
+                self.config.database,
+                "--username",
+                self.config.username,
+                "--password",
+                self.config.password,
+                "--authenticationDatabase",
+                "admin",
+                "--out",
+                str(temp_path),
             ]
 
             # Run mongodump
@@ -266,11 +287,16 @@ class MongoDBConnection(DatabaseConnection):
             # Build mongorestore command
             cmd = [
                 "mongorestore",
-                "--host", f"{self.config.host or 'localhost'}:{self.config.port or 27017}",
-                "--db", self.config.database,
-                "--username", self.config.username,
-                "--password", self.config.password,
-                "--authenticationDatabase", "admin",
+                "--host",
+                f"{self.config.host or 'localhost'}:{self.config.port or 27017}",
+                "--db",
+                self.config.database,
+                "--username",
+                self.config.username,
+                "--password",
+                self.config.password,
+                "--authenticationDatabase",
+                "admin",
                 str(temp_path),
             ]
 
@@ -285,4 +311,3 @@ class MongoDBConnection(DatabaseConnection):
 
             if process.returncode != 0:
                 raise RuntimeError(f"mongorestore failed: {stderr.decode()}")
-

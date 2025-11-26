@@ -21,7 +21,9 @@ class BackupManager:
         """Register a backup adapter"""
         self.adapters[adapter_type] = adapter
 
-    def get_adapter(self, adapter_type: str, config: Optional[Dict[str, Any]] = None) -> Optional[BackupAdapter]:
+    def get_adapter(
+        self, adapter_type: str, config: Optional[Dict[str, Any]] = None
+    ) -> Optional[BackupAdapter]:
         """Get a backup adapter by type"""
         if adapter_type in self.adapters:
             return self.adapters[adapter_type]
@@ -29,16 +31,19 @@ class BackupManager:
         # Create adapter dynamically if not registered
         if adapter_type == "local":
             from .local import LocalBackupAdapter
+
             adapter = LocalBackupAdapter()
             self.register_adapter("local", adapter)
             return adapter
         elif adapter_type == "s3" and config:
             from .s3 import S3BackupAdapter
+
             adapter = S3BackupAdapter(config)
             self.register_adapter("s3", adapter)
             return adapter
         elif adapter_type == "googledrive" and config:
             from .googledrive import GoogleDriveBackupAdapter
+
             adapter = GoogleDriveBackupAdapter(config)
             self.register_adapter("googledrive", adapter)
             return adapter
@@ -59,7 +64,10 @@ class BackupManager:
         try:
             # Create temporary backup file
             temp_dir = Path(tempfile.gettempdir())
-            temp_backup = temp_dir / f"{connection_config.name}_{__import__('time').time()}.tmpbackup"
+            temp_backup = (
+                temp_dir
+                / f"{connection_config.name}_{__import__('time').time()}.tmpbackup"
+            )
 
             # Create backup using database connection
             backup_result = await db_connection.create_backup(str(temp_backup))
@@ -101,7 +109,9 @@ class BackupManager:
 
         try:
             # Create database connection
-            db_connection = DatabaseConnectionFactory.create_connection(connection_config)
+            db_connection = DatabaseConnectionFactory.create_connection(
+                connection_config
+            )
             await db_connection.connect()
 
             try:
@@ -127,7 +137,9 @@ class BackupManager:
         for connection in connections:
             try:
                 if on_progress:
-                    on_progress({"connectionId": connection.id, "status": "in_progress"})
+                    on_progress(
+                        {"connectionId": connection.id, "status": "in_progress"}
+                    )
 
                 backup_info = await self.create_backup(adapter, connection, options)
 
@@ -149,7 +161,12 @@ class BackupManager:
                 results.append(result)
 
                 if on_progress:
-                    on_progress({"connectionId": connection.id, "status": "failed", "error": str(e)})
+                    on_progress(
+                        {
+                            "connectionId": connection.id,
+                            "status": "failed",
+                            "error": str(e),
+                        }
+                    )
 
         return results
-

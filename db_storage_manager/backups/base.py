@@ -11,6 +11,7 @@ from datetime import datetime
 @dataclass
 class BackupInfo:
     """Backup information"""
+
     id: str
     name: str
     path: str
@@ -23,6 +24,7 @@ class BackupInfo:
 @dataclass
 class BackupOptions:
     """Backup options"""
+
     connectionId: str
     connectionName: str
     databaseType: str
@@ -62,4 +64,3 @@ class BackupAdapter(ABC):
     async def validate_options(self, options: BackupOptions) -> bool:
         """Validate backup options"""
         pass
-

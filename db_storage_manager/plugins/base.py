@@ -10,6 +10,7 @@ from enum import Enum
 
 class PluginType(Enum):
     """Plugin types"""
+
     MIGRATION = "migration"
     DATA_COMPARISON = "data_comparison"
     PERFORMANCE_MONITORING = "performance_monitoring"
@@ -20,6 +21,7 @@ class PluginType(Enum):
 @dataclass
 class PluginMetadata:
     """Plugin metadata"""
+
     name: str
     version: str
     author: str
@@ -73,7 +75,7 @@ class PluginManager:
         """Register a plugin"""
         if plugin.metadata.name in self.plugins:
             return False
-        
+
         if plugin.initialize(self.context):
             self.plugins[plugin.metadata.name] = plugin
             return True
@@ -108,4 +110,3 @@ class PluginManager:
     def set_context(self, key: str, value: Any) -> None:
         """Set context value for plugins"""
         self.context[key] = value
-

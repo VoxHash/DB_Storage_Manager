@@ -37,7 +37,9 @@ class S3BackupAdapter(BackupAdapter):
 
         source_path = Path(options.backupPath)
         if not source_path.exists():
-            raise FileNotFoundError(f"Backup source file not found: {options.backupPath}")
+            raise FileNotFoundError(
+                f"Backup source file not found: {options.backupPath}"
+            )
 
         # Upload to S3
         metadata = {
@@ -106,19 +108,21 @@ class S3BackupAdapter(BackupAdapter):
                     except ClientError:
                         metadata = {}
 
-                    backups.append(BackupInfo(
-                        id=metadata.get("backup-id", str(uuid.uuid4())),
-                        name=Path(obj["Key"]).name,
-                        path=obj["Key"],
-                        size=obj["Size"],
-                        createdAt=obj["LastModified"],
-                        status="completed",
-                        metadata={
-                            "key": obj["Key"],
-                            "bucket": self.bucket,
-                            **metadata,
-                        },
-                    ))
+                    backups.append(
+                        BackupInfo(
+                            id=metadata.get("backup-id", str(uuid.uuid4())),
+                            name=Path(obj["Key"]).name,
+                            path=obj["Key"],
+                            size=obj["Size"],
+                            createdAt=obj["LastModified"],
+                            status="completed",
+                            metadata={
+                                "key": obj["Key"],
+                                "bucket": self.bucket,
+                                **metadata,
+                            },
+                        )
+                    )
 
         return backups
 
@@ -140,4 +144,3 @@ class S3BackupAdapter(BackupAdapter):
             return True
         except ClientError:
             return False
-

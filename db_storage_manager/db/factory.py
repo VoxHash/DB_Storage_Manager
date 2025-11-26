@@ -43,4 +43,3 @@ class DatabaseConnectionFactory:
             return InfluxDBConnection(config)
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
-

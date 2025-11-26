@@ -26,11 +26,16 @@ class MigrationPlugin(Plugin):
         """Initialize migration plugin"""
         return True
 
-    def execute(self, source_db: DatabaseConnection, target_db: DatabaseConnection, tables: List[str] = None) -> Dict[str, Any]:
+    def execute(
+        self,
+        source_db: DatabaseConnection,
+        target_db: DatabaseConnection,
+        tables: List[str] = None,
+    ) -> Dict[str, Any]:
         """Execute migration"""
         self.source_db = source_db
         self.target_db = target_db
-        
+
         # Migration logic would go here
         return {
             "status": "success",
@@ -43,4 +48,3 @@ class MigrationPlugin(Plugin):
 
 
 PLUGIN_CLASS = MigrationPlugin
-

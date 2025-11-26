@@ -164,6 +164,7 @@ class ScheduledBackupManager:
 
     def _start_schedule(self, schedule: ScheduledBackup) -> None:
         """Start a scheduled backup"""
+
         def job():
             self._execute_backup(schedule)
 
@@ -184,9 +185,7 @@ class ScheduledBackupManager:
             # Get connections
             connections = self.secure_store.get_connections()
             if schedule.connections == "all":
-                target_connections = [
-                    ConnectionConfig(**conn) for conn in connections
-                ]
+                target_connections = [ConnectionConfig(**conn) for conn in connections]
             else:
                 target_connections = [
                     ConnectionConfig(**conn)
@@ -208,6 +207,7 @@ class ScheduledBackupManager:
 
             # Execute batch backup
             import asyncio
+
             asyncio.run(
                 self.backup_manager.create_batch_backups(
                     target_connections,
@@ -236,6 +236,7 @@ class ScheduledBackupManager:
             while self.running:
                 schedule_module.run_pending()
                 import time
+
                 time.sleep(1)
 
         self.scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
@@ -251,4 +252,3 @@ class ScheduledBackupManager:
         self.running = False
         if self.scheduler_thread:
             self.scheduler_thread.join(timeout=5)
-

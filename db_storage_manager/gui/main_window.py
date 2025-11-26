@@ -82,17 +82,17 @@ class MainWindow(QMainWindow):
 
         # Apply theme
         self._apply_theme()
-        
+
         # Apply background to central widget
         self._apply_central_widget_style()
 
     def _create_menu_bar(self):
         """Create application menu bar"""
         menubar = self.menuBar()
-        
+
         # Clear all existing menus to prevent duplicates
         menubar.clear()
-        
+
         t = self.i18n.translate
 
         # File menu
@@ -160,22 +160,25 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         """Apply theme to application"""
         apply_theme_to_app(self)
-    
+
     def _apply_central_widget_style(self):
         """Apply proper styling to central widget"""
         from ..themes.manager import get_theme_manager
+
         theme_manager = get_theme_manager()
         theme = theme_manager.get_theme()
         colors = theme["colors"]
-        
+
         central_widget = self.centralWidget()
         if central_widget:
-            central_widget.setStyleSheet(f"""
+            central_widget.setStyleSheet(
+                f"""
                 QWidget {{
                     background-color: {colors['background']};
                     color: {colors['text']};
                 }}
-            """)
+            """
+            )
 
     def _on_theme_changed(self, theme_key):
         """Handle theme change"""
@@ -219,4 +222,3 @@ class MainWindow(QMainWindow):
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
         self.monitoring_widget.update_connections(self.connections)
-

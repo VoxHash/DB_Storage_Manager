@@ -19,7 +19,7 @@ class MetricsCollector:
     async def collect_metrics(self) -> Dict[str, Any]:
         """Collect current database metrics"""
         db_type = self.connection.config.type.lower()
-        
+
         if db_type in ["postgresql", "postgres"]:
             return await self._collect_postgres_metrics()
         elif db_type in ["mysql", "mariadb"]:
@@ -33,9 +33,10 @@ class MetricsCollector:
         """Collect PostgreSQL-specific metrics"""
         if not self.connection.connected:
             await self.connection.connect()
-        
+
         try:
-            result = await self.connection.execute_query("""
+            result = await self.connection.execute_query(
+                """
                 SELECT 
                     (SELECT count(*) FROM pg_stat_activity) as active_connections,
                     (SELECT count(*) FROM pg_stat_activity WHERE state = 'active') as active_queries,
@@ -45,8 +46,10 @@ class MetricsCollector:
                     (SELECT sum(blks_read) FROM pg_stat_database WHERE datname = current_database()) as blocks_read,
                     (SELECT sum(blks_hit) FROM pg_stat_database WHERE datname = current_database()) as blocks_hit,
                     (SELECT pg_database_size(current_database())) as database_size
-            """, safe_mode=True)
-            
+            """,
+                safe_mode=True,
+            )
+
             if result.get("rows"):
                 row = result["rows"][0]
                 return {
@@ -60,22 +63,26 @@ class MetricsCollector:
                     "blocksHit": row.get("blocks_hit", 0),
                     "databaseSize": row.get("database_size", 0),
                     "cacheHitRatio": (
-                        row.get("blocks_hit", 0) / (row.get("blocks_read", 0) + row.get("blocks_hit", 1)) * 100
-                        if (row.get("blocks_read", 0) + row.get("blocks_hit", 0)) > 0 else 0
+                        row.get("blocks_hit", 0)
+                        / (row.get("blocks_read", 0) + row.get("blocks_hit", 1))
+                        * 100
+                        if (row.get("blocks_read", 0) + row.get("blocks_hit", 0)) > 0
+                        else 0
                     ),
                 }
         except Exception:
             pass
-        
+
         return await self._collect_basic_metrics()
 
     async def _collect_mysql_metrics(self) -> Dict[str, Any]:
         """Collect MySQL-specific metrics"""
         if not self.connection.connected:
             await self.connection.connect()
-        
+
         try:
-            result = await self.connection.execute_query("""
+            result = await self.connection.execute_query(
+                """
                 SHOW STATUS WHERE Variable_name IN (
                     'Threads_connected',
                     'Threads_running',
@@ -85,12 +92,14 @@ class MetricsCollector:
                     'Innodb_buffer_pool_read_requests',
                     'Innodb_buffer_pool_reads'
                 )
-            """, safe_mode=True)
-            
+            """,
+                safe_mode=True,
+            )
+
             metrics = {}
             for row in result.get("rows", []):
                 metrics[row.get("Variable_name", "").lower()] = int(row.get("Value", 0))
-            
+
             return {
                 "timestamp": datetime.now().isoformat(),
                 "activeConnections": metrics.get("threads_connected", 0),
@@ -99,29 +108,41 @@ class MetricsCollector:
                 "transactionsCommitted": metrics.get("com_commit", 0),
                 "transactionsRolledBack": metrics.get("com_rollback", 0),
                 "cacheHitRatio": (
-                    metrics.get("innodb_buffer_pool_read_requests", 0) / 
-                    (metrics.get("innodb_buffer_pool_reads", 0) + metrics.get("innodb_buffer_pool_read_requests", 1)) * 100
-                    if (metrics.get("innodb_buffer_pool_reads", 0) + metrics.get("innodb_buffer_pool_read_requests", 0)) > 0 else 0
+                    metrics.get("innodb_buffer_pool_read_requests", 0)
+                    / (
+                        metrics.get("innodb_buffer_pool_reads", 0)
+                        + metrics.get("innodb_buffer_pool_read_requests", 1)
+                    )
+                    * 100
+                    if (
+                        metrics.get("innodb_buffer_pool_reads", 0)
+                        + metrics.get("innodb_buffer_pool_read_requests", 0)
+                    )
+                    > 0
+                    else 0
                 ),
             }
         except Exception:
             pass
-        
+
         return await self._collect_basic_metrics()
 
     async def _collect_sqlserver_metrics(self) -> Dict[str, Any]:
         """Collect SQL Server-specific metrics"""
         if not self.connection.connected:
             await self.connection.connect()
-        
+
         try:
-            result = await self.connection.execute_query("""
+            result = await self.connection.execute_query(
+                """
                 SELECT 
                     (SELECT COUNT(*) FROM sys.dm_exec_sessions WHERE is_user_process = 1) as active_connections,
                     (SELECT COUNT(*) FROM sys.dm_exec_requests WHERE status = 'running') as active_queries,
                     (SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Transactions/sec') as transactions_per_sec
-            """, safe_mode=True)
-            
+            """,
+                safe_mode=True,
+            )
+
             if result.get("rows"):
                 row = result["rows"][0]
                 return {
@@ -132,7 +153,7 @@ class MetricsCollector:
                 }
         except Exception:
             pass
-        
+
         return await self._collect_basic_metrics()
 
     async def _collect_basic_metrics(self) -> Dict[str, Any]:
@@ -143,22 +164,24 @@ class MetricsCollector:
             "databaseType": self.connection.config.type,
         }
 
-    async def start_collecting(self, interval_seconds: int = 60, callback: Optional[Callable] = None) -> None:
+    async def start_collecting(
+        self, interval_seconds: int = 60, callback: Optional[Callable] = None
+    ) -> None:
         """Start collecting metrics at regular intervals"""
         self.collecting = True
-        
+
         while self.collecting:
             try:
                 metrics = await self.collect_metrics()
                 self.metrics_history.append(metrics)
-                
+
                 # Keep only last 1000 entries
                 if len(self.metrics_history) > 1000:
                     self.metrics_history = self.metrics_history[-1000:]
-                
+
                 if callback:
                     callback(metrics)
-                
+
                 await asyncio.sleep(interval_seconds)
             except Exception as e:
                 print(f"Error collecting metrics: {e}")
@@ -175,4 +198,3 @@ class MetricsCollector:
     def get_latest_metrics(self) -> Optional[Dict[str, Any]]:
         """Get latest metrics"""
         return self.metrics_history[-1] if self.metrics_history else None
-

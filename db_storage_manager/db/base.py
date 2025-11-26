@@ -10,6 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class ConnectionConfig:
     """Database connection configuration"""
+
     id: str
     name: str
     type: str  # postgresql, mysql, sqlite, mongodb, redis, oracle, sqlserver, clickhouse, influxdb
@@ -25,6 +26,7 @@ class ConnectionConfig:
 
 class TableInfo(TypedDict):
     """Table information"""
+
     name: str
     size: int
     rowCount: int
@@ -34,6 +36,7 @@ class TableInfo(TypedDict):
 
 class IndexInfo(TypedDict):
     """Index information"""
+
     name: str
     tableName: str
     size: int
@@ -42,6 +45,7 @@ class IndexInfo(TypedDict):
 
 class StorageAnalysis(TypedDict):
     """Storage analysis results"""
+
     totalSize: int
     tableCount: int
     indexCount: int
@@ -53,6 +57,7 @@ class StorageAnalysis(TypedDict):
 
 class QueryResult(TypedDict):
     """Query execution result"""
+
     columns: List[str]
     rows: List[Dict[str, Any]]
     rowCount: int
@@ -62,6 +67,7 @@ class QueryResult(TypedDict):
 
 class ColumnInfo(TypedDict):
     """Column information"""
+
     name: str
     type: str
     nullable: bool
@@ -70,6 +76,7 @@ class ColumnInfo(TypedDict):
 
 class TableSchema(TypedDict):
     """Table schema information"""
+
     name: str
     columns: List[ColumnInfo]
     indexes: List[Dict[str, Any]]
@@ -77,6 +84,7 @@ class TableSchema(TypedDict):
 
 class SchemaInfo(TypedDict, total=False):
     """Database schema information"""
+
     tables: List[str]
     views: List[str]
     procedures: List[str]
@@ -133,4 +141,3 @@ class DatabaseConnection(ABC):
             return True
         except Exception:
             return False
-

@@ -65,6 +65,7 @@ class SecureStore:
         """Get application settings"""
         if not SETTINGS_FILE.exists():
             from ..config import DEFAULT_SETTINGS
+
             return DEFAULT_SETTINGS.copy()
 
         try:
@@ -72,6 +73,7 @@ class SecureStore:
             return self._decrypt(encrypted)
         except Exception:
             from ..config import DEFAULT_SETTINGS
+
             return DEFAULT_SETTINGS.copy()
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
@@ -119,4 +121,3 @@ class SecureStore:
         # Set restrictive permissions
         if os.name != "nt":
             os.chmod(SSH_KEYS_FILE, 0o600)
-

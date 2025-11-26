@@ -4,6 +4,7 @@ Microsoft SQL Server database connection
 
 import asyncio
 from typing import Any, Dict, List
+
 try:
     import pyodbc
 except ImportError:
@@ -25,7 +26,9 @@ class SQLServerConnection(DatabaseConnection):
         super().__init__(config)
         self.connection = None
         if pyodbc is None:
-            raise ImportError("pyodbc is required for SQL Server support. Install it with: pip install pyodbc")
+            raise ImportError(
+                "pyodbc is required for SQL Server support. Install it with: pip install pyodbc"
+            )
 
     async def connect(self) -> None:
         """Connect to SQL Server database"""
@@ -58,7 +61,8 @@ class SQLServerConnection(DatabaseConnection):
         cursor = self.connection.cursor()
 
         # Get table sizes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 t.NAME AS name,
                 p.rows AS row_count,
@@ -70,23 +74,27 @@ class SQLServerConnection(DatabaseConnection):
             WHERE t.NAME NOT LIKE 'dt%' AND t.is_ms_shipped = 0 AND i.OBJECT_ID > 255
             GROUP BY t.NAME, p.rows
             ORDER BY size DESC
-        """)
+        """
+        )
 
         tables = []
         total_size = 0
         for row in cursor.fetchall():
             table_size = row[2] or 0
-            tables.append({
-                "name": row[0],
-                "size": table_size,
-                "rowCount": row[1] or 0,
-                "indexSize": 0,
-                "bloat": 0.0,
-            })
+            tables.append(
+                {
+                    "name": row[0],
+                    "size": table_size,
+                    "rowCount": row[1] or 0,
+                    "indexSize": 0,
+                    "bloat": 0.0,
+                }
+            )
             total_size += table_size
 
         # Get indexes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT 
                 i.name AS name,
                 OBJECT_NAME(i.object_id) AS table_name,
@@ -95,25 +103,30 @@ class SQLServerConnection(DatabaseConnection):
             INNER JOIN sys.dm_db_partition_stats s ON i.object_id = s.object_id AND i.index_id = s.index_id
             WHERE i.object_id > 255
             GROUP BY i.name, i.object_id
-        """)
+        """
+        )
 
         indexes = []
         index_total = 0
         for row in cursor.fetchall():
             index_size = row[2] or 0
-            indexes.append({
-                "name": row[0],
-                "tableName": row[1],
-                "size": index_size,
-                "bloat": 0.0,
-            })
+            indexes.append(
+                {
+                    "name": row[0],
+                    "tableName": row[1],
+                    "size": index_size,
+                    "bloat": 0.0,
+                }
+            )
             index_total += index_size
 
         cursor.close()
 
-        largest_table = max(tables, key=lambda t: t["size"]) if tables else {
-            "name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0
-        }
+        largest_table = (
+            max(tables, key=lambda t: t["size"])
+            if tables
+            else {"name": "", "size": 0, "rowCount": 0, "indexSize": 0, "bloat": 0.0}
+        )
 
         return {
             "totalSize": total_size + index_total,
@@ -135,7 +148,7 @@ class SQLServerConnection(DatabaseConnection):
         cursor = self.connection.cursor()
         try:
             cursor.execute(query)
-            
+
             if query.strip().upper().startswith("SELECT"):
                 columns = [desc[0] for desc in cursor.description]
                 rows = []
@@ -164,29 +177,35 @@ class SQLServerConnection(DatabaseConnection):
         cursor = self.connection.cursor()
 
         # Get tables
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT TABLE_NAME
             FROM INFORMATION_SCHEMA.TABLES
             WHERE TABLE_TYPE = 'BASE TABLE'
             ORDER BY TABLE_NAME
-        """)
+        """
+        )
         tables = [row[0] for row in cursor.fetchall()]
 
         # Get views
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT TABLE_NAME
             FROM INFORMATION_SCHEMA.VIEWS
             ORDER BY TABLE_NAME
-        """)
+        """
+        )
         views = [row[0] for row in cursor.fetchall()]
 
         # Get stored procedures
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT ROUTINE_NAME
             FROM INFORMATION_SCHEMA.ROUTINES
             WHERE ROUTINE_TYPE = 'PROCEDURE'
             ORDER BY ROUTINE_NAME
-        """)
+        """
+        )
         procedures = [row[0] for row in cursor.fetchall()]
 
         cursor.close()
@@ -213,13 +232,15 @@ class SQLServerConnection(DatabaseConnection):
 
         cursor = self.connection.cursor()
         backup_file = f"{backup_path}.bak"
-        
+
         try:
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 BACKUP DATABASE [{self.config.database}]
                 TO DISK = '{backup_file}'
                 WITH FORMAT, INIT, NAME = 'Full Backup of {self.config.database}'
-            """)
+            """
+            )
             self.connection.commit()
             return backup_file
         finally:
@@ -232,12 +253,13 @@ class SQLServerConnection(DatabaseConnection):
 
         cursor = self.connection.cursor()
         try:
-            cursor.execute(f"""
+            cursor.execute(
+                f"""
                 RESTORE DATABASE [{self.config.database}]
                 FROM DISK = '{backup_path}'
                 WITH REPLACE
-            """)
+            """
+            )
             self.connection.commit()
         finally:
             cursor.close()
-

@@ -67,7 +67,9 @@ class QueryWidget(QWidget):
 
         # Results table
         self.results_table = QTableWidget()
-        self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
         layout.addWidget(self.results_table)
 
     def _execute_query(self):
@@ -91,6 +93,7 @@ class QueryWidget(QWidget):
             db = DatabaseConnectionFactory.create_connection(config)
 
             import asyncio
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
@@ -120,7 +123,9 @@ class QueryWidget(QWidget):
         for row_idx, row_data in enumerate(rows):
             for col_idx, col_name in enumerate(columns):
                 value = row_data.get(col_name, "")
-                self.results_table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+                self.results_table.setItem(
+                    row_idx, col_idx, QTableWidgetItem(str(value))
+                )
 
     def _display_error(self, error):
         """Display error message"""
@@ -137,4 +142,3 @@ class QueryWidget(QWidget):
         self.connection_combo.addItem(self.i18n.translate("query.select_connection"))
         for conn in self.connections:
             self.connection_combo.addItem(conn["name"], conn)
-
