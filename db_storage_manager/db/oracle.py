@@ -3,6 +3,7 @@ Oracle Database connection
 """
 
 import asyncio
+import os
 from typing import Any, Dict, List
 
 try:
@@ -211,7 +212,6 @@ class OracleConnection(DatabaseConnection):
     async def create_backup(self, backup_path: str) -> str:
         """Create Oracle backup using expdp"""
         import subprocess
-        import os
 
         if not self.connection:
             await self.connect()

@@ -112,7 +112,7 @@ DB Storage Manager is designed with security as a top priority. All sensitive da
 - **Security Issues**: Report via GitHub Security Advisories
 - **Bug Reports**: Use GitHub Issues
 - **Responsible Disclosure**: Follow responsible disclosure practices
-- **Contact**: security@voxhash.com (if available)
+- **Contact**: contact@voxhash.dev
 
 ## Compliance
 
