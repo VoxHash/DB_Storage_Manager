@@ -22,6 +22,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+        
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -29,7 +34,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3-pyqt6 python3-pyqt6.qtcharts
 
-      # PyQt6 is installed via pip from requirements.txt, no system package needed
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install pyqt6
 
       - name: Install dependencies
         run: |
@@ -56,6 +64,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4

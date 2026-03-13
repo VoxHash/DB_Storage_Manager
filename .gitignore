@@ -94,3 +94,5 @@ temp/
 # IDE
 *.sublime-project
 *.sublime-workspace
+.cursorindexingignore
+.specstory/
