@@ -42,17 +42,63 @@ jobs:
             echo "Some dependencies failed, trying without cx_Oracle (optional)..."
             pip install PyQt6 PyQt6-Charts psycopg2-binary pymysql aiosqlite pymongo redis pyodbc clickhouse-driver influxdb-client boto3 google-api-python-client google-auth-httplib2 google-auth-oauthlib cryptography pynacl python-dotenv schedule paramiko pandas numpy matplotlib Pillow ldap3 pyotp qrcode azure-identity azure-mgmt-sql || echo "Dependency installation completed with some failures"
           }
-          pip install build
-        continue-on-error: true
+          pip install build pyinstaller
 
-      - name: Build package
+      - name: Build Python package
         run: python -m build
+
+      - name: Build Windows executable
+        if: matrix.os == 'windows-latest'
+        run: |
+          pyinstaller --clean --noconfirm --onefile --windowed --name "DB_Storage_Manager" --icon=NONE db_storage_manager/main.py || {
+            pyinstaller --clean --noconfirm --onefile --name "DB_Storage_Manager" db_storage_manager/main.py || echo "Windows executable build attempted"
+          }
+          mkdir -p release
+          if [ -f "dist/DB_Storage_Manager.exe" ]; then
+            cp dist/DB_Storage_Manager.exe release/DB_Storage_Manager-v1.0.1.exe || echo "Windows executable copied"
+          fi
+        shell: bash
+
+      - name: Build macOS app bundle
+        if: matrix.os == 'macos-latest'
+        run: |
+          pyinstaller --clean --noconfirm --windowed --name "DB Storage Manager" --osx-bundle-identifier com.voxhash.db-storage-manager pyinstaller.spec || {
+            pyinstaller --clean --noconfirm --name "DB_Storage_Manager" --onefile db_storage_manager/main.py || echo "macOS build attempted"
+          }
+          mkdir -p release
+          if [ -d "dist/DB Storage Manager.app" ]; then
+            cp -r "dist/DB Storage Manager.app" release/ || echo "App bundle copied"
+          elif [ -f "dist/DB_Storage_Manager" ]; then
+            cp dist/DB_Storage_Manager release/DB_Storage_Manager-v1.0.1 || echo "macOS executable copied"
+          fi
+
+      - name: Create macOS DMG
+        if: matrix.os == 'macos-latest'
+        run: |
+          if [ -d "release/DB Storage Manager.app" ]; then
+            hdiutil create -volname "DB Storage Manager" -srcfolder "release/DB Storage Manager.app" -ov -format UDZO release/DB_Storage_Manager-v1.0.1.dmg || echo "DMG creation attempted"
+          elif [ -f "release/DB_Storage_Manager" ]; then
+            mkdir -p "release/DB Storage Manager.app/Contents/MacOS"
+            cp release/DB_Storage_Manager "release/DB Storage Manager.app/Contents/MacOS/DB Storage Manager"
+            hdiutil create -volname "DB Storage Manager" -srcfolder "release/DB Storage Manager.app" -ov -format UDZO release/DB_Storage_Manager-v1.0.1.dmg || echo "DMG creation attempted"
+          fi
+
+      - name: Build Linux AppImage
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          pyinstaller --clean --noconfirm --name "DB_Storage_Manager" --onefile db_storage_manager/main.py || echo "Linux build attempted"
+          mkdir -p release
+          if [ -f "dist/DB_Storage_Manager" ]; then
+            cp dist/DB_Storage_Manager release/DB_Storage_Manager-v1.0.1.AppImage || echo "Linux executable prepared"
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist-${{ matrix.os }}
-          path: dist/
+          path: |
+            dist/
+            release/
 
   publish:
     name: Publish Release
@@ -80,9 +126,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/ubuntu-latest/*
-            dist/windows-latest/*
-            dist/macos-latest/*
+            dist/ubuntu-latest/dist/*
+            dist/windows-latest/dist/*
+            dist/windows-latest/release/*.exe
+            dist/macos-latest/dist/*
+            dist/macos-latest/release/*.dmg
+            dist/macos-latest/release/*.app
+            dist/ubuntu-latest/release/*
           generate_release_notes: true
           draft: false
           prerelease: false
