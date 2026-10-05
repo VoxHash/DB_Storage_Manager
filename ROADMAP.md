@@ -1,51 +1,33 @@
 # Roadmap — DB Storage Manager
 
-## Q1 2026
+Status as of **1.0.2** (2026-10-05). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
-### Enhanced Features
-- Additional database support (Oracle, SQL Server, ClickHouse, InfluxDB improvements)
-- Real-time monitoring and alerts
-- SSH tunneling for secure remote connections
-- Advanced dashboard customization
-- Query optimization suggestions
+## Now (1.x patch / minor)
 
-### Technical Improvements
-- Comprehensive test suite
-- Performance optimization
-- Enhanced error handling
-- Improved documentation
+- Expand automated tests beyond import/smoke coverage (driver unit tests, SecureStore, Safe Mode)
+- Harden optional engine installs (`oracle`, `mssql`, `clickhouse`, `influxdb`) and document Instant Client / ODBC prerequisites per platform
+- Polish SSH tunnel UX in the Connections UI (Paramiko helpers already exist under `db_storage_manager.ssh`)
+- Improve monitoring/alerts presentation using existing `monitoring/` modules
+- Keep documentation kit synchronized with release tags
 
-## Q2-Q3 2026
+## Next
 
-### Advanced Features
-- Plugin system architecture
-- Cloud database integration (AWS RDS, Google Cloud SQL, Azure)
-- Data comparison and migration tools
-- Enhanced visualizations
+- Real-time monitoring refinements and actionable alerts
+- Query optimization suggestions surfaced in the Query Console
+- Dashboard customization (saved layouts / watched metrics)
+- Connection pooling for long-lived SQL engine sessions
+- Stronger backup verification (checksum / restore dry-run)
 
-### Platform Expansion
-- Web interface development
-- REST API server
+## Later
+
+- Web UI / REST companion (desktop remains primary)
+- Plugin marketplace and public SDK around `plugins/`
+- Multi-user / RBAC for shared workstation deployments
+- Deeper cloud-managed database integrations (RDS, Cloud SQL, Azure SQL) beyond current SDK stubs
+
+## Explicitly out of scope for near-term
+
+- Replacing the product name or Python package (`db_storage_manager` / `db-storage-manager`) — name is descriptive and already aligned with PyPI-style packaging
 - Mobile companion app
 
-## Q4 2026+
-
-### Enterprise Features
-- Multi-user support
-- Role-based access control
-- Advanced analytics
-- Enterprise deployment tools
-
-### Ecosystem
-- Plugin marketplace
-- Developer SDK
-- Community resources
-
-## Future
-
-- Continuous improvements based on community feedback
-- Integration with emerging database technologies
-- Enhanced security features
-- Performance optimizations
-
-For detailed development goals, see [DEVELOPMENT_GOALS.md](DEVELOPMENT_GOALS.md).
+Feedback and proposals: https://github.com/VoxHash/DB_Storage_Manager/issues · contact@voxhash.dev

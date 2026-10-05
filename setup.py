@@ -15,13 +15,13 @@ long_description = (
 
 setup(
     name="db-storage-manager",
-    version="1.0.1",
+    version="1.0.2",
     description="Professional desktop application for database storage management and backups",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="VoxHash",
-    author_email="",
-    url="https://github.com/voxhash/db-storage-manager",
+    author_email="contact@voxhash.dev",
+    url="https://github.com/VoxHash/DB_Storage_Manager",
     license="MIT",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     python_requires=">=3.10",
@@ -53,6 +53,15 @@ setup(
             "black>=23.11.0",
             "flake8>=6.1.0",
             "mypy>=1.7.0",
+        ],
+        "oracle": ["cx_Oracle>=8.3.0"],
+        "mssql": ["pyodbc>=5.0.0"],
+        "clickhouse": ["clickhouse-driver>=0.2.6"],
+        "influxdb": ["influxdb-client>=1.38.0"],
+        "engines": [
+            "pyodbc>=5.0.0",
+            "clickhouse-driver>=0.2.6",
+            "influxdb-client>=1.38.0",
         ],
     },
     entry_points={

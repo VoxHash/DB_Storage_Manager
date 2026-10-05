@@ -29,34 +29,34 @@ env/
 ENV/
 env.bak/
 venv.bak/
-.venv
+.venv/
 
-# PyCharm
+# IDE / editors
 .idea/
-
-# VS Code
 .vscode/
 *.code-workspace
+*.sublime-project
+*.sublime-workspace
+.cursorindexingignore
 
-# Jupyter Notebook
+# Jupyter
 .ipynb_checkpoints
 
-# pytest
+# Test / type / coverage caches
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .tox/
+.nox/
 .hypothesis/
-
-# mypy
 .mypy_cache/
 .dmypy.json
 dmypy.json
-
-# Pyre type checker
 .pyre/
+.ruff_cache/
 
-# Environment variables
+# Environment / secrets
 .env
 .env.local
 .env.*.local
@@ -66,33 +66,31 @@ dmypy.json
 Thumbs.db
 *.swp
 *.swo
+*~
 
 # Logs
 logs/
 *.log
 
-# Database files
+# Local databases / demos
 *.db
 *.sqlite
 *.sqlite3
-
-# Demo data
 demo-data/
 
-# User data (encrypted settings)
+# App user data (encrypted settings)
 userData/
 
-# Temporary files
+# Temp / backups
 tmp/
 temp/
 *.tmp
-
-# Backup files
 *.backup
 *.bak
 
-# IDE
-*.sublime-project
-*.sublime-workspace
-.cursorindexingignore
+# SpecStory local history (do not commit chat dumps)
 .specstory/
+
+# Packaging
+*.manifest
+*.spec.bak

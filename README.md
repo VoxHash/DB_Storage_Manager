@@ -1,187 +1,130 @@
 # DB Storage Manager
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6+-blue.svg)](https://www.riverbankcomputing.com/software/pyqt/)
+[![Release](https://img.shields.io/github/v/release/VoxHash/DB_Storage_Manager)](https://github.com/VoxHash/DB_Storage_Manager/releases)
+[![CI](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml)
 
-> Professional desktop application for visualizing and managing database storage, growth, and backups across multiple database engines. Built with Python and PyQt6 for cross-platform excellence.
+> Professional desktop application for visualizing and managing database storage, growth, and backups across multiple database engines. Built with Python and PyQt6 by VoxHash Technologies.
 
-## ✨ Features
+## Features
 
-- **Multi-Database Support** - PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis, Oracle, SQL Server, ClickHouse, InfluxDB
-- **Storage Analysis Dashboard** - Comprehensive metrics, visualizations, and growth tracking
-- **Secure Connection Management** - Encrypted credential storage with cryptography (Fernet)
-- **Advanced Query Console** - Multi-database query execution with safe mode
-- **Backup & Restore System** - Local, S3, and Google Drive backups with scheduling
-- **Modern User Interface** - Cross-platform desktop app with theme support
+- **Multi-Database Support** — PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis; optional Oracle, SQL Server, ClickHouse, InfluxDB
+- **Storage Analysis Dashboard** — Metrics, table/index sizing, growth-oriented views
+- **Secure Connection Management** — Fernet-encrypted credential storage
+- **Query Console** — Multi-engine queries with Safe Mode for write protection
+- **Backup & Restore** — Local, S3, and Google Drive adapters with scheduling
+- **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
 
-## 🧭 Table of Contents
+## Table of Contents
 
-- [Quick Start](#-quick-start)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Configuration](#-configuration)
-- [Architecture](#-architecture)
-- [Roadmap](#-roadmap)
-- [Contributing](#-contributing)
-- [License](#-license)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Configuration](#configuration)
+- [Documentation](#documentation)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [Security](#security)
+- [License](#license)
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# 1) Clone repository
-git clone https://github.com/voxhash/db-storage-manager.git
-cd db-storage-manager
-
-# 2) Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# 3) Install dependencies
+git clone https://github.com/VoxHash/DB_Storage_Manager.git
+cd DB_Storage_Manager
+python3.12 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
-
-# 4) Run application
+pip install -e .
 python -m db_storage_manager.main
 ```
 
-## 💿 Installation
+Full walkthrough: [docs/quick-start.md](docs/quick-start.md)
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for platform-specific installation steps.
+## Installation
 
-### Prerequisites
+See [docs/installation.md](docs/installation.md) for platform notes and optional engines.
 
-- Python 3.10 or higher
-- pip or pipenv
-
-### Installation Methods
-
-**Using pip:**
 ```bash
 pip install -r requirements.txt
-```
-
-**Using setup.py:**
-```bash
 pip install -e .
 db-storage-manager
 ```
 
-## 🛠 Usage
+Optional engines:
 
-### Adding Database Connections
+```bash
+pip install -e ".[mssql,clickhouse,influxdb]"
+pip install -e ".[oracle]"   # needs Oracle Instant Client
+```
 
-1. Open application and navigate to "Connections" tab
-2. Click "Add Connection" button
-3. Select database type and enter connection details
-4. Click "Test Connection" to verify
-5. Save connection (credentials are encrypted)
+### Prerequisites
 
-### Analyzing Storage
+- Python 3.10–3.12 recommended
+- Desktop session for the GUI (or `QT_QPA_PLATFORM=offscreen` for smoke tests)
 
-1. Select connection from Dashboard dropdown
-2. Click "Analyze" to scan database storage
-3. View detailed metrics, tables, and indexes
-4. Export data as CSV (planned)
+## Usage
 
-### Using Query Console
+1. **Connections** — add/test/save encrypted profiles
+2. **Dashboard** — analyze storage for a selected connection
+3. **Query Console** — run queries; keep Safe Mode on for production
+4. **Backups** — local/S3/Google Drive with optional schedules
 
-1. Navigate to "Query Console" tab
-2. Select database connection
-3. Write SQL/NoSQL queries
-4. Toggle "Safe Mode" for write operations
-5. Execute and view results
+Details: [docs/usage.md](docs/usage.md)
 
-### Managing Backups
-
-1. Go to "Backups" tab
-2. Select connection and backup adapter (Local/S3/Google Drive)
-3. Configure compression and encryption
-4. Create backup or schedule automated backups
-
-For detailed usage instructions, see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
-
-## ⚙️ Configuration
-
-Access settings via **Settings** tab:
+## Configuration
 
 | Setting | Description | Default |
 |---|---|---|
-| Theme | Light, dark, or system theme | System |
-| Language | Internationalization support | English |
-| Safe Mode | Enable/disable write operations | Enabled |
-| Auto Connect | Automatically connect on startup | Disabled |
-| Notifications | System notification preferences | Enabled |
+| Theme | `light`, `dark`, or `dracula` | `dark` |
+| Language | i18n code | `en` |
+| Safe Mode | Block non-SELECT queries | Enabled |
+| Auto Connect | Connect on startup | Disabled |
+| Notifications | Desktop notifications | Enabled |
+| Telemetry | Anonymous telemetry | Disabled |
 
-Full configuration reference: [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md#configuration)
+User data: `~/.config/db-storage-manager/` (Linux/macOS) or `%APPDATA%\DB Storage Manager\` (Windows).  
+Reference: [docs/configuration.md](docs/configuration.md)
 
-## 🧩 Architecture
+## Documentation
 
-DB Storage Manager follows a modular architecture:
+- [docs/index.md](docs/index.md) — documentation home
+- [Getting Started](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [API](docs/api.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [FAQ](docs/faq.md)
+- [Examples](docs/examples/example-01.md)
 
-- **Database Layer**: Async database connections with unified interface
-- **Security Layer**: Encrypted credential storage with cryptography (Fernet)
-- **Backup System**: Pluggable backup adapters (Local, S3, Google Drive)
-- **GUI Layer**: PyQt6-based desktop interface with theme support
+## Roadmap
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed technical architecture.
+See [ROADMAP.md](ROADMAP.md). Current focus: test coverage, optional-engine reliability, monitoring polish, and SSH tunnel UX.
 
-## 🗺 Roadmap
+## Contributing
 
-Planned milestones live in [ROADMAP.md](ROADMAP.md). For changes, see [CHANGELOG.md](CHANGELOG.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md). Use Conventional Commits and the PR template.
 
-**Current Focus:**
-- Enhanced database support (Oracle, SQL Server improvements)
-- Real-time monitoring and alerts
-- SSH tunneling for secure remote connections
-- Plugin system architecture
-
-## 🤝 Contributing
-
-We welcome PRs! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and follow the PR template.
-
-**Quick Start for Contributors:**
 ```bash
-git clone https://github.com/voxhash/db-storage-manager.git
-cd db-storage-manager
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
 pip install -e ".[dev]"
-pytest
+pytest -v
 ```
 
-## 🔒 Security
+## Security
 
-Please report vulnerabilities via [SECURITY.md](SECURITY.md).
+Report vulnerabilities to contact@voxhash.dev — [SECURITY.md](SECURITY.md).
 
-**Security Features:**
-- Encrypted credential storage (cryptography/Fernet)
-- Safe mode prevents dangerous operations
-- Local-only operation (no external data transmission)
-- Input validation and sanitization
+## Support
 
-See [docs/SECURITY.md](docs/SECURITY.md) for detailed security documentation.
+- Issues: https://github.com/VoxHash/DB_Storage_Manager/issues
+- Contact: contact@voxhash.dev — [SUPPORT.md](SUPPORT.md)
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📚 Documentation
-
-- **[Getting Started](docs/GETTING_STARTED.md)** - Setup and first steps
-- **[Architecture](docs/ARCHITECTURE.md)** - Technical architecture details
-- **[Security](docs/SECURITY.md)** - Security features and best practices
-- **[Development Goals](DEVELOPMENT_GOALS.md)** - Short-term and long-term goals
-- **[GitHub Topics](GITHUB_TOPICS.md)** - Recommended repository topics
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/voxhash/db-storage-manager/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/voxhash/db-storage-manager/discussions)
-- **Contact**: See [SUPPORT.md](SUPPORT.md)
+MIT — see [LICENSE](LICENSE).
 
 ---
 
-**Made with ❤️ by VoxHash**
-
-*DB Storage Manager - Professional database management made simple!* 🗄️✨
+Maintained by VoxHash Technologies

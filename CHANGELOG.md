@@ -7,14 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-05
+
 ### Added
-- 
+- Standardized documentation kit under `docs/` (index, getting started, quick start, installation, configuration, usage, CLI, API, architecture, troubleshooting, FAQ, and two working examples)
+- Optional install extras in `setup.py` for `oracle`, `mssql`, `clickhouse`, `influxdb`, and bundled `engines`
 
 ### Changed
-- 
+- Core `requirements.txt` no longer hard-requires `cx_Oracle`, `pyodbc`, `clickhouse-driver`, or `influxdb-client` so default installs succeed without Instant Client / ODBC
+- Synchronized package version to `1.0.2` across `setup.py`, `db_storage_manager.__version__`, and `APP_VERSION`
+- Corrected GitHub URLs and badges to `https://github.com/VoxHash/DB_Storage_Manager`
+- Refreshed `ROADMAP.md` against the current codebase (removed dependency on deleted `DEVELOPMENT_GOALS.md`)
+- Tightened `.gitignore` for caches, coverage, and local tooling while keeping required ignore coverage
 
 ### Fixed
-- 
+- Restored corrupted `db_storage_manager/ssh/__init__.py` (null-byte file) to the valid SSH package exports
+- Documented Python 3.10–3.12 as the validated install path after core install failures on system Python 3.14 when optional Oracle builds were required
+
+### Removed
+- Stray documentation outside the kit: `DEVELOPMENT_GOALS.md`, legacy `docs/GETTING_STARTED.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and duplicate `docs/*_from-workstation-20260928.md` files (content folded into the kit / root `SECURITY.md`)
 
 ## [1.0.1] - 2026-03-12
 
@@ -28,8 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed undefined `os` import in Oracle database restore functionality
+- Release workflow executable artifact path corrections
+- CI dependency installation fallback when `cx_Oracle` fails to build
 
-## [1.0.0] - 2025-01-XX
+## [1.0.0] - 2025-11-26
 
 ### Added
 - Complete cross-platform desktop application built with PyQt6
@@ -38,25 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secure connection management with encrypted credential storage (cryptography/Fernet)
 - Advanced query console with multi-database query execution
 - Safe mode to prevent accidental data modification
-- Backup and restore system with multiple adapters:
-  - Local file system backups
-  - AWS S3 integration
-  - Google Drive integration
-- Scheduled backup automation with cron-like functionality
-- Theme system: light, dark, and system theme support
-- Internationalization (i18n) support for multiple languages
-- Cross-platform support: Windows, macOS, and Linux
+- Backup and restore system with Local, S3, and Google Drive adapters
+- Scheduled backup automation
+- Theme system and internationalization support
 - Connection testing and validation
-- Query explain plans for optimization analysis
-- CSV data export capabilities
-- Encrypted backup storage
-- Compression support for backups
-
-### Changed
-- 
-
-### Fixed
-- 
-
-### Removed
-- 
+- Query explain plans where supported
+- Encrypted backup storage and compression support
