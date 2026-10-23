@@ -16,6 +16,7 @@
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
 - **Backup & Restore** — Local, S3, and Google Drive adapters with scheduling
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
+- **Optional Rust acceleration** — PyO3 helpers for backup gzip, SHA-256 verification, and parallel hashing (pure-Python fallback)
 
 ## Table of Contents
 
@@ -61,10 +62,19 @@ pip install -e ".[mssql,clickhouse,influxdb]"
 pip install -e ".[oracle]"   # needs Oracle Instant Client
 ```
 
+Optional native performance module (requires Rust toolchain):
+
+```bash
+pip install -e ".[native]"
+cd native/db_storage_native && maturin develop --release && cd ../..
+python -c "from db_storage_manager.native import backend_info; print(backend_info())"
+```
+
 ### Prerequisites
 
 - Python 3.10–3.12 recommended
 - Desktop session for the GUI (or `QT_QPA_PLATFORM=offscreen` for smoke tests)
+- Optional: Rust + maturin for `db_storage_native` (see [docs/installation.md](docs/installation.md))
 
 ## Usage
 

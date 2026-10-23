@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Optional Rust/PyO3 native module (`native/db_storage_native`, import `db_storage_native`) for streaming gzip compress/decompress, SHA-256 checksums (including parallel batch hashing), numeric aggregation, and parallel row fingerprinting
+- Python feature-detect wrapper `db_storage_manager.native` with pure-Python fallbacks when the extension is not built
+- Local backups record `sha256` metadata; `BackupManager.verify_backup_checksum` / `verify_backups_parallel` for integrity checks
+- `pip install -e ".[native]"` extra (maturin) and tests under `tests/test_native.py`
+- Roadmap entries for exploratory Android/GrapheneOS and Meta Quest 3 companion apps
+
+### Changed
+- Local backup gzip path and data comparison row matching use the native helpers when available
+- Query performance statistics use native `aggregate_f64` and expose min/max execution times
+
 ## [1.0.2] - 2026-10-05
 
 ### Added

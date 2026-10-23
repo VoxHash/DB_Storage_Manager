@@ -103,17 +103,22 @@ class QueryPerformanceAnalyzer:
         ]
 
         if successful_queries:
-            avg_time = sum(q.get("executionTime", 0) for q in successful_queries) / len(
-                successful_queries
-            )
+            from ..native import aggregate_f64
+
+            times = [float(q.get("executionTime", 0) or 0) for q in successful_queries]
+            _count, _total, min_time, max_time, avg_time = aggregate_f64(times)
             slow_queries = len(self.get_slow_queries())
         else:
             avg_time = 0
+            min_time = 0
+            max_time = 0
             slow_queries = 0
 
         return {
             "totalQueries": len(self.query_history),
             "averageExecutionTime": avg_time,
+            "minExecutionTime": min_time,
+            "maxExecutionTime": max_time,
             "slowQueries": slow_queries,
             "errorQueries": len(
                 [q for q in self.query_history if q.get("status") == "error"]

@@ -46,9 +46,17 @@ Query → Safe Mode check → execute_query → QueryResult
 Backup → export → compress/encrypt → adapter → storage
 ```
 
+## Native performance layer (optional)
+
+- Crate: `native/db_storage_native` (Rust + PyO3 / maturin)
+- Python API: `db_storage_manager.native` — feature-detects `db_storage_native`, else pure Python
+- Wired into: local backup gzip + SHA-256 metadata, backup checksum verification, data comparison fingerprints, query timing aggregates
+- Build: `cd native/db_storage_native && maturin develop --release` (see [installation.md](installation.md))
+
 ## Technology stack
 
 - Python 3.10+, PyQt6 / PyQt6-Charts
+- Optional Rust extension for compression, checksums, and parallel helpers
 - Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional cx_Oracle, pyodbc, clickhouse-driver, influxdb-client
 - cryptography (Fernet), paramiko, boto3, Google API client, schedule, pandas/numpy/matplotlib
 

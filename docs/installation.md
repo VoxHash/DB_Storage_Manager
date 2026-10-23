@@ -45,6 +45,27 @@ sudo apt-get install -y python3-pyqt6 python3-pyqt6.qtcharts
 
 macOS users typically rely on the PyQt6 wheels from pip. Windows users may need the Visual C++ Redistributable if wheel installs fail.
 
+## Optional native performance module (Rust / PyO3)
+
+Hot paths (backup gzip, SHA-256 verification, parallel row hashing, numeric aggregates) can use an in-process Rust extension. The app runs without it via pure-Python fallbacks.
+
+**Prerequisites:** Rust toolchain (`rustc` / `cargo`) and [maturin](https://www.maturin.rs/).
+
+```bash
+pip install -e ".[native]"
+cd native/db_storage_native
+maturin develop --release
+cd ../..
+python -c "from db_storage_manager.native import backend_info; print(backend_info())"
+# Expect: {'available': True, 'language': 'rust', ...}
+```
+
+Validate:
+
+```bash
+pytest -v tests/test_native.py
+```
+
 ## Development install
 
 ```bash

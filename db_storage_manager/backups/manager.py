@@ -9,6 +9,7 @@ import tempfile
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
+from ..native import sha256_file, sha256_files_parallel
 
 
 class BackupManager:
@@ -169,4 +170,46 @@ class BackupManager:
                         }
                     )
 
+        return results
+
+    def verify_backup_checksum(self, backup_info: BackupInfo) -> Dict[str, Any]:
+        """Verify a backup file against its stored SHA-256 metadata."""
+        path = Path(backup_info.path)
+        if not path.exists():
+            return {
+                "ok": False,
+                "path": str(path),
+                "error": "Backup file not found",
+            }
+
+        expected = (backup_info.metadata or {}).get("sha256")
+        actual = sha256_file(path)
+        return {
+            "ok": expected is None or expected == actual,
+            "path": str(path),
+            "expected": expected,
+            "actual": actual,
+            "size": path.stat().st_size,
+        }
+
+    def verify_backups_parallel(
+        self, backups: List[BackupInfo]
+    ) -> List[Dict[str, Any]]:
+        """Verify many backup checksums using parallel native hashing when available."""
+        paths = [b.path for b in backups]
+        digests = dict(sha256_files_parallel(paths))
+        results = []
+        for backup in backups:
+            expected = (backup.metadata or {}).get("sha256")
+            actual = digests.get(backup.path, "")
+            results.append(
+                {
+                    "ok": bool(actual)
+                    and (expected is None or expected == actual),
+                    "path": backup.path,
+                    "id": backup.id,
+                    "expected": expected,
+                    "actual": actual or None,
+                }
+            )
         return results

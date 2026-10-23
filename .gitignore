@@ -94,3 +94,7 @@ temp/
 # Packaging
 *.manifest
 *.spec.bak
+
+# Rust / maturin
+native/**/target/
+*.pyd

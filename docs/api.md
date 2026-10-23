@@ -57,6 +57,33 @@ asyncio.run(run())
 
 Abstract methods on `DatabaseConnection`: `connect`, `disconnect`, `analyze_storage`, `execute_query`, `get_schema`, `create_backup`, `restore_backup`, plus `test_connection`.
 
+## Native performance helpers
+
+```python
+from db_storage_manager.native import (
+    backend_info,
+    is_available,
+    gzip_compress_file,
+    gzip_decompress_file,
+    sha256_file,
+    sha256_files_parallel,
+    aggregate_f64,
+    hash_rows_parallel,
+)
+
+backend_info()  # {'available': True, 'language': 'rust', ...} or Python fallback
+```
+
+Build the optional extension with maturin (see [installation.md](installation.md)). Backup verification:
+
+```python
+from db_storage_manager.backups.manager import BackupManager
+
+manager = BackupManager()
+manager.verify_backup_checksum(backup_info)
+manager.verify_backups_parallel([backup_info, ...])
+```
+
 ## Secure storage
 
 ```python

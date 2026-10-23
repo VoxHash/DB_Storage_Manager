@@ -54,6 +54,9 @@ setup(
             "flake8>=6.1.0",
             "mypy>=1.7.0",
         ],
+        "native": [
+            "maturin>=1.7,<2.0",
+        ],
         "oracle": ["cx_Oracle>=8.3.0"],
         "mssql": ["pyodbc>=5.0.0"],
         "clickhouse": ["clickhouse-driver>=0.2.6"],

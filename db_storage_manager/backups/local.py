@@ -2,7 +2,6 @@
 Local file system backup adapter
 """
 
-import gzip
 import shutil
 from pathlib import Path
 from typing import Any, Dict
@@ -11,6 +10,7 @@ import uuid
 
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..config import BACKUP_DIR
+from ..native import gzip_compress_file, gzip_decompress_file, sha256_file
 
 
 class LocalBackupAdapter(BackupAdapter):
@@ -35,12 +35,10 @@ class LocalBackupAdapter(BackupAdapter):
 
         processed_path = source_path
 
-        # Apply compression if requested
+        # Apply compression if requested (Rust/PyO3 when available)
         if options.compression == "gzip":
             compressed_path = self.base_path / f"{original_filename}.gz"
-            with open(source_path, "rb") as f_in:
-                with gzip.open(compressed_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            gzip_compress_file(source_path, compressed_path)
             processed_path = compressed_path
             final_filename += ".gz"
         else:
@@ -55,6 +53,7 @@ class LocalBackupAdapter(BackupAdapter):
             final_filename += ".enc"
 
         size = processed_path.stat().st_size
+        checksum = sha256_file(processed_path)
 
         return BackupInfo(
             id=backup_id,
@@ -68,6 +67,7 @@ class LocalBackupAdapter(BackupAdapter):
                 "encryption": options.encryption or False,
                 "databaseType": options.databaseType,
                 "connectionId": options.connectionId,
+                "sha256": checksum,
             },
         )
 
@@ -77,14 +77,12 @@ class LocalBackupAdapter(BackupAdapter):
         if not backup_path.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
 
-        # Handle decompression
+        # Handle decompression (Rust/PyO3 when available)
         if backup_info.metadata.get("compression") == "gzip":
             import tempfile
 
             temp_path = Path(tempfile.mktemp(suffix=".backup"))
-            with gzip.open(backup_path, "rb") as f_in:
-                with open(temp_path, "wb") as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+            gzip_decompress_file(backup_path, temp_path)
             return str(temp_path)
 
         return str(backup_path)
