@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `db_storage_manager.db.optional_deps` with shared missing-driver `ImportError` messages (extras + platform notes) for `oracle`, `mssql`, `clickhouse`, and `influxdb`
+- Platform Instant Client / ODBC prerequisites in `docs/installation.md` (Linux, macOS, Windows) and troubleshooting / FAQ updates
+- Tests for setup extras metadata, helpful ImportErrors when optional drivers are absent, and SQL Server ODBC driver preference (`tests/test_optional_engines.py`)
+- `ORACLE_CLIENT_LIB_DIR` support to enable python-oracledb Thick mode when Instant Client is installed
+
+### Changed
+- Oracle extra / driver switched from obsolete `cx_Oracle` to **`oracledb`** (Thin mode by default; no Instant Client required for Oracle Database 12.1+)
+- `.[engines]` extra now includes `oracledb` alongside `pyodbc`, `clickhouse-driver`, and `influxdb-client`
+- SQL Server connections prefer **ODBC Driver 18**, then 17, then any installed SQL Server ODBC driver, with a clear error when none are registered
+
 ## [1.0.4] - 2026-10-24
 
 ### Added

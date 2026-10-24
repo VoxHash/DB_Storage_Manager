@@ -29,4 +29,4 @@ print(w.windowTitle())
 
 Expected: version `1.0.4` and window title `DB Storage Manager`.
 
-If `pip install -r requirements.txt` fails on an optional engine (historically `cx_Oracle`), install core requirements only and add engines via extras — see [installation.md](installation.md).
+Optional engines are not in `requirements.txt`. Install via extras (`".[oracle]"`, `".[mssql]"`, …) when needed — see [installation.md](installation.md).

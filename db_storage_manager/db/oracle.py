@@ -1,5 +1,8 @@
 """
 Oracle Database connection
+
+Uses python-oracledb (`oracledb`) in Thin mode by default (no Instant Client).
+Falls back to legacy `cx_Oracle` if that package is installed instead.
 """
 
 import asyncio
@@ -7,9 +10,12 @@ import os
 from typing import Any, Dict, List
 
 try:
-    import cx_Oracle
+    import oracledb as _oracle_driver
 except ImportError:
-    cx_Oracle = None
+    try:
+        import cx_Oracle as _oracle_driver  # type: ignore[no-redef]
+    except ImportError:
+        _oracle_driver = None
 
 from .base import (
     DatabaseConnection,
@@ -18,6 +24,24 @@ from .base import (
     QueryResult,
     SchemaInfo,
 )
+from .optional_deps import missing_driver_error
+
+_oracle_client_initialized = False
+
+
+def _ensure_thick_mode_if_requested() -> None:
+    """Optionally enable Thick mode when ORACLE_CLIENT_LIB_DIR is set."""
+    global _oracle_client_initialized
+    if _oracle_driver is None or _oracle_client_initialized:
+        return
+    lib_dir = os.environ.get("ORACLE_CLIENT_LIB_DIR")
+    if not lib_dir:
+        return
+    init = getattr(_oracle_driver, "init_oracle_client", None)
+    if init is None:
+        return
+    init(lib_dir=lib_dir)
+    _oracle_client_initialized = True
 
 
 class OracleConnection(DatabaseConnection):
@@ -26,22 +50,21 @@ class OracleConnection(DatabaseConnection):
     def __init__(self, config: ConnectionConfig):
         super().__init__(config)
         self.connection = None
-        if cx_Oracle is None:
-            raise ImportError(
-                "cx_Oracle is required for Oracle support. Install it with: pip install cx_Oracle"
-            )
+        if _oracle_driver is None:
+            raise missing_driver_error("oracle")
 
     async def connect(self) -> None:
         """Connect to Oracle database"""
+        _ensure_thick_mode_if_requested()
         if self.config.connection_string:
-            self.connection = cx_Oracle.connect(self.config.connection_string)
+            self.connection = _oracle_driver.connect(self.config.connection_string)
         else:
-            dsn = cx_Oracle.makedsn(
+            dsn = _oracle_driver.makedsn(
                 self.config.host or "localhost",
                 self.config.port or 1521,
                 service_name=self.config.database or "ORCL",
             )
-            self.connection = cx_Oracle.connect(
+            self.connection = _oracle_driver.connect(
                 user=self.config.username, password=self.config.password, dsn=dsn
             )
         self.connected = True

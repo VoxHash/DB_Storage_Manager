@@ -1,5 +1,8 @@
 """
 Microsoft SQL Server database connection
+
+Requires the `pyodbc` package plus a host ODBC Driver for SQL Server
+(Microsoft ODBC Driver 18 preferred; 17 still accepted).
 """
 
 import asyncio
@@ -17,6 +20,31 @@ from .base import (
     QueryResult,
     SchemaInfo,
 )
+from .optional_deps import missing_driver_error
+
+_PREFERRED_ODBC_DRIVERS = (
+    "ODBC Driver 18 for SQL Server",
+    "ODBC Driver 17 for SQL Server",
+    "ODBC Driver 13 for SQL Server",
+)
+
+
+def _pick_sql_server_driver() -> str:
+    """Return the best installed SQL Server ODBC driver name."""
+    installed = list(pyodbc.drivers())
+    for name in _PREFERRED_ODBC_DRIVERS:
+        if name in installed:
+            return name
+    for name in installed:
+        if "SQL Server" in name:
+            return name
+    raise ImportError(
+        "pyodbc is installed, but no SQL Server ODBC driver was found. "
+        "Install Microsoft ODBC Driver 18 for SQL Server "
+        "(Linux: msodbcsql18 + unixodbc-dev; macOS: brew install msodbcsql18; "
+        "Windows: Microsoft ODBC Driver 18 installer). "
+        "See docs/installation.md."
+    )
 
 
 class SQLServerConnection(DatabaseConnection):
@@ -26,18 +54,16 @@ class SQLServerConnection(DatabaseConnection):
         super().__init__(config)
         self.connection = None
         if pyodbc is None:
-            raise ImportError(
-                "pyodbc is required for SQL Server support. Install it with: pip install pyodbc"
-            )
+            raise missing_driver_error("mssql")
 
     async def connect(self) -> None:
         """Connect to SQL Server database"""
         if self.config.connection_string:
             self.connection = pyodbc.connect(self.config.connection_string)
         else:
-            driver = "{ODBC Driver 17 for SQL Server}"  # Try common driver
+            driver = _pick_sql_server_driver()
             conn_str = (
-                f"DRIVER={driver};"
+                f"DRIVER={{{driver}}};"
                 f"SERVER={self.config.host or 'localhost'},{self.config.port or 1433};"
                 f"DATABASE={self.config.database};"
                 f"UID={self.config.username};"

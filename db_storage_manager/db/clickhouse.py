@@ -17,6 +17,7 @@ from .base import (
     QueryResult,
     SchemaInfo,
 )
+from .optional_deps import missing_driver_error
 
 
 class ClickHouseConnection(DatabaseConnection):
@@ -26,9 +27,7 @@ class ClickHouseConnection(DatabaseConnection):
         super().__init__(config)
         self.client = None
         if Client is None:
-            raise ImportError(
-                "clickhouse-driver is required for ClickHouse support. Install it with: pip install clickhouse-driver"
-            )
+            raise missing_driver_error("clickhouse")
 
     async def connect(self) -> None:
         """Connect to ClickHouse database"""

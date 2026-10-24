@@ -58,7 +58,7 @@ Backup → export → compress/encrypt → adapter → storage
 
 - Python 3.10+, PyQt6 / PyQt6-Charts
 - Optional Rust extension for compression, checksums, and parallel helpers
-- Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional cx_Oracle, pyodbc, clickhouse-driver, influxdb-client
+- Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional oracledb (Thin/Thick), pyodbc (+ ODBC Driver 18), clickhouse-driver, influxdb-client
 - cryptography (Fernet), paramiko, boto3, Google API client, schedule, pandas/numpy/matplotlib
 
 ## Packaging and CI

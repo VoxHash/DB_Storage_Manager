@@ -19,7 +19,7 @@ pip install -e ".[dev]"
 pytest -v
 ```
 
-Use Python 3.10–3.12. Optional engines: `pip install -e ".[engines]"` (and `".[oracle]"` when Instant Client is available).
+Use Python 3.10–3.12. Optional engines: `pip install -e ".[engines]"` (`oracledb`, `pyodbc`, `clickhouse-driver`, `influxdb-client`). SQL Server still needs Microsoft ODBC Driver 18 on the host; Oracle Instant Client is only for Thick mode (`ORACLE_CLIENT_LIB_DIR`).
 
 ## Branching & Commit Style
 

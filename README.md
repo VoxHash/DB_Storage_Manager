@@ -60,7 +60,8 @@ Optional engines:
 
 ```bash
 pip install -e ".[mssql,clickhouse,influxdb]"
-pip install -e ".[oracle]"   # needs Oracle Instant Client
+pip install -e ".[oracle]"    # oracledb Thin mode; Instant Client only for Thick mode
+pip install -e ".[engines]"   # all optional Python drivers
 ```
 
 Optional native performance module (prebuilt wheels on GitHub Releases — no Rust required):

@@ -41,6 +41,7 @@ No required secrets for core operation. Useful optional variables:
 |---|---|
 | `QT_QPA_PLATFORM=offscreen` | Headless GUI smoke tests |
 | `APPDATA` | Windows user data root (OS-provided) |
+| `ORACLE_CLIENT_LIB_DIR` | Optional path to Oracle Instant Client libraries (enables `oracledb` Thick mode) |
 | AWS / Google credentials | Only for S3 or Google Drive backup adapters |
 | LDAP / MFA related settings | Only when auth features are enabled |
 

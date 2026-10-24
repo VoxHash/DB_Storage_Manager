@@ -57,11 +57,13 @@ setup(
         "native": [
             "maturin>=1.7,<2.0",
         ],
-        "oracle": ["cx_Oracle>=8.3.0"],
+        # python-oracledb (Thin mode needs no Instant Client); PyPI name: oracledb
+        "oracle": ["oracledb>=2.5.0"],
         "mssql": ["pyodbc>=5.0.0"],
         "clickhouse": ["clickhouse-driver>=0.2.6"],
         "influxdb": ["influxdb-client>=1.38.0"],
         "engines": [
+            "oracledb>=2.5.0",
             "pyodbc>=5.0.0",
             "clickhouse-driver>=0.2.6",
             "influxdb-client>=1.38.0",

@@ -21,9 +21,13 @@ Encrypted with Fernet in `connections.enc` under the user data directory. The ma
 
 Not in the current release. The product is a desktop application with a Python package API for programmatic access. A web interface is on the longer-term roadmap.
 
-## Why does Oracle install fail?
+## Why did Oracle installs used to fail?
 
-`cx_Oracle` needs Oracle Instant Client and often fails in pure pip environments. Install Instant Client, then `pip install -e ".[oracle]"`, or skip Oracle until needed.
+Older docs and extras pointed at obsolete `cx_Oracle`, which always needed Oracle Instant Client. The project now uses **`oracledb`** (python-oracledb) in **Thin mode** by default — `pip install -e ".[oracle]"` with no Instant Client for Oracle Database 12.1+. Instant Client is only required for Thick mode (11g, NNE, AC/TAC); set `ORACLE_CLIENT_LIB_DIR`. See [installation.md](installation.md).
+
+## What do I need for SQL Server?
+
+`pip install -e ".[mssql]"` (`pyodbc`) plus Microsoft ODBC Driver 18 on the host (unixODBC on Linux/macOS). Details: [installation.md](installation.md).
 
 ## Which Python versions are supported?
 

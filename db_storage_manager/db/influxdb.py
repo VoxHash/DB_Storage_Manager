@@ -10,6 +10,8 @@ try:
     from influxdb_client.client.write_api import SYNCHRONOUS
 except ImportError:
     InfluxDBClient = None
+    Point = None
+    SYNCHRONOUS = None
 
 from .base import (
     DatabaseConnection,
@@ -18,6 +20,7 @@ from .base import (
     QueryResult,
     SchemaInfo,
 )
+from .optional_deps import missing_driver_error
 
 
 class InfluxDBConnection(DatabaseConnection):
@@ -29,9 +32,7 @@ class InfluxDBConnection(DatabaseConnection):
         self.write_api = None
         self.query_api = None
         if InfluxDBClient is None:
-            raise ImportError(
-                "influxdb-client is required for InfluxDB support. Install it with: pip install influxdb-client"
-            )
+            raise missing_driver_error("influxdb")
 
     async def connect(self) -> None:
         """Connect to InfluxDB database"""

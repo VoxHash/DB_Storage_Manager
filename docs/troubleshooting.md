@@ -7,9 +7,34 @@
 - On Linux, install system Qt helpers: `sudo apt-get install -y python3-pyqt6 python3-pyqt6.qtcharts`
 - Check for missing imports: `python -c "import PyQt6; import db_storage_manager"`
 
-## `pip install -r requirements.txt` fails on `cx_Oracle`
+## Optional engine ImportError (oracle / mssql / clickhouse / influxdb)
 
-Oracle support is optional. Current `requirements.txt` excludes `cx_Oracle` from the core install. If you still try `pip install cx_Oracle` without Instant Client / build deps, pip may fail with `pkg_resources` or compile errors. Use core install without Oracle, or install Instant Client first, then `pip install -e ".[oracle]"`.
+Selecting an optional engine without its Python package raises an `ImportError` that names the package and the setup extra. Install only what you need:
+
+```bash
+pip install -e ".[oracle]"       # oracledb (Thin mode; no Instant Client by default)
+pip install -e ".[mssql]"        # pyodbc (+ host ODBC Driver 18)
+pip install -e ".[clickhouse]"   # clickhouse-driver
+pip install -e ".[influxdb]"     # influxdb-client
+pip install -e ".[engines]"      # all of the above Python packages
+```
+
+See [installation.md](installation.md) for Instant Client / ODBC platform steps.
+
+## Oracle: legacy `cx_Oracle` / Instant Client build failures
+
+Oracle support uses **`oracledb`** (python-oracledb), not `cx_Oracle`. Thin mode needs no Instant Client. Do not add `cx_Oracle` to a fresh environment.
+
+- Core `requirements.txt` never installs Oracle drivers.
+- If you previously used Instant Client only to make `cx_Oracle` build: switch to `pip install -e ".[oracle]"` and use Thin mode unless you need Thick features.
+- Thick mode: install Instant Client, set `ORACLE_CLIENT_LIB_DIR`, then connect.
+
+## SQL Server: `pyodbc` installed but connection fails / no ODBC driver
+
+- List drivers: `odbcinst -q -d` (Linux/macOS) or the Windows ODBC Data Source Administrator.
+- Expect `ODBC Driver 18 for SQL Server` (or 17). Install per [installation.md](installation.md).
+- On macOS use **unixODBC** (Homebrew), not iODBC, to avoid architecture mismatches with Microsoft’s driver.
+- Linux builds of `pyodbc` from source need `unixodbc-dev` (Debian/Ubuntu) or equivalent headers.
 
 ## Database connection fails
 

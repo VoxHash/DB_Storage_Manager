@@ -27,9 +27,11 @@ Optional engines (install only what you need):
 
 ```bash
 pip install -e ".[mssql,clickhouse,influxdb]"
-# Oracle requires Instant Client and often fails on pure-pip builds:
-pip install -e ".[oracle]"
+pip install -e ".[oracle]"    # oracledb Thin mode; Instant Client only for Thick mode
+# or: pip install -e ".[engines]"
 ```
+
+Platform prerequisites (ODBC / Instant Client): [installation.md](installation.md).
 
 ## First steps
 

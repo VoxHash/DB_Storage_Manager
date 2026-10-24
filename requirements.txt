@@ -53,9 +53,12 @@ flake8>=6.1.0
 mypy>=1.7.0
 
 # --- Optional database engines (install only what you need) ---
-# Oracle:        pip install cx_Oracle
-#                (requires Oracle Instant Client; often fails on pip-only builds)
-# SQL Server:    pip install pyodbc
+# Prefer setup extras: pip install -e ".[oracle,mssql,clickhouse,influxdb]"
+#   or bundled:        pip install -e ".[engines]"
+# Oracle:        pip install oracledb
+#                Thin mode works without Instant Client (DB 12.1+).
+#                Thick mode: Instant Client + ORACLE_CLIENT_LIB_DIR (see docs/installation.md)
+# SQL Server:    pip install pyodbc  (+ Microsoft ODBC Driver 18 / unixODBC)
 # ClickHouse:    pip install clickhouse-driver
 # InfluxDB:      pip install influxdb-client
 # GCP Cloud SQL: pip install google-cloud-sqladmin

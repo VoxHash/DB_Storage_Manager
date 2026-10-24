@@ -24,17 +24,71 @@ Entry points after editable install:
 
 ## Optional database engines
 
-Core install covers PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, and Redis.
+Core install covers PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, and Redis. Optional engines are **not** in `requirements.txt`; install only what you need via setup extras.
 
-| Engine | Extra / pip package | System note |
-|---|---|---|
-| SQL Server | `pip install -e ".[mssql]"` (`pyodbc`) | ODBC driver required on the host |
-| ClickHouse | `pip install -e ".[clickhouse]"` | — |
-| InfluxDB | `pip install -e ".[influxdb]"` | — |
-| Oracle | `pip install -e ".[oracle]"` (`cx_Oracle`) | Oracle Instant Client required; wheel builds often fail without it |
-| All non-Oracle engines | `pip install -e ".[engines]"` | — |
+| Engine | Extra | PyPI package | System prerequisites |
+|---|---|---|---|
+| Oracle | `pip install -e ".[oracle]"` | [`oracledb`](https://pypi.org/project/oracledb/) (python-oracledb) | **Thin mode (default):** none — connects without Instant Client (Oracle Database 12.1+). **Thick mode:** Oracle Instant Client 19+ when you need 11g, Native Network Encryption, or Application Continuity |
+| SQL Server | `pip install -e ".[mssql]"` | [`pyodbc`](https://pypi.org/project/pyodbc/) | Microsoft **ODBC Driver 18** for SQL Server (17 still accepted) + unixODBC on Linux/macOS |
+| ClickHouse | `pip install -e ".[clickhouse]"` | [`clickhouse-driver`](https://pypi.org/project/clickhouse-driver/) | None (wheels on Linux / macOS / Windows) |
+| InfluxDB 2.x | `pip install -e ".[influxdb]"` | [`influxdb-client`](https://pypi.org/project/influxdb-client/) | None (HTTP client) |
+| All optional engines | `pip install -e ".[engines]"` | oracledb + pyodbc + clickhouse-driver + influxdb-client | SQL Server still needs the host ODBC driver; Oracle Thick mode still needs Instant Client if you enable it |
 
-Missing optional drivers raise a clear `ImportError` when that engine is selected (for example: `cx_Oracle is required for Oracle support`).
+Missing optional drivers raise a clear `ImportError` when that engine is selected, including the matching `pip install -e ".[…]"` hint and a short platform note.
+
+```bash
+# Examples
+pip install -e ".[mssql,clickhouse,influxdb]"
+pip install -e ".[oracle]"
+pip install -e ".[engines]"
+```
+
+### Oracle Instant Client (Thick mode only)
+
+Default `oracledb` **Thin** mode needs no Oracle Client libraries. Enable Thick mode only when required (Oracle 11g, NNE/checksumming, AC/TAC):
+
+1. Install [Oracle Instant Client](https://www.oracle.com/database/technologies/instant-client/downloads.html) Basic or Basic Light (19, 21, or 23) for your OS/arch.
+2. Point the library directory at the client, then connect:
+
+```bash
+export ORACLE_CLIENT_LIB_DIR=/opt/oracle/instantclient_23_5   # example path
+```
+
+DB Storage Manager calls `oracledb.init_oracle_client(lib_dir=…)` when `ORACLE_CLIENT_LIB_DIR` is set. Legacy `cx_Oracle` is obsolete; if it is already installed it is used as a fallback, but new installs should use `oracledb`.
+
+Docs: [Installing python-oracledb](https://python-oracledb.readthedocs.io/en/latest/user_guide/installation.html), [Thick mode](https://python-oracledb.readthedocs.io/en/latest/user_guide/initialization.html).
+
+### SQL Server ODBC (per platform)
+
+`pyodbc` talks to SQL Server through an ODBC driver manager. Install **Microsoft ODBC Driver 18** (preferred; 17 works). Official guides: [Linux](https://learn.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server), [macOS](https://learn.microsoft.com/en-us/sql/connect/odbc/linux-mac/install-microsoft-odbc-driver-sql-server-macos), [Windows](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server).
+
+**Debian / Ubuntu** (after adding the [Microsoft package repo](https://packages.microsoft.com/)):
+
+```bash
+sudo apt-get update
+sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev libgssapi-krb5-2
+pip install -e ".[mssql]"
+```
+
+**RHEL / Fedora / Oracle Linux** — use Microsoft’s `msodbcsql18` packages from the same docs (EULA via `ACCEPT_EULA=Y` or `/opt/microsoft/msodbcsql18/ACCEPT_EULA`).
+
+**macOS (Homebrew):**
+
+```bash
+brew install unixodbc
+brew tap microsoft/mssql-release https://github.com/Microsoft/homebrew-mssql-release
+brew trust microsoft/mssql-release
+HOMEBREW_ACCEPT_EULA=Y brew install msodbcsql18
+pip install -e ".[mssql]"
+```
+
+**Windows:** install the Microsoft ODBC Driver 18 MSI for your architecture from the download page above, then `pip install -e ".[mssql]"`. Windows includes an ODBC driver manager; no unixODBC step.
+
+The app prefers **ODBC Driver 18**, then 17, then any installed driver whose name contains `SQL Server`. If `pyodbc` is present but no SQL Server ODBC driver is registered, connection setup raises an `ImportError` with these install hints.
+
+### ClickHouse and InfluxDB
+
+No proprietary client install. After `pip install -e ".[clickhouse]"` or `".[influxdb]"`, point the connection at your server (ClickHouse native port default **9000**; InfluxDB HTTP default **8086**, token/org via connection extras).
 
 ## System packages (Linux)
 
@@ -104,6 +158,8 @@ GitHub Releases may include platform executables built by `.github/workflows/rel
 
 1. Confirm Python version: `python --version` (use 3.12 if system Python is 3.14+)
 2. Upgrade packaging tools: `pip install --upgrade pip setuptools wheel`
-3. Skip Oracle unless Instant Client is present
-4. On Linux, install system PyQt6 packages if Qt plugins fail to load
-5. Re-create the virtual environment if imports resolve to the wrong tree
+3. Skip optional engines until needed; use extras, not a forced `cx_Oracle` install
+4. For SQL Server: confirm `odbcinst -q -d` lists `ODBC Driver 18 for SQL Server` (or 17)
+5. For Oracle Thick mode only: confirm Instant Client and `ORACLE_CLIENT_LIB_DIR`
+6. On Linux, install system PyQt6 packages if Qt plugins fail to load
+7. Re-create the virtual environment if imports resolve to the wrong tree
