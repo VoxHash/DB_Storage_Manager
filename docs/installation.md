@@ -72,6 +72,22 @@ pip install -e ".[mssql]"
 
 **RHEL / Fedora / Oracle Linux** — use Microsoft’s `msodbcsql18` packages from the same docs (EULA via `ACCEPT_EULA=Y` or `/opt/microsoft/msodbcsql18/ACCEPT_EULA`).
 
+**Arch Linux / Garuda / Manjaro** (AUR package `msodbcsql` = Microsoft ODBC Driver 18; `unixodbc` from official repos):
+
+```bash
+# Interactive (sudo password required), or use the helper:
+./scripts/setup-host-odbc-arch.sh
+
+# Manual equivalent:
+sudo pacman -S --needed unixodbc
+# paru or yay:
+ACCEPT_EULA=Y paru -S --needed msodbcsql
+odbcinst -q -d   # expect "ODBC Driver 18 for SQL Server" (or similar)
+pip install -e ".[mssql]"
+```
+
+If `/etc/odbcinst.ini` is empty and `odbcinst -q -d` fails, the Microsoft driver is not registered yet — finish the AUR install above (needs sudo). Oracle Instant Client is **not** required for default Thin `oracledb`; skip it unless you need Thick mode.
+
 **macOS (Homebrew):**
 
 ```bash

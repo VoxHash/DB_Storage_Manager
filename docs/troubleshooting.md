@@ -35,6 +35,7 @@ Oracle support uses **`oracledb`** (python-oracledb), not `cx_Oracle`. Thin mode
 - Expect `ODBC Driver 18 for SQL Server` (or 17). Install per [installation.md](installation.md).
 - On macOS use **unixODBC** (Homebrew), not iODBC, to avoid architecture mismatches with Microsoft’s driver.
 - Linux builds of `pyodbc` from source need `unixodbc-dev` (Debian/Ubuntu) or equivalent headers.
+- On Arch / Garuda: `unixodbc` via pacman + AUR `msodbcsql` (Driver 18). Empty `/etc/odbcinst.ini` means no driver is registered — run `./scripts/setup-host-odbc-arch.sh` (sudo).
 
 ## Database connection fails
 
