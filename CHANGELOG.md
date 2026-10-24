@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Connections UI SSH tunnel workflow: enable bastion fields (host, port, user, password/passphrase, key path, remote host/port), **Open Tunnel** / **Close Tunnel** with live status, and Test Connection via local forward
+- `SSHTunnel` local port-forward implementation (Paramiko `direct-tcpip`), `SSHTunnelError` / `normalize_ssh_config` / `validate_ssh_config`, sync + async `TunnelManager` APIs
+- `SecureStore.upsert_ssh_settings_for_connection` / `remove_ssh_settings_for_connection` for encrypted bastion metadata in `ssh-keys.enc` (passwords remain only in `connections.enc`)
+- Unit tests for SSH validation, mocked Paramiko connect/auth paths, TunnelManager lifecycle, and SecureStore SSH settings (`tests/test_ssh_tunnel.py`)
+
 ### Fixed
 - Shell scripts under `scripts/` use Unix LF line endings (`.gitattributes`: `*.sh text eol=lf`) so shebangs no longer fail with `env: ‘bash\r’: No such file or directory`
+- Connections tab now loads persisted profiles on startup and closes SSH tunnels when the main window exits
 
 ## [1.0.5] - 2026-10-24
 

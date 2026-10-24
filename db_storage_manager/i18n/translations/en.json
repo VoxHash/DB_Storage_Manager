@@ -196,17 +196,28 @@
   },
   "ssh": {
     "tunnel": "SSH Tunnel",
+    "enable": "Use SSH tunnel via bastion",
     "ssh_host": "SSH Host:",
     "ssh_port": "SSH Port:",
     "ssh_username": "SSH Username:",
     "ssh_password": "SSH Password:",
+    "password_or_passphrase": "Password or key passphrase",
     "ssh_key_path": "SSH Key Path:",
+    "browse_key": "Browse…",
+    "browse_key_title": "Select SSH private key",
     "remote_host": "Remote Host:",
+    "remote_host_hint": "Database host as reachable from the bastion (often localhost)",
     "remote_port": "Remote Port:",
-    "create_tunnel": "Create Tunnel",
+    "create_tunnel": "Open Tunnel",
     "close_tunnel": "Close Tunnel",
     "tunnel_active": "Tunnel Active",
-    "tunnel_inactive": "Tunnel Inactive"
+    "tunnel_inactive": "Tunnel Inactive",
+    "tunnel_ready": "SSH configured — open tunnel before connecting remotely",
+    "tunnel_active_detail": "Tunnel active → {host}:{port} (bastion {bastion})",
+    "tunnel_opened": "SSH tunnel open on {host}:{port}",
+    "tunnel_closed": "SSH tunnel closed",
+    "tunnel_failed": "Failed to open SSH tunnel",
+    "name_required": "Connection name is required"
   }
 }
 

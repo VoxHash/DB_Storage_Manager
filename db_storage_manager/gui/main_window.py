@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
 
         # Create tabs
         self.dashboard = DashboardWidget(self.connections)
-        self.connections_widget = ConnectionsWidget()
+        self.connections_widget = ConnectionsWidget(self.connections)
         self.query_widget = QueryWidget(self.connections)
         self.backups_widget = BackupsWidget(self.connections)
         self.monitoring_widget = MonitoringWidget(self.connections)
@@ -197,6 +197,7 @@ class MainWindow(QMainWindow):
         """Handle connection added"""
         self.connections.append(connection)
         self.secure_store.save_connections(self.connections)
+        self.secure_store.upsert_ssh_settings_for_connection(connection)
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
@@ -209,6 +210,10 @@ class MainWindow(QMainWindow):
                 self.connections[i] = connection
                 break
         self.secure_store.save_connections(self.connections)
+        if connection.get("ssh_config") and connection["ssh_config"].get("enabled"):
+            self.secure_store.upsert_ssh_settings_for_connection(connection)
+        else:
+            self.secure_store.remove_ssh_settings_for_connection(connection["id"])
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
@@ -218,7 +223,16 @@ class MainWindow(QMainWindow):
         """Handle connection deleted"""
         self.connections = [c for c in self.connections if c["id"] != connection_id]
         self.secure_store.save_connections(self.connections)
+        self.secure_store.remove_ssh_settings_for_connection(connection_id)
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
         self.monitoring_widget.update_connections(self.connections)
+
+    def closeEvent(self, event):
+        """Ensure SSH tunnels are closed when the window shuts down."""
+        try:
+            self.connections_widget.close_all_tunnels()
+        except Exception:
+            pass
+        super().closeEvent(event)

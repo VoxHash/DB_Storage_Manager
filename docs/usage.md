@@ -44,4 +44,13 @@ Use **Settings** to switch theme and language. Theme application goes through `t
 
 ## SSH tunneling
 
-SSH helpers live in `db_storage_manager.ssh` (`SSHTunnel`, `TunnelManager`) using Paramiko. Configure tunnel details on a connection when remote access requires it.
+SSH helpers live in `db_storage_manager.ssh` (`SSHTunnel`, `TunnelManager`) using Paramiko local port forwarding.
+
+In the **Connections** tab:
+
+1. Edit a connection and enable **Use SSH tunnel via bastion**.
+2. Fill bastion host, SSH port (default 22), username, and either a private key path and/or password (password also works as a key passphrase).
+3. Set **Remote Host** / **Remote Port** to the database address *as seen from the bastion* (often `localhost` and the engine port).
+4. Save — settings are encrypted with the connection profile (`connections.enc`); bastion metadata is also indexed in `ssh-keys.enc` (passwords stay only in the connection profile).
+5. Select the connection and click **Open Tunnel**. Status shows the local `127.0.0.1:<port>` endpoint. **Test Connection** opens the tunnel automatically when SSH is enabled.
+6. **Close Tunnel** (or quit the app) tears the forwarder down.

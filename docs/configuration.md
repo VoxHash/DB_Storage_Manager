@@ -28,7 +28,7 @@ Key files:
 |---|---|
 | `connections.enc` | Encrypted connection profiles |
 | `settings.enc` | Encrypted app settings |
-| `ssh-keys.enc` | Encrypted SSH key material |
+| `ssh-keys.enc` | Encrypted SSH bastion metadata index (host/user/key path per connection; passwords stay in `connections.enc`) |
 | `scheduled-backups.json` | Backup schedule definitions |
 | `backups/` | Local backup payloads |
 | `.master-key` | Fernet master key (Unix mode `600`) |

@@ -115,7 +115,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: test coverage, optional-engine reliability, monitoring polish, and SSH tunnel UX.
+See [ROADMAP.md](ROADMAP.md). Current focus: monitoring/alerts presentation polish and keeping the documentation kit synchronized with release tags.
 
 ## Contributing
 

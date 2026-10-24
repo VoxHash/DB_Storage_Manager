@@ -99,8 +99,33 @@ settings = store.get_settings()
 ## SSH
 
 ```python
-from db_storage_manager.ssh import SSHTunnel, TunnelManager
+from db_storage_manager.ssh import (
+    SSHTunnel,
+    SSHTunnelError,
+    TunnelManager,
+    normalize_ssh_config,
+    validate_ssh_config,
+)
+
+manager = TunnelManager()
+tunnel = manager.create_tunnel_sync(
+    "conn-id",
+    ssh_config={
+        "enabled": True,
+        "ssh_host": "bastion.example.com",
+        "ssh_port": 22,
+        "ssh_username": "deploy",
+        "ssh_password": None,
+        "ssh_key_path": "~/.ssh/id_ed25519",
+        "remote_host": "localhost",
+        "remote_port": 5432,
+    },
+)
+endpoint = tunnel.get_local_endpoint()  # {"host": "127.0.0.1", "port": ...}
+manager.close_tunnel_sync("conn-id")
 ```
+
+`SSHTunnelError` carries clear messages for missing fields, bad keys, auth failures, timeouts, and refused connections.
 
 ## GUI entry (advanced)
 

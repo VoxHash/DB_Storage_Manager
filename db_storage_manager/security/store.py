@@ -121,3 +121,45 @@ class SecureStore:
         # Set restrictive permissions
         if os.name != "nt":
             os.chmod(SSH_KEYS_FILE, 0o600)
+
+    def upsert_ssh_settings_for_connection(self, connection: Dict[str, Any]) -> None:
+        """Persist SSH bastion settings for a connection into ssh-keys.enc.
+
+        Connection profiles already store ``ssh_config`` (including password) via
+        ``save_connections``. This index keeps a separate encrypted inventory of
+        bastion host / key-path metadata keyed by connection id for reuse and
+        audit without duplicating private key file contents on disk beyond the
+        path the user selected.
+        """
+        ssh_config = connection.get("ssh_config") or {}
+        if not ssh_config.get("enabled"):
+            return
+
+        connection_id = connection.get("id")
+        if not connection_id:
+            return
+
+        entry = {
+            "id": connection_id,
+            "connection_id": connection_id,
+            "connection_name": connection.get("name") or "",
+            "ssh_host": ssh_config.get("ssh_host") or "",
+            "ssh_port": ssh_config.get("ssh_port") or 22,
+            "ssh_username": ssh_config.get("ssh_username") or "",
+            "ssh_key_path": ssh_config.get("ssh_key_path") or None,
+            # Password stays only in connections.enc; never mirror into ssh-keys.enc
+            "has_password": bool(ssh_config.get("ssh_password")),
+            "remote_host": ssh_config.get("remote_host") or "localhost",
+            "remote_port": ssh_config.get("remote_port") or 5432,
+        }
+
+        keys = [k for k in self.get_ssh_keys() if k.get("connection_id") != connection_id]
+        keys.append(entry)
+        self.save_ssh_keys(keys)
+
+    def remove_ssh_settings_for_connection(self, connection_id: str) -> None:
+        """Drop SSH inventory entry for a deleted connection."""
+        existing = self.get_ssh_keys()
+        keys = [k for k in existing if k.get("connection_id") != connection_id]
+        if len(keys) != len(existing):
+            self.save_ssh_keys(keys)
