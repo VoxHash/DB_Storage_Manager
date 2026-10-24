@@ -81,24 +81,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt || {
-            echo "Some dependencies failed, trying without cx_Oracle (optional)..."
-            pip install PyQt6 PyQt6-Charts psycopg2-binary pymysql aiosqlite pymongo redis pyodbc clickhouse-driver influxdb-client boto3 google-api-python-client google-auth-httplib2 google-auth-oauthlib cryptography pynacl python-dotenv schedule paramiko pandas numpy matplotlib Pillow ldap3 pyotp qrcode azure-identity azure-mgmt-sql pytest pytest-qt black flake8 mypy || echo "Dependency installation completed with some failures"
+            echo "Some dependencies failed, trying without optional engines..."
+            pip install PyQt6 PyQt6-Charts psycopg2-binary pymysql aiosqlite pymongo redis boto3 google-api-python-client google-auth-httplib2 google-auth-oauthlib cryptography pynacl python-dotenv schedule paramiko pandas numpy matplotlib Pillow ldap3 pyotp qrcode azure-identity azure-mgmt-sql pytest pytest-qt black flake8 mypy || echo "Dependency installation completed with some failures"
           }
+          # Ensure unit-test baseline deps are present even if full requirements partially failed
+          pip install aiosqlite cryptography pytest
         continue-on-error: true
 
       - name: Install package in development mode
-        run: pip install -e .
+        run: pip install -e . || pip install -e . --no-deps
 
       - name: Run tests with pytest
-        run: pytest -v || echo "No tests found, skipping"
-        continue-on-error: true
+        run: pytest -v tests/
 
       - name: Verify application can be imported
         run: |
           python -c "import db_storage_manager; print('Import successful')" || \
-          python -c "import sys; sys.path.insert(0, '.'); import db_storage_manager; print('Import successful')" || \
-          echo "Import check skipped"
-        continue-on-error: true
+          python -c "import sys; sys.path.insert(0, '.'); import db_storage_manager; print('Import successful')"
 
   build:
     name: Build

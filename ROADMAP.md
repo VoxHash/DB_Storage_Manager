@@ -4,7 +4,6 @@ Status as of **1.0.3** (2026-10-24). Items already shipped in-tree are marked ac
 
 ## Now (1.x patch / minor)
 
-- Expand automated tests beyond import/smoke coverage (driver unit tests, SecureStore, Safe Mode)
 - Harden optional engine installs (`oracle`, `mssql`, `clickhouse`, `influxdb`) and document Instant Client / ODBC prerequisites per platform
 - Polish SSH tunnel UX in the Connections UI (Paramiko helpers already exist under `db_storage_manager.ssh`)
 - Improve monitoring/alerts presentation using existing `monitoring/` modules
@@ -52,6 +51,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Expanded automated tests: real SQLite driver/factory paths, SecureStore Fernet round-trips and failure cases, Safe Mode SELECT allow / non-SELECT block; CI `test` job runs `pytest -v tests/` as a hard gate (post-1.0.3)
 - Optional Rust/PyO3 native helpers (`native/db_storage_native`) with pure-Python fallbacks (post-1.0.2)
 - CI wheels for `db-storage-native` (Linux manylinux x86_64, Windows x64, macOS Intel + Apple Silicon) via `.github/workflows/native-wheels.yml`, attached to GitHub Releases on `v*` tags (1.0.3)
 
