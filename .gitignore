@@ -97,4 +97,5 @@ temp/
 
 # Rust / maturin
 native/**/target/
+dist-native/
 *.pyd

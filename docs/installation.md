@@ -47,7 +47,27 @@ macOS users typically rely on the PyQt6 wheels from pip. Windows users may need 
 
 ## Optional native performance module (Rust / PyO3)
 
-Hot paths (backup gzip, SHA-256 verification, parallel row hashing, numeric aggregates) can use an in-process Rust extension. The app runs without it via pure-Python fallbacks.
+Hot paths (backup gzip, SHA-256 verification, parallel row hashing, numeric aggregates) can use an in-process Rust extension. The app runs without it via pure-Python fallbacks. Wheels use the Python stable ABI (`abi3-py310`) and work on CPython 3.10+.
+
+### Install from GitHub Release wheels (no Rust toolchain)
+
+CI builds platform wheels (Linux manylinux x86_64, Windows x64, macOS Intel + Apple Silicon) and attaches them to [GitHub Releases](https://github.com/VoxHash/DB_Storage_Manager/releases) on each `v*` tag.
+
+```bash
+# Example: download the matching .whl from the release assets, then:
+pip install ./db_storage_native-0.1.0-cp310-abi3-*.whl
+python -c "from db_storage_manager.native import backend_info; print(backend_info())"
+# Expect: {'available': True, 'language': 'rust', ...}
+```
+
+Or with `gh`:
+
+```bash
+gh release download --repo VoxHash/DB_Storage_Manager --pattern 'db_storage_native-*.whl' --dir /tmp/native-wheels
+pip install /tmp/native-wheels/db_storage_native-*.whl
+```
+
+### Build from source (developers)
 
 **Prerequisites:** Rust toolchain (`rustc` / `cargo`) and [maturin](https://www.maturin.rs/).
 
@@ -57,7 +77,6 @@ cd native/db_storage_native
 maturin develop --release
 cd ../..
 python -c "from db_storage_manager.native import backend_info; print(backend_info())"
-# Expect: {'available': True, 'language': 'rust', ...}
 ```
 
 Validate:
@@ -65,6 +84,8 @@ Validate:
 ```bash
 pytest -v tests/test_native.py
 ```
+
+Workflow: `.github/workflows/native-wheels.yml`
 
 ## Development install
 

@@ -1,6 +1,6 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.2** (2026-10-05), with in-tree Rust/PyO3 native helpers landing post-1.0.2 under Unreleased. Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.3** (2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
@@ -9,7 +9,6 @@ Status as of **1.0.2** (2026-10-05), with in-tree Rust/PyO3 native helpers landi
 - Polish SSH tunnel UX in the Connections UI (Paramiko helpers already exist under `db_storage_manager.ssh`)
 - Improve monitoring/alerts presentation using existing `monitoring/` modules
 - Keep documentation kit synchronized with release tags
-- Ship optional Rust native wheels in CI (`native/db_storage_native`) so end users get compression/checksum speedups without a local Rust toolchain
 
 ## Next
 
@@ -50,5 +49,10 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 - Replacing the product name or Python package (`db_storage_manager` / `db-storage-manager`) — name is descriptive and already aligned with PyPI-style packaging
 - Full mobile rewrite of the PyQt6 desktop UI
 - Shipping Quest / Android apps before the Web/REST companion foundation exists
+
+## Shipped recently
+
+- Optional Rust/PyO3 native helpers (`native/db_storage_native`) with pure-Python fallbacks (post-1.0.2)
+- CI wheels for `db-storage-native` (Linux manylinux x86_64, Windows x64, macOS Intel + Apple Silicon) via `.github/workflows/native-wheels.yml`, attached to GitHub Releases on `v*` tags (1.0.3)
 
 Feedback and proposals: https://github.com/VoxHash/DB_Storage_Manager/issues · contact@voxhash.dev

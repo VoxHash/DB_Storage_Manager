@@ -11,7 +11,8 @@ name = "db_storage_native"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.23", features = ["extension-module"] }
+# abi3-py310: one wheel per OS/arch works on CPython 3.10+ (no per-minor rebuild)
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py310"] }
 flate2 = { version = "1.0", default-features = false, features = ["zlib"] }
 sha2 = "0.10"
 hex = "0.4"

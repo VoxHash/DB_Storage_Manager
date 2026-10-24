@@ -74,7 +74,7 @@ from db_storage_manager.native import (
 backend_info()  # {'available': True, 'language': 'rust', ...} or Python fallback
 ```
 
-Build the optional extension with maturin (see [installation.md](installation.md)). Backup verification:
+Install a Release wheel or build with maturin (see [installation.md](installation.md)). Backup verification:
 
 ```python
 from db_storage_manager.backups.manager import BackupManager

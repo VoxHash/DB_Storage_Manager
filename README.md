@@ -5,6 +5,7 @@
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6+-blue.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![Release](https://img.shields.io/github/v/release/VoxHash/DB_Storage_Manager)](https://github.com/VoxHash/DB_Storage_Manager/releases)
 [![CI](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml)
+[![Native wheels](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/native-wheels.yml/badge.svg)](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/native-wheels.yml)
 
 > Professional desktop application for visualizing and managing database storage, growth, and backups across multiple database engines. Built with Python and PyQt6 by VoxHash Technologies.
 
@@ -62,19 +63,21 @@ pip install -e ".[mssql,clickhouse,influxdb]"
 pip install -e ".[oracle]"   # needs Oracle Instant Client
 ```
 
-Optional native performance module (requires Rust toolchain):
+Optional native performance module (prebuilt wheels on GitHub Releases — no Rust required):
 
 ```bash
-pip install -e ".[native]"
-cd native/db_storage_native && maturin develop --release && cd ../..
+# Download the matching db_storage_native-*.whl from the latest release, then:
+pip install ./db_storage_native-*.whl
 python -c "from db_storage_manager.native import backend_info; print(backend_info())"
 ```
+
+Developers building from source still need Rust + maturin (`pip install -e ".[native]"` then `maturin develop --release` under `native/db_storage_native`). See [docs/installation.md](docs/installation.md).
 
 ### Prerequisites
 
 - Python 3.10–3.12 recommended
 - Desktop session for the GUI (or `QT_QPA_PLATFORM=offscreen` for smoke tests)
-- Optional: Rust + maturin for `db_storage_native` (see [docs/installation.md](docs/installation.md))
+- Optional: `db_storage_native` wheel from Releases, or Rust + maturin to build locally
 
 ## Usage
 

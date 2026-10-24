@@ -48,10 +48,11 @@ Backup → export → compress/encrypt → adapter → storage
 
 ## Native performance layer (optional)
 
-- Crate: `native/db_storage_native` (Rust + PyO3 / maturin)
+- Crate: `native/db_storage_native` (Rust + PyO3 / maturin, `abi3-py310`)
 - Python API: `db_storage_manager.native` — feature-detects `db_storage_native`, else pure Python
 - Wired into: local backup gzip + SHA-256 metadata, backup checksum verification, data comparison fingerprints, query timing aggregates
-- Build: `cd native/db_storage_native && maturin develop --release` (see [installation.md](installation.md))
+- Install: prebuilt wheels from GitHub Releases (no Rust), or `maturin develop --release` for local builds (see [installation.md](installation.md))
+- CI: `.github/workflows/native-wheels.yml`
 
 ## Technology stack
 
@@ -64,6 +65,7 @@ Backup → export → compress/encrypt → adapter → storage
 
 - `setup.py` provides the `db-storage-manager` console script
 - `.github/workflows/ci.yml` — lint/test/build across Ubuntu, Windows, macOS and Python 3.10–3.12
+- `.github/workflows/native-wheels.yml` — `db-storage-native` wheels (Linux/Windows/macOS) + attach to `v*` releases
 - `.github/workflows/release.yml` — tagged `v*` builds for executable artifacts
 
 ## Security notes (folded from prior security docs)
