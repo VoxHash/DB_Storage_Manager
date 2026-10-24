@@ -1,5 +1,6 @@
 # Build optional db-storage-native wheels so end users need no local Rust toolchain.
-# Desktop targets only (Linux x86_64 manylinux, Windows x64, macOS Intel + Apple Silicon).
+# Desktop targets: Linux x86_64 manylinux, Windows x64, macOS Apple Silicon (arm64).
+# macOS Intel (macos-13) omitted — GitHub hosted capacity is unreliable and blocked releases.
 name: Native wheels
 
 on:
@@ -93,18 +94,10 @@ jobs:
           pytest -v tests/test_native.py
 
   macos:
-    name: macOS ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
+    name: macOS aarch64
+    runs-on: macos-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-13
-            target: x86_64
-          - runner: macos-latest
-            target: aarch64
     steps:
       - uses: actions/checkout@v4
 
@@ -116,7 +109,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           working-directory: native/db_storage_native
-          target: ${{ matrix.target }}
+          target: aarch64
           args: --release --out dist
           sccache: "true"
           rust-toolchain: stable
@@ -124,7 +117,7 @@ jobs:
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.target }}
+          name: wheels-macos-aarch64
           path: native/db_storage_native/dist/*.whl
 
       - name: Install wheel and run native tests
@@ -161,7 +154,12 @@ jobs:
 
   release-assets:
     name: Attach native wheels to GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Run even if one platform job failed, so available wheels still ship.
+    # Do not wait forever on a cancelled matrix leg (e.g. capacity stall).
+    if: >-
+      always()
+      && !cancelled()
+      && startsWith(github.ref, 'refs/tags/v')
     needs: [linux, windows, macos, sdist]
     runs-on: ubuntu-latest
     permissions:
@@ -169,20 +167,31 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - name: Download all wheel artifacts
+      - name: Download available wheel artifacts
         uses: actions/download-artifact@v4
         with:
           path: native-dist
           pattern: wheels-*
           merge-multiple: true
+          # Succeed when some platform jobs failed and produced no artifact
+          # (upload-artifact never ran for that leg).
+        continue-on-error: true
 
       - name: List assets
-        run: find native-dist -type f | sort
+        run: |
+          set -euo pipefail
+          mkdir -p native-dist
+          find native-dist -type f | sort
+          count="$(find native-dist -type f | wc -l | tr -d ' ')"
+          if [ "$count" -eq 0 ]; then
+            echo "No wheel/sdist artifacts to attach" >&2
+            exit 1
+          fi
 
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: native-dist/*
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

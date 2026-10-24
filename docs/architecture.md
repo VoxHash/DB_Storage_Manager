@@ -65,7 +65,7 @@ Backup → export → compress/encrypt → adapter → storage
 
 - `setup.py` provides the `db-storage-manager` console script
 - `.github/workflows/ci.yml` — lint/test/build across Ubuntu, Windows, macOS and Python 3.10–3.12
-- `.github/workflows/native-wheels.yml` — `db-storage-native` wheels (Linux/Windows/macOS) + attach to `v*` releases
+- `.github/workflows/native-wheels.yml` — `db-storage-native` wheels (Linux x86_64, Windows x64, macOS arm64) + sdist; attaches available artifacts to `v*` releases even if one platform job fails
 - `.github/workflows/release.yml` — tagged `v*` builds for executable artifacts
 
 ## Security notes (folded from prior security docs)

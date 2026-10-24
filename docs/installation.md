@@ -51,7 +51,7 @@ Hot paths (backup gzip, SHA-256 verification, parallel row hashing, numeric aggr
 
 ### Install from GitHub Release wheels (no Rust toolchain)
 
-CI builds platform wheels (Linux manylinux x86_64, Windows x64, macOS Intel + Apple Silicon) and attaches them to [GitHub Releases](https://github.com/VoxHash/DB_Storage_Manager/releases) on each `v*` tag.
+CI builds platform wheels (Linux manylinux x86_64, Windows x64, macOS Apple Silicon / arm64) and attaches them to [GitHub Releases](https://github.com/VoxHash/DB_Storage_Manager/releases) on each `v*` tag. Prebuilt macOS Intel (x86_64) wheels are not published; use the release sdist with a Rust toolchain, or run under Rosetta with the arm64 wheel when applicable.
 
 ```bash
 # Example: download the matching .whl from the release assets, then:

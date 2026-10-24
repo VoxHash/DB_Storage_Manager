@@ -1,6 +1,6 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.3** (2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.4** (2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
@@ -53,6 +53,6 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 - Expanded automated tests: real SQLite driver/factory paths, SecureStore Fernet round-trips and failure cases, Safe Mode SELECT allow / non-SELECT block; CI `test` job runs `pytest -v tests/` as a hard gate (post-1.0.3)
 - Optional Rust/PyO3 native helpers (`native/db_storage_native`) with pure-Python fallbacks (post-1.0.2)
-- CI wheels for `db-storage-native` (Linux manylinux x86_64, Windows x64, macOS Intel + Apple Silicon) via `.github/workflows/native-wheels.yml`, attached to GitHub Releases on `v*` tags (1.0.3)
+- CI wheels for `db-storage-native` (Linux manylinux x86_64, Windows x64, macOS arm64) via `.github/workflows/native-wheels.yml`, attached to GitHub Releases on `v*` tags (1.0.3+; Intel macOS prebuilts dropped in 1.0.4 after macos-13 capacity stalls)
 
 Feedback and proposals: https://github.com/VoxHash/DB_Storage_Manager/issues · contact@voxhash.dev

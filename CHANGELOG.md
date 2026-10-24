@@ -7,11 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-24
+
 ### Added
 - Automated unit tests for SQLite driver/factory, SecureStore encrypt/decrypt round-trips and failure handling, and Safe Mode enforcement (`tests/test_sqlite_driver.py`, `tests/test_secure_store.py`, `tests/test_safe_mode.py`, shared `tests/conftest.py`)
 
 ### Changed
 - CI `test` job runs `pytest -v tests/` as a failing gate (no longer swallowed); ensures `aiosqlite` / `cryptography` / `pytest` are installed for the unit-test baseline
+- Native wheels CI builds macOS **arm64 only** (`macos-latest`); dropped `macos-13` Intel jobs that queued indefinitely and blocked release asset upload
+- Release attach job uploads whatever platform artifacts exist (`fail-fast` already false; attach continues when a sibling job fails) so one platform cannot leave a tag with zero assets
+- Package version synchronized to `1.0.4`
+
+### Fixed
+- `v1.0.3` GitHub Release had zero assets while Native wheels waited on macos-13 capacity; prebuilt Linux / Windows / macOS arm64 wheels and sdist were attached from completed jobs, and the workflow was fixed so future tags are not blocked the same way
 
 ## [1.0.3] - 2026-10-24
 
