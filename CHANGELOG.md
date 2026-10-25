@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Query Console **Analyze** action and optimization suggestions table: SQL heuristics (SELECT *, leading LIKE wildcards, missing WHERE, ORDER BY without LIMIT, etc.) plus live EXPLAIN analysis when a connection is available (SQLite `EXPLAIN QUERY PLAN`; Postgres/MySQL `EXPLAIN`), with Safe Mode blocking EXPLAIN for non-SELECT
+- `db_storage_manager.analysis.query_suggestions` (`suggest_for_query`, `analyze_sql_heuristics`, `analyze_explain_plan`, `fetch_explain_plan`); suggestions also refresh after Execute using `explainPlan` from the result when present
+- Unit tests with real SQLite EXPLAIN + offscreen Qt smoke for `QueryWidget` (`tests/test_query_suggestions.py`)
 - Monitoring **Thresholds** and **Channels** tabs: editable warning/critical spinboxes for connection count, query time, cache hit ratio, and disk usage; desktop (system tray) + in-app notification channel toggles with live notification log
 - `NotificationDispatcher` routes AlertManager emissions to enabled channels; `QSystemTrayIcon.showMessage` for real desktop notifications when a system tray is available
 - Durable `alert_thresholds` / `alert_channels` in SecureStore settings (merged with defaults); Settings save preserves monitoring prefs

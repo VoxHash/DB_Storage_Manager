@@ -2,6 +2,8 @@
 Query console widget
 """
 
+import asyncio
+
 from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -14,13 +16,24 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QLabel,
     QCheckBox,
+    QSplitter,
+    QAbstractItemView,
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 
+from ..analysis.query_suggestions import suggest_for_query
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
 from .utils import apply_glassmorphism
+
+_SEVERITY_COLORS = {
+    "high": QColor(220, 80, 80),
+    "medium": QColor(220, 160, 60),
+    "low": QColor(80, 140, 220),
+    "info": QColor(120, 120, 120),
+}
 
 
 class QueryWidget(QWidget):
@@ -57,28 +70,79 @@ class QueryWidget(QWidget):
         self.execute_button.clicked.connect(self._execute_query)
         connection_layout.addWidget(self.execute_button)
 
+        self.analyze_button = QPushButton(t("query.analyze"))
+        self.analyze_button.clicked.connect(self._analyze_query)
+        connection_layout.addWidget(self.analyze_button)
+
         connection_layout.addStretch()
         layout.addLayout(connection_layout)
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
 
         # Query editor
         self.query_edit = QTextEdit()
         self.query_edit.setPlaceholderText(t("query.query_placeholder"))
-        layout.addWidget(self.query_edit)
+        splitter.addWidget(self.query_edit)
 
         # Results table
         self.results_table = QTableWidget()
         self.results_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
-        layout.addWidget(self.results_table)
+        splitter.addWidget(self.results_table)
+
+        # Optimization suggestions
+        suggestions_panel = QWidget()
+        suggestions_layout = QVBoxLayout(suggestions_panel)
+        suggestions_layout.setContentsMargins(0, 0, 0, 0)
+        self.suggestions_label = QLabel(t("query.suggestions_title"))
+        suggestions_layout.addWidget(self.suggestions_label)
+
+        self.suggestions_table = QTableWidget()
+        self.suggestions_table.setColumnCount(4)
+        self.suggestions_table.setHorizontalHeaderLabels(
+            [
+                t("query.suggestion_severity"),
+                t("query.suggestion_title"),
+                t("query.suggestion_message"),
+                t("query.suggestion_source"),
+            ]
+        )
+        self.suggestions_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.suggestions_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.suggestions_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+        self.suggestions_table.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.suggestions_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.NoEditTriggers
+        )
+        self.suggestions_table.setSelectionBehavior(
+            QAbstractItemView.SelectionBehavior.SelectRows
+        )
+        suggestions_layout.addWidget(self.suggestions_table)
+        splitter.addWidget(suggestions_panel)
+
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setStretchFactor(2, 2)
+        layout.addWidget(splitter)
+
+    def _selected_connection(self):
+        index = self.connection_combo.currentIndex()
+        if index <= 0:
+            return None
+        return self.connection_combo.itemData(index)
 
     def _execute_query(self):
         """Execute query"""
-        index = self.connection_combo.currentIndex()
-        if index <= 0:
-            return
-
-        connection = self.connection_combo.itemData(index)
+        connection = self._selected_connection()
         if not connection:
             return
 
@@ -92,24 +156,127 @@ class QueryWidget(QWidget):
             config = ConnectionConfig(**connection)
             db = DatabaseConnectionFactory.create_connection(config)
 
-            import asyncio
-
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
             async def execute():
                 await db.connect()
                 result = await db.execute_query(query, safe_mode)
+                advice = await suggest_for_query(
+                    query,
+                    connection=db,
+                    explain_plan=result.get("explainPlan"),
+                    safe_mode=safe_mode,
+                    db_type=config.type,
+                )
                 await db.disconnect()
-                return result
+                return result, advice
 
-            result = loop.run_until_complete(execute())
+            result, advice = loop.run_until_complete(execute())
             loop.close()
 
-            # Display results
             self._display_results(result)
+            self._display_suggestions(advice)
         except Exception as e:
             self._display_error(str(e))
+
+    def _analyze_query(self):
+        """Run optimization analysis without executing the user query."""
+        query = self.query_edit.toPlainText()
+        if not query.strip():
+            self._display_suggestions(
+                {
+                    "suggestions": [],
+                    "counts": {"total": 0},
+                    "explainSkippedSafeMode": False,
+                    "explainError": None,
+                }
+            )
+            self.suggestions_label.setText(
+                self.i18n.translate("query.suggestions_empty_query")
+            )
+            return
+
+        connection = self._selected_connection()
+        safe_mode = self.safe_mode_check.isChecked()
+
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def analyze():
+                db = None
+                db_type = None
+                if connection:
+                    config = ConnectionConfig(**connection)
+                    db_type = config.type
+                    db = DatabaseConnectionFactory.create_connection(config)
+                    await db.connect()
+                try:
+                    return await suggest_for_query(
+                        query,
+                        connection=db,
+                        safe_mode=safe_mode,
+                        db_type=db_type,
+                    )
+                finally:
+                    if db is not None:
+                        await db.disconnect()
+
+            advice = loop.run_until_complete(analyze())
+            loop.close()
+            self._display_suggestions(advice)
+        except Exception as e:
+            self._display_suggestions(
+                {
+                    "suggestions": [
+                        {
+                            "code": "analyze_error",
+                            "severity": "info",
+                            "title": self.i18n.translate("common.error"),
+                            "message": str(e),
+                            "source": "explain",
+                        }
+                    ],
+                    "counts": {"total": 1},
+                    "explainError": str(e),
+                    "explainSkippedSafeMode": False,
+                }
+            )
+
+    def _display_suggestions(self, advice: dict):
+        """Populate the suggestions table from advisor output."""
+        t = self.i18n.translate
+        suggestions = advice.get("suggestions") or []
+        counts = advice.get("counts") or {}
+        total = counts.get("total", len(suggestions))
+
+        status_bits = [t("query.suggestions_count").format(count=total)]
+        if advice.get("explainSkippedSafeMode"):
+            status_bits.append(t("query.suggestions_explain_skipped_safe"))
+        if advice.get("explainError"):
+            status_bits.append(
+                t("query.suggestions_explain_error").format(
+                    error=advice["explainError"]
+                )
+            )
+        self.suggestions_label.setText(" — ".join(status_bits))
+
+        self.suggestions_table.setRowCount(len(suggestions))
+        for row_idx, item in enumerate(suggestions):
+            severity = str(item.get("severity", "info"))
+            cells = [
+                severity,
+                str(item.get("title", "")),
+                str(item.get("message", "")),
+                str(item.get("source", "")),
+            ]
+            color = _SEVERITY_COLORS.get(severity.lower())
+            for col_idx, value in enumerate(cells):
+                table_item = QTableWidgetItem(value)
+                if color is not None and col_idx == 0:
+                    table_item.setForeground(color)
+                self.suggestions_table.setItem(row_idx, col_idx, table_item)
 
     def _display_results(self, result):
         """Display query results"""

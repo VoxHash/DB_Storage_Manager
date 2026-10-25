@@ -118,7 +118,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: monitoring refinements (notification channels / threshold UI), Query Console optimization hints, and dashboard customization.
+See [ROADMAP.md](ROADMAP.md). Current focus: dashboard customization (saved layouts / watched metrics), connection pooling, and stronger backup verification UX.
 
 ## Contributing
 

@@ -69,11 +69,21 @@
     "select_connection": "Select a connection...",
     "safe_mode": "Safe Mode",
     "execute": "Execute",
+    "analyze": "Analyze",
     "query_placeholder": "Enter your query here...",
     "error": "Error",
     "no_connection_selected": "No connection selected",
     "query_empty": "Query is empty",
-    "only_select_allowed": "Only SELECT queries are allowed in safe mode"
+    "only_select_allowed": "Only SELECT queries are allowed in safe mode",
+    "suggestions_title": "Optimization suggestions",
+    "suggestions_count": "{count} suggestion(s)",
+    "suggestions_empty_query": "Enter a query to analyze",
+    "suggestions_explain_skipped_safe": "Live EXPLAIN skipped (Safe Mode allows SELECT only)",
+    "suggestions_explain_error": "EXPLAIN unavailable: {error}",
+    "suggestion_severity": "Severity",
+    "suggestion_title": "Title",
+    "suggestion_message": "Suggestion",
+    "suggestion_source": "Source"
   },
   "backups": {
     "title": "Backups",
