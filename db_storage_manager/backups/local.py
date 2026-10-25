@@ -2,9 +2,10 @@
 Local file system backup adapter
 """
 
+import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from datetime import datetime
 import uuid
 
@@ -13,12 +14,36 @@ from ..config import BACKUP_DIR
 from ..native import gzip_compress_file, gzip_decompress_file, sha256_file
 
 
+def meta_path_for(backup_path: Path) -> Path:
+    """Sidecar JSON path that stores SHA-256 and backup metadata."""
+    return Path(str(backup_path) + ".meta.json")
+
+
 class LocalBackupAdapter(BackupAdapter):
     """Local file system backup adapter"""
 
     def __init__(self, base_path: Path = None):
         self.base_path = base_path or BACKUP_DIR
         self.base_path.mkdir(parents=True, exist_ok=True)
+
+    def _write_meta(self, backup_path: Path, metadata: Dict[str, Any]) -> None:
+        sidecar = meta_path_for(backup_path)
+        payload = dict(metadata)
+        payload["name"] = backup_path.name
+        payload["path"] = str(backup_path)
+        with open(sidecar, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2, default=str)
+
+    def _read_meta(self, backup_path: Path) -> Optional[Dict[str, Any]]:
+        sidecar = meta_path_for(backup_path)
+        if not sidecar.exists():
+            return None
+        try:
+            with open(sidecar, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            return data if isinstance(data, dict) else None
+        except (OSError, json.JSONDecodeError, TypeError):
+            return None
 
     async def create_backup(self, options: BackupOptions) -> BackupInfo:
         """Create a local backup"""
@@ -54,17 +79,29 @@ class LocalBackupAdapter(BackupAdapter):
 
         size = processed_path.stat().st_size
         checksum = sha256_file(processed_path)
+        created_at = datetime.now()
+        metadata = {
+            "id": backup_id,
+            "compression": options.compression or "none",
+            "encryption": options.encryption or False,
+            "databaseType": options.databaseType,
+            "connectionId": options.connectionId,
+            "connectionName": options.connectionName,
+            "sha256": checksum,
+            "createdAt": created_at.isoformat(),
+        }
+        self._write_meta(processed_path, metadata)
 
         return BackupInfo(
             id=backup_id,
             name=final_filename,
             path=str(processed_path),
             size=size,
-            createdAt=datetime.now(),
+            createdAt=created_at,
             status="completed",
             metadata={
-                "compression": options.compression or "none",
-                "encryption": options.encryption or False,
+                "compression": metadata["compression"],
+                "encryption": metadata["encryption"],
                 "databaseType": options.databaseType,
                 "connectionId": options.connectionId,
                 "sha256": checksum,
@@ -91,25 +128,48 @@ class LocalBackupAdapter(BackupAdapter):
         """List all local backups"""
         backups = []
 
-        for backup_file in self.base_path.glob("*.backup*"):
-            if backup_file.is_file():
-                backup_id = str(uuid.uuid4())  # Generate ID from filename or metadata
-                backups.append(
-                    BackupInfo(
-                        id=backup_id,
-                        name=backup_file.name,
-                        path=str(backup_file),
-                        size=backup_file.stat().st_size,
-                        createdAt=datetime.fromtimestamp(backup_file.stat().st_mtime),
-                        status="completed",
-                        metadata={
-                            "compression": (
-                                "gzip" if backup_file.suffix == ".gz" else "none"
-                            ),
-                            "encryption": backup_file.suffix == ".enc",
-                        },
-                    )
+        for backup_file in sorted(self.base_path.glob("*.backup*")):
+            if not backup_file.is_file():
+                continue
+            if backup_file.name.endswith(".meta.json"):
+                continue
+
+            stored = self._read_meta(backup_file) or {}
+            backup_id = str(stored.get("id") or uuid.uuid4())
+            compression = stored.get("compression")
+            if compression is None:
+                compression = "gzip" if backup_file.suffix == ".gz" else "none"
+            encryption = stored.get("encryption")
+            if encryption is None:
+                encryption = backup_file.suffix == ".enc"
+
+            metadata: Dict[str, Any] = {
+                "compression": compression,
+                "encryption": bool(encryption),
+            }
+            for key in ("databaseType", "connectionId", "connectionName", "sha256"):
+                if key in stored and stored[key] is not None:
+                    metadata[key] = stored[key]
+
+            created_at = datetime.fromtimestamp(backup_file.stat().st_mtime)
+            created_raw = stored.get("createdAt")
+            if isinstance(created_raw, str):
+                try:
+                    created_at = datetime.fromisoformat(created_raw)
+                except ValueError:
+                    pass
+
+            backups.append(
+                BackupInfo(
+                    id=backup_id,
+                    name=backup_file.name,
+                    path=str(backup_file),
+                    size=backup_file.stat().st_size,
+                    createdAt=created_at,
+                    status="completed",
+                    metadata=metadata,
                 )
+            )
 
         return backups
 
@@ -119,7 +179,9 @@ class LocalBackupAdapter(BackupAdapter):
         backup = next((b for b in backups if b.id == backup_id), None)
 
         if backup:
-            Path(backup.path).unlink()
+            path = Path(backup.path)
+            path.unlink(missing_ok=True)
+            meta_path_for(path).unlink(missing_ok=True)
         else:
             raise FileNotFoundError(f"Backup not found: {backup_id}")
 

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Stronger backup verification UX: Restore tab lists local backups with **Verify Checksum**, **Verify All**, and **Dry-run Restore**; color-coded PASS / FAIL / MISSING CHECKSUM status banner and table columns
+- Local backup `.meta.json` sidecars persist SHA-256 (and related metadata) so `list_backups` reloads expected digests after restart
+- `BackupManager.dry_run_restore`: real checksum verify, optional gzip decompress to temp, SQLite header + `PRAGMA integrity_check` without writing to a live database
+- Clearer `verify_backup_checksum` / `verify_backups_parallel` results (`status`: `pass` / `fail` / `missing_checksum` / `not_found`; missing stored digest is not treated as success)
+- Unit tests for sidecar persistence, checksum pass/fail/parallel, gzip + SQLite dry-run, and offscreen Qt smoke (`tests/test_backup_verification.py`)
 - SQL engine connection pooling (`db_storage_manager.db.pool.SQLEnginePool`): reuse long-lived sessions per connection profile, safe checkout/return, discard on profile delete, close on main-window shutdown
 - `DatabaseConnectionFactory.acquire` / `release` / `shutdown_pool` wired into dashboard analysis, Query Console, enhanced query, backups, monitoring start/stop, and Connections test probe
 - Real SQLite pool tests for reuse, exhaustion, context manager, discard, and shutdown (`tests/test_connection_pool.py`)

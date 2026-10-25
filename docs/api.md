@@ -82,7 +82,11 @@ from db_storage_manager.backups.manager import BackupManager
 manager = BackupManager()
 manager.verify_backup_checksum(backup_info)
 manager.verify_backups_parallel([backup_info, ...])
+manager.dry_run_restore(backup_info)  # checksum + payload checks; never writes to a live DB
 ```
+
+`verify_*` results include `ok`, `status` (`pass` / `fail` / `missing_checksum` / `not_found`), and digests. Local backups persist SHA-256 in a `.meta.json` sidecar next to the backup file.
+
 
 ## Secure storage
 

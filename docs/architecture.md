@@ -51,7 +51,7 @@ Backup → export → compress/encrypt → adapter → storage
 
 - Crate: `native/db_storage_native` (Rust + PyO3 / maturin, `abi3-py310`)
 - Python API: `db_storage_manager.native` — feature-detects `db_storage_native`, else pure Python
-- Wired into: local backup gzip + SHA-256 metadata, backup checksum verification, data comparison fingerprints, query timing aggregates
+- Wired into: local backup gzip + SHA-256 metadata/sidecars, backup checksum verification and restore dry-run, data comparison fingerprints, query timing aggregates
 - Install: prebuilt wheels from GitHub Releases (no Rust), or `maturin develop --release` for local builds (see [installation.md](installation.md))
 - CI: `.github/workflows/native-wheels.yml`
 

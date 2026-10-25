@@ -172,18 +172,35 @@ class BackupManager:
         if not path.exists():
             return {
                 "ok": False,
+                "status": "not_found",
                 "path": str(path),
+                "expected": None,
+                "actual": None,
                 "error": "Backup file not found",
             }
 
         expected = (backup_info.metadata or {}).get("sha256")
         actual = sha256_file(path)
+        size = path.stat().st_size
+        if not expected:
+            return {
+                "ok": False,
+                "status": "missing_checksum",
+                "path": str(path),
+                "expected": None,
+                "actual": actual,
+                "size": size,
+                "error": "No stored SHA-256 checksum in backup metadata",
+            }
+        matched = expected == actual
         return {
-            "ok": expected is None or expected == actual,
+            "ok": matched,
+            "status": "pass" if matched else "fail",
             "path": str(path),
             "expected": expected,
             "actual": actual,
-            "size": path.stat().st_size,
+            "size": size,
+            "error": None if matched else "SHA-256 mismatch",
         }
 
     def verify_backups_parallel(
@@ -195,15 +212,145 @@ class BackupManager:
         results = []
         for backup in backups:
             expected = (backup.metadata or {}).get("sha256")
-            actual = digests.get(backup.path, "")
+            actual = digests.get(backup.path) or None
+            if not Path(backup.path).exists():
+                results.append(
+                    {
+                        "ok": False,
+                        "status": "not_found",
+                        "path": backup.path,
+                        "id": backup.id,
+                        "expected": expected,
+                        "actual": None,
+                        "error": "Backup file not found",
+                    }
+                )
+                continue
+            if not expected:
+                results.append(
+                    {
+                        "ok": False,
+                        "status": "missing_checksum",
+                        "path": backup.path,
+                        "id": backup.id,
+                        "expected": None,
+                        "actual": actual,
+                        "error": "No stored SHA-256 checksum in backup metadata",
+                    }
+                )
+                continue
+            matched = bool(actual) and expected == actual
             results.append(
                 {
-                    "ok": bool(actual)
-                    and (expected is None or expected == actual),
+                    "ok": matched,
+                    "status": "pass" if matched else "fail",
                     "path": backup.path,
                     "id": backup.id,
                     "expected": expected,
-                    "actual": actual or None,
+                    "actual": actual,
+                    "error": None if matched else "SHA-256 mismatch",
                 }
             )
         return results
+
+    def dry_run_restore(self, backup_info: BackupInfo) -> Dict[str, Any]:
+        """Validate a backup can be restored without writing to a live database.
+
+        Steps: SHA-256 verify → optional gzip decompress to a temp file →
+        payload readability checks (SQLite header + PRAGMA integrity_check when
+        the payload is a SQLite database).
+        """
+        import os
+        import sqlite3
+        import tempfile
+
+        from ..native import gzip_decompress_file
+
+        checksum = self.verify_backup_checksum(backup_info)
+        if not checksum.get("ok"):
+            return {
+                "ok": False,
+                "status": checksum.get("status", "fail"),
+                "stage": "checksum",
+                "checksum": checksum,
+                "error": checksum.get("error") or "Checksum verification failed",
+            }
+
+        source = Path(backup_info.path)
+        metadata = backup_info.metadata or {}
+        temp_path: Optional[Path] = None
+        try:
+            if metadata.get("compression") == "gzip":
+                fd, temp_name = tempfile.mkstemp(suffix=".dryrun.backup")
+                os.close(fd)
+                temp_path = Path(temp_name)
+                gzip_decompress_file(source, temp_path)
+                payload = temp_path
+            else:
+                payload = source
+
+            if not payload.exists() or payload.stat().st_size == 0:
+                return {
+                    "ok": False,
+                    "status": "fail",
+                    "stage": "payload",
+                    "checksum": checksum,
+                    "error": "Backup payload is missing or empty",
+                }
+
+            payload_size = payload.stat().st_size
+            db_type = str(metadata.get("databaseType") or "").lower()
+            with open(payload, "rb") as handle:
+                magic = handle.read(16)
+            is_sqlite = magic.startswith(b"SQLite format 3") or db_type == "sqlite"
+
+            integrity = None
+            if is_sqlite:
+                if not magic.startswith(b"SQLite format 3"):
+                    return {
+                        "ok": False,
+                        "status": "fail",
+                        "stage": "header",
+                        "checksum": checksum,
+                        "payload_size": payload_size,
+                        "error": "Payload is not a valid SQLite database header",
+                    }
+                uri = f"file:{payload.resolve().as_posix()}?mode=ro"
+                conn = sqlite3.connect(uri, uri=True)
+                try:
+                    row = conn.execute("PRAGMA integrity_check").fetchone()
+                    integrity = row[0] if row else "failed"
+                finally:
+                    conn.close()
+                if integrity != "ok":
+                    return {
+                        "ok": False,
+                        "status": "fail",
+                        "stage": "integrity_check",
+                        "checksum": checksum,
+                        "payload_size": payload_size,
+                        "integrity": integrity,
+                        "error": f"SQLite integrity_check failed: {integrity}",
+                    }
+
+            return {
+                "ok": True,
+                "status": "pass",
+                "stage": "complete",
+                "checksum": checksum,
+                "payload_size": payload_size,
+                "integrity": integrity,
+                "databaseType": metadata.get("databaseType"),
+                "error": None,
+            }
+        except Exception as exc:
+            return {
+                "ok": False,
+                "status": "fail",
+                "stage": "dry_run",
+                "checksum": checksum,
+                "error": str(exc),
+            }
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
