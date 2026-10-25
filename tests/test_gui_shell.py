@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -15,9 +16,33 @@ from db_storage_manager.security.bootstrap import bootstrap_admin
 from db_storage_manager.themes.themes import THEMES, DEFAULT_THEME
 from db_storage_manager.gui.utils import build_app_stylesheet
 
+_NAV_SECTION_COUNT = 7
+_THEME_KEYS = ("dark", "light", "dracula")  # Atmospheric / Light / Dracula
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_RBAC_ENV_PATH = _REPO_ROOT / ".env.rbac.local"
+
+
+def _load_rbac_local_credentials() -> tuple[str, str]:
+    """Load USERNAME/PASSWORD from gitignored .env.rbac.local (skip if absent)."""
+    if not _RBAC_ENV_PATH.is_file():
+        pytest.skip(".env.rbac.local not present on this workstation")
+    values: dict[str, str] = {}
+    for raw in _RBAC_ENV_PATH.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        values[key.strip()] = val.strip().strip("'\"")
+    username = values.get("USERNAME", "").strip()
+    password = values.get("PASSWORD", "")
+    if not username or not password:
+        pytest.skip(".env.rbac.local missing USERNAME or PASSWORD")
+    return username, password
+
 
 def test_theme_tokens_include_shell_keys():
     assert DEFAULT_THEME == "dark"
+    assert THEMES["dark"]["name"] == "Atmospheric"
     for key, theme in THEMES.items():
         colors = theme["colors"]
         for token in (
@@ -64,7 +89,7 @@ def test_main_window_shell_offscreen(isolated_secure_store, monkeypatch):
 
     assert window.sidebar is not None
     assert window.sidebar.width() == 220
-    assert window.tab_widget.count() == 7
+    assert window.tab_widget.count() == _NAV_SECTION_COUNT
     assert not window.tab_widget.tabBar().isVisible()
 
     window.sidebar.set_current_index(2)
@@ -119,3 +144,87 @@ def test_login_dialog_shell_offscreen(isolated_secure_store, monkeypatch):
     dlg._try_login()
     assert get_auth_manager().current_user is not None
     assert dlg.result() == int(QDialog.DialogCode.Accepted)
+
+
+def test_post_login_click_through_shell_offscreen(isolated_secure_store, monkeypatch):
+    """Sign-in → MainWindow: click all nav sections, rotate themes, check footer."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    username, password = _load_rbac_local_credentials()
+    store, data_dir = isolated_secure_store
+    reset_auth_manager()
+
+    import db_storage_manager.themes.manager as theme_mod
+    from db_storage_manager.security import auth as auth_mod
+
+    monkeypatch.setattr(theme_mod, "THEME_FILE", data_dir / "theme.json")
+    theme_mod._theme_manager = None
+    auth_mod._auth_manager = AuthenticationManager(store=store)
+
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox
+
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *a, **k: QMessageBox.StandardButton.Ok
+    )
+
+    bootstrap_admin(username, password, store=store)
+    get_auth_manager().reload()
+    assert get_auth_manager().is_rbac_active()
+    assert get_auth_manager().current_user is None
+
+    from db_storage_manager.gui.login import LoginDialog
+    from db_storage_manager.gui.main_window import MainWindow
+    from db_storage_manager.themes.manager import get_theme_manager
+
+    # Same path as db_storage_manager.main: LoginDialog then MainWindow
+    dlg = LoginDialog()
+    dlg.show()
+    app.processEvents()
+    dlg.username_edit.setText(username)
+    dlg.password_edit.setText(password)
+    dlg._try_login()
+    app.processEvents()
+    assert dlg.result() == int(QDialog.DialogCode.Accepted)
+    assert get_auth_manager().current_user is not None
+    assert get_auth_manager().current_user.username == username
+    dlg.close()
+
+    get_theme_manager().set_theme("dark")
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+
+    assert window.tab_widget.count() == _NAV_SECTION_COUNT
+    assert len(window.sidebar._buttons) == _NAV_SECTION_COUNT
+    assert not window.tab_widget.tabBar().isVisible()
+
+    footer = window.sidebar.footer.text()
+    assert username in footer
+    assert "Signed in" in footer or username in window.statusBar().currentMessage()
+
+    for index in range(_NAV_SECTION_COUNT):
+        window.sidebar._buttons[index].click()
+        app.processEvents()
+        assert window.tab_widget.currentIndex() == index
+        assert window.sidebar._buttons[index].isChecked()
+        assert window.tab_widget.widget(index) is not None
+        assert window.tab_widget.widget(index).isVisible()
+
+    for theme_key in _THEME_KEYS:
+        combo_index = window.settings_widget.theme_combo.findData(theme_key)
+        assert combo_index >= 0, f"theme {theme_key} missing from Settings combo"
+        window.settings_widget.theme_combo.setCurrentIndex(combo_index)
+        app.processEvents()
+        assert get_theme_manager().current_theme == theme_key
+        sheet = window.styleSheet()
+        assert "NavSidebar" in sheet
+        assert THEMES[theme_key]["colors"]["primary"] in sheet
+        # Nav still coherent after theme apply
+        target = (window.tab_widget.currentIndex() + 1) % _NAV_SECTION_COUNT
+        window.sidebar._buttons[target].click()
+        app.processEvents()
+        assert window.tab_widget.currentIndex() == target
+        assert username in window.sidebar.footer.text()
+
+    window.close()

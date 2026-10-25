@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
 
 ### Added
-- Offscreen Qt shell smoke tests for main window navigation + login (`tests/test_gui_shell.py`)
+- Offscreen Qt shell smoke tests for main window navigation + login, plus post-sign-in click-through of all seven nav sections and Atmospheric / Light / Dracula theme rotation (`tests/test_gui_shell.py`)
 - **Multi-user / RBAC** for shared workstation deployments: local accounts with PBKDF2-HMAC-SHA256 password hashes in encrypted `users.enc`, roles `admin` / `user` / `viewer` / `guest`, and real permission checks on connections, backups, settings, plugins, and the REST companion
 - Desktop **sign-in** when RBAC is active; Settings **Users & RBAC** panel to bootstrap the first admin, add users, change roles, reset passwords, enable/disable, and delete (with last-admin guards)
 - CLI bootstrap: `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap` (`DSM_BOOTSTRAP_USERNAME` / `DSM_BOOTSTRAP_PASSWORD`)
