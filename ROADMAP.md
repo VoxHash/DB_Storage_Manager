@@ -1,15 +1,14 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ SSH tunnel UX on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ monitoring alerts UX on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Improve monitoring/alerts presentation using existing `monitoring/` modules
 - Keep documentation kit synchronized with release tags
 
 ## Next
 
-- Real-time monitoring refinements and actionable alerts
+- Real-time monitoring refinements and actionable alerts (notification channels, threshold editing UI)
 - Query optimization suggestions surfaced in the Query Console
 - Dashboard customization (saved layouts / watched metrics)
 - Connection pooling for long-lived SQL engine sessions
@@ -49,6 +48,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Monitoring/alerts UX: status banner with health + alert counts, severity-colored alerts table with acknowledge/refresh, health detail column, timer-driven `DatabaseMonitor.poll_once()` wired to real collectors, AlertManager id/dedupe/counts, unit + offscreen Qt smoke tests (post-1.0.5)
 - Connections UI SSH tunnel UX: bastion host/user/key/password/port fields, open/close status, Paramiko local port forward, encrypted `ssh_config` + SecureStore bastion index, unit tests with mocked network (post-1.0.5)
 - Hardened optional engine installs: `oracledb` (Thin default / Instant Client only for Thick via `ORACLE_CLIENT_LIB_DIR`), clearer missing-driver `ImportError`s pointing at setup extras, SQL Server ODBC Driver 18→17 selection, platform Instant Client / ODBC docs (incl. Arch/Garuda helper), extras + missing-driver tests (1.0.5)
 - Expanded automated tests: real SQLite driver/factory paths, SecureStore Fernet round-trips and failure cases, Safe Mode SELECT allow / non-SELECT block; CI `test` job runs `pytest -v tests/` as a hard gate (post-1.0.3)

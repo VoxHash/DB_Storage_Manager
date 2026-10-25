@@ -8,14 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Monitoring tab presentation: live status banner (health + alert counts), severity-colored alerts with source column, **Acknowledge Selected** / **Acknowledge All** / **Refresh Now**, health overall label + detail column, human-readable metric labels
+- `DatabaseMonitor.poll_once()` for Qt-timer / script one-shot collect → health → threshold evaluation; `get_status_summary()` for banner data
+- `Alert` stable `id`, `AlertManager.emit_alert` / `acknowledge_by_id` / `acknowledge_all` / `get_counts`, active-alert dedupe on threshold re-checks
+- Unit tests for alerts + SQLite `poll_once`, offscreen Qt smoke for `MonitoringWidget` (`tests/test_monitoring.py`)
 - Connections UI SSH tunnel workflow: enable bastion fields (host, port, user, password/passphrase, key path, remote host/port), **Open Tunnel** / **Close Tunnel** with live status, and Test Connection via local forward
 - `SSHTunnel` local port-forward implementation (Paramiko `direct-tcpip`), `SSHTunnelError` / `normalize_ssh_config` / `validate_ssh_config`, sync + async `TunnelManager` APIs
 - `SecureStore.upsert_ssh_settings_for_connection` / `remove_ssh_settings_for_connection` for encrypted bastion metadata in `ssh-keys.enc` (passwords remain only in `connections.enc`)
 - Unit tests for SSH validation, mocked Paramiko connect/auth paths, TunnelManager lifecycle, and SecureStore SSH settings (`tests/test_ssh_tunnel.py`)
 
+### Changed
+- Monitoring UI collects via timer-driven `poll_once()` instead of discarding a short-lived asyncio loop after `start_monitoring()`
+- Health-failure alerts go through `AlertManager.emit_alert` (callbacks + dedupe) instead of a silent list append
+
 ### Fixed
 - Shell scripts under `scripts/` use Unix LF line endings (`.gitattributes`: `*.sh text eol=lf`) so shebangs no longer fail with `env: ‘bash\r’: No such file or directory`
 - Connections tab now loads persisted profiles on startup and closes SSH tunnels when the main window exits
+
 
 ## [1.0.5] - 2026-10-24
 

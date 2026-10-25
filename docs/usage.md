@@ -42,6 +42,16 @@ Options typically include compression and optional encryption. Scheduled backups
 
 Use **Settings** to switch theme and language. Theme application goes through `themes.manager` and `gui.utils.apply_theme_to_app`.
 
+## Monitoring and alerts
+
+1. Open **Monitoring**
+2. Select a saved connection and click **Start Monitoring**
+3. The status banner shows overall health and active alert counts (critical / warning / info)
+4. **Metrics**, **Alerts**, **Performance**, and **Health** tabs refresh every 5 seconds from the real `monitoring/` collectors (not placeholders)
+5. On **Alerts**, select rows and **Acknowledge Selected**, or **Acknowledge All**; **Refresh Now** forces an immediate poll
+
+Thresholds (connection count, cache hit ratio, health failures) live in `AlertManager`. SQLite reports basic connectivity metrics; PostgreSQL / MySQL / SQL Server collect richer engine counters when connected.
+
 ## SSH tunneling
 
 SSH helpers live in `db_storage_manager.ssh` (`SSHTunnel`, `TunnelManager`) using Paramiko local port forwarding.

@@ -181,8 +181,18 @@
     "severity": "Severity",
     "title": "Title",
     "message": "Message",
+    "source": "Source",
     "check": "Check",
-    "status": "Status"
+    "status": "Status",
+    "detail": "Detail",
+    "acknowledge_selected": "Acknowledge Selected",
+    "acknowledge_all": "Acknowledge All",
+    "refresh_now": "Refresh Now",
+    "status_idle": "Monitoring idle — select a connection and start to collect live metrics and alerts.",
+    "status_active": "Monitoring {connection} · Health: {health} · Alerts: {total} (critical {critical}, warning {warning}, info {info})",
+    "health_overall": "Overall health: {status}",
+    "health_unknown": "Overall health: UNKNOWN",
+    "poll_failed": "Monitoring poll failed: {error}"
   },
   "analysis": {
     "query_performance": "Query Performance",

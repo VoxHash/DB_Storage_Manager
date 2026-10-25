@@ -96,6 +96,27 @@ store.set_settings({...})
 settings = store.get_settings()
 ```
 
+## Monitoring
+
+```python
+from db_storage_manager.monitoring import (
+    AlertManager,
+    DatabaseMonitor,
+)
+
+monitor = DatabaseMonitor(connection)  # async DatabaseConnection
+data = await monitor.poll_once()
+# data["metrics"], data["health"], data["alerts"], data["alertCounts"]
+
+manager = AlertManager()
+manager.check_metrics({"activeConnections": 80, "cacheHitRatio": 55})
+manager.acknowledge_by_id(manager.get_active_alerts()[0].id)
+manager.acknowledge_all()
+counts = manager.get_counts()  # critical / warning / info / total
+```
+
+`DatabaseMonitor.poll_once()` collects metrics, runs health checks, evaluates thresholds (with dedupe for active alerts), and returns `get_dashboard_data()`.
+
 ## SSH
 
 ```python

@@ -2,13 +2,15 @@
 Main database monitoring system
 """
 
+from __future__ import annotations
+
 import asyncio
-from typing import Dict, List, Any, Optional, Callable
-from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
+
 from ..db.base import DatabaseConnection
+from .alerts import Alert, AlertManager, AlertSeverity
+from .health import HealthChecker
 from .metrics import MetricsCollector
-from .alerts import AlertManager, Alert
-from .health import HealthChecker, HealthStatus
 
 
 class DatabaseMonitor:
@@ -21,6 +23,47 @@ class DatabaseMonitor:
         self.health_checker = HealthChecker(connection)
         self.monitoring = False
         self.monitoring_task: Optional[asyncio.Task] = None
+        self._on_metrics: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._last_health_alert_status: Optional[str] = None
+
+    async def poll_once(self) -> Dict[str, Any]:
+        """Collect one metrics + health sample and evaluate alert thresholds.
+
+        Intended for Qt timers (or other drivers) that cannot keep a long-lived
+        asyncio event loop running in the background.
+        """
+        if not self.connection.connected:
+            await self.connection.connect()
+
+        metrics = await self.metrics_collector.collect_metrics()
+        self.metrics_collector.metrics_history.append(metrics)
+        if len(self.metrics_collector.metrics_history) > 1000:
+            self.metrics_collector.metrics_history = (
+                self.metrics_collector.metrics_history[-1000:]
+            )
+
+        if self._on_metrics:
+            try:
+                self._on_metrics(metrics)
+            except Exception:
+                pass
+
+        self.alert_manager.check_metrics(metrics)
+
+        health = await self.health_checker.check_health()
+        status = health.get("status")
+        if status == "unhealthy" and self._last_health_alert_status != "unhealthy":
+            self.alert_manager.emit_alert(
+                Alert(
+                    "Database Health Check Failed",
+                    "Database health check returned unhealthy status",
+                    AlertSeverity.CRITICAL,
+                    "health_monitor",
+                )
+            )
+        self._last_health_alert_status = status
+
+        return self.get_dashboard_data()
 
     async def start_monitoring(
         self,
@@ -34,6 +77,7 @@ class DatabaseMonitor:
             return
 
         self.monitoring = True
+        self._on_metrics = on_metrics
 
         if on_alert:
             self.alert_manager.add_alert_callback(on_alert)
@@ -50,16 +94,20 @@ class DatabaseMonitor:
             while self.monitoring:
                 try:
                     health = await self.health_checker.check_health()
-                    if health["status"] == "unhealthy":
-                        from .alerts import Alert, AlertSeverity
-
-                        alert = Alert(
-                            "Database Health Check Failed",
-                            f"Database health check returned unhealthy status",
-                            AlertSeverity.CRITICAL,
-                            "health_monitor",
+                    status = health.get("status")
+                    if (
+                        status == "unhealthy"
+                        and self._last_health_alert_status != "unhealthy"
+                    ):
+                        self.alert_manager.emit_alert(
+                            Alert(
+                                "Database Health Check Failed",
+                                "Database health check returned unhealthy status",
+                                AlertSeverity.CRITICAL,
+                                "health_monitor",
+                            )
                         )
-                        self.alert_manager.alerts.append(alert)
+                    self._last_health_alert_status = status
                 except Exception:
                     pass
                 await asyncio.sleep(health_interval)
@@ -100,14 +148,35 @@ class DatabaseMonitor:
         latest_metrics = self.metrics_collector.get_latest_metrics()
         current_health = self.health_checker.get_current_health()
         active_alerts = self.alert_manager.get_active_alerts()
+        counts = self.alert_manager.get_counts()
 
         return {
-            "metrics": latest_metrics,
-            "health": current_health,
+            "metrics": latest_metrics or {},
+            "health": current_health
+            or {
+                "status": "unknown",
+                "checks": {},
+                "timestamp": None,
+            },
             "alerts": [alert.to_dict() for alert in active_alerts],
+            "alertCounts": counts,
+            "monitoring": self.monitoring,
             "metricsHistory": self.metrics_collector.get_metrics_history(limit=50),
             "healthHistory": self.health_checker.get_health_history(limit=20),
         }
+
+    def get_status_summary(self) -> Dict[str, Any]:
+        """Compact status for the monitoring banner."""
+        data = self.get_dashboard_data()
+        health = data.get("health") or {}
+        return {
+            "monitoring": self.monitoring,
+            "healthStatus": health.get("status", "unknown"),
+            "alertCounts": data.get("alertCounts", {}),
+            "lastMetricsAt": (data.get("metrics") or {}).get("timestamp"),
+            "lastHealthAt": health.get("timestamp"),
+        }
+
 
     def get_performance_summary(self) -> Dict[str, Any]:
         """Get performance summary"""
