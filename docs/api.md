@@ -187,4 +187,54 @@ Prefer the documented CLI entry for end users. GUI classes expect a running `QAp
 
 ## Plugins and extensions
 
-Plugin hooks live under `db_storage_manager.plugins` (`base`, `registry`, migration/comparison helpers). Treat these as evolving APIs; pin versions for production automation.
+### Public SDK (`db_storage_manager.plugins.sdk`)
+
+Stable authoring surface (API version `1.0`):
+
+```python
+from db_storage_manager.plugins.sdk import (
+    PLUGIN_API_VERSION,
+    Plugin,
+    PluginMetadata,
+    PluginType,
+    load_manifest,
+    validate_manifest,
+    ManifestError,
+)
+```
+
+A third-party plugin is a directory containing `plugin.json` plus an entry module:
+
+```json
+{
+  "id": "hello_echo",
+  "name": "Hello Echo",
+  "version": "1.0.0",
+  "author": "VoxHash Technologies",
+  "description": "Example SDK plugin",
+  "plugin_type": "custom",
+  "api_version": "1.0",
+  "entry": "plugin:HelloEchoPlugin",
+  "dependencies": []
+}
+```
+
+`entry` is `module:ClassName` relative to the plugin root. The class must subclass `Plugin`. See `examples/plugins/hello_echo/`.
+
+### Local marketplace
+
+```python
+from pathlib import Path
+from db_storage_manager.plugins.marketplace import LocalPluginMarketplace
+
+mp = LocalPluginMarketplace()
+mp.list_installed()  # builtins + user installs
+mp.install_from_path(Path("examples/plugins/hello_echo"))
+mp.install_from_url("https://example.com/my-plugin.zip")  # zip or tar.gz
+mp.set_enabled("hello_echo", False)
+mp.uninstall("hello_echo")  # user installs only
+manager = mp.load_into_manager()
+manager.execute_plugin("hello_echo", message="hi")
+```
+
+Registry files live under `~/.config/db-storage-manager/plugins/` (`registry.json`, `installed/`). Enable/disable flags are stored in SecureStore settings key `plugins`. There is no remote catalog with placeholder listings; a future public store can publish the same `plugin.json` layout.

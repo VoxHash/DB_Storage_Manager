@@ -1,0 +1,11 @@
+{
+  "id": "hello_echo",
+  "name": "Hello Echo",
+  "version": "1.0.0",
+  "author": "VoxHash Technologies",
+  "description": "Example SDK plugin that echoes a message — use as a template for third-party plugins.",
+  "plugin_type": "custom",
+  "api_version": "1.0",
+  "entry": "plugin:HelloEchoPlugin",
+  "dependencies": []
+}

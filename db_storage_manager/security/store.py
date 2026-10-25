@@ -94,6 +94,10 @@ class SecureStore:
                 merged["dashboard_layout"] = normalize_dashboard_layout(
                     loaded.get("dashboard_layout")
                 )
+            if "plugins" in loaded:
+                from ..plugins.marketplace import normalize_plugins_prefs
+
+                merged["plugins"] = normalize_plugins_prefs(loaded.get("plugins"))
             return merged
         except Exception:
             return defaults

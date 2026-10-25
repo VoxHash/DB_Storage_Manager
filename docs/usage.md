@@ -52,6 +52,17 @@ Use **Settings** to switch theme and language. Theme application goes through `t
 
 Thresholds (connection count, cache hit ratio, health failures) live in `AlertManager`. SQLite reports basic connectivity metrics; PostgreSQL / MySQL / SQL Server collect richer engine counters when connected.
 
+## Plugins (local marketplace)
+
+1. Open **Plugins** (View → Plugins, or Ctrl+6)
+2. Review built-in plugins (`migration`, `data_comparison`) and any user installs
+3. **Enable** / **Disable** — persisted in SecureStore (`settings.plugins.enabled`)
+4. **Install from Path…** — select a directory that contains `plugin.json` (see `examples/plugins/hello_echo/`)
+5. **Install from URL…** — http(s) URL to a `.zip` or `.tar.gz` archive with the same layout
+6. **Uninstall** — removes user-installed plugins only (built-ins can only be disabled)
+
+Authoring API: `db_storage_manager.plugins.sdk` (API version `1.0`). Registry on disk: `plugins/registry.json` under the user data directory. There is no remote store catalog yet; publish later by shipping the same `plugin.json` package.
+
 ## SSH tunneling
 
 SSH helpers live in `db_storage_manager.ssh` (`SSHTunnel`, `TunnelManager`) using Paramiko local port forwarding.

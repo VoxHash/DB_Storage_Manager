@@ -3,9 +3,9 @@ Base plugin system
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class PluginType(Enum):
@@ -27,7 +27,8 @@ class PluginMetadata:
     author: str
     description: str
     plugin_type: PluginType
-    dependencies: List[str] = None
+    dependencies: List[str] = field(default_factory=list)
+    plugin_id: Optional[str] = None
 
 
 class Plugin(ABC):
@@ -54,13 +55,16 @@ class Plugin(ABC):
 
     def get_info(self) -> Dict[str, Any]:
         """Get plugin information"""
+        plugin_id = self.metadata.plugin_id or self.metadata.name
         return {
+            "id": plugin_id,
             "name": self.metadata.name,
             "version": self.metadata.version,
             "author": self.metadata.author,
             "description": self.metadata.description,
             "type": self.metadata.plugin_type.value,
             "enabled": self.enabled,
+            "dependencies": list(self.metadata.dependencies),
         }
 
 
@@ -73,11 +77,12 @@ class PluginManager:
 
     def register_plugin(self, plugin: Plugin) -> bool:
         """Register a plugin"""
-        if plugin.metadata.name in self.plugins:
+        key = plugin.metadata.plugin_id or plugin.metadata.name
+        if key in self.plugins:
             return False
 
         if plugin.initialize(self.context):
-            self.plugins[plugin.metadata.name] = plugin
+            self.plugins[key] = plugin
             return True
         return False
 
@@ -106,6 +111,19 @@ class PluginManager:
         if plugin and plugin.enabled:
             return plugin.execute(*args, **kwargs)
         return None
+
+    def set_enabled(self, plugin_name: str, enabled: bool) -> bool:
+        """Enable or disable a registered plugin."""
+        plugin = self.plugins.get(plugin_name)
+        if plugin is None:
+            return False
+        plugin.enabled = bool(enabled)
+        return True
+
+    def is_enabled(self, plugin_name: str) -> bool:
+        """Return whether a registered plugin is enabled."""
+        plugin = self.plugins.get(plugin_name)
+        return bool(plugin and plugin.enabled)
 
     def set_context(self, key: str, value: Any) -> None:
         """Set context value for plugins"""

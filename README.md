@@ -16,6 +16,7 @@
 - **Secure Connection Management** — Fernet-encrypted credential storage
 - **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
 - **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh
+- **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
 - **Backup & Restore** — Local, S3, and Google Drive adapters with scheduling
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
@@ -88,7 +89,8 @@ Developers building from source still need Rust + maturin (`pip install -e ".[na
 2. **Dashboard** — analyze storage for a selected connection
 3. **Query Console** — run queries; keep Safe Mode on for production
 4. **Monitoring** — health metrics and acknowledgeable alerts
-5. **Backups** — local/S3/Google Drive with optional schedules
+5. **Plugins** — local marketplace: enable/disable, install from path or URL
+6. **Backups** — local/S3/Google Drive with optional schedules
 
 Details: [docs/usage.md](docs/usage.md)
 
@@ -118,7 +120,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: plugin marketplace and public SDK around `plugins/`.
+See [ROADMAP.md](ROADMAP.md). Current focus: multi-user / RBAC for shared workstation deployments.
 
 ## Contributing
 

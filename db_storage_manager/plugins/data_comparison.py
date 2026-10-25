@@ -17,6 +17,7 @@ class DataComparisonPlugin(Plugin):
             author="DB Storage Manager",
             description="Compare data between databases",
             plugin_type=PluginType.DATA_COMPARISON,
+            plugin_id="data_comparison",
         )
         super().__init__(metadata)
 

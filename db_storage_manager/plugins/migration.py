@@ -17,6 +17,7 @@ class MigrationPlugin(Plugin):
             author="DB Storage Manager",
             description="Database schema migration tools",
             plugin_type=PluginType.MIGRATION,
+            plugin_id="migration",
         )
         super().__init__(metadata)
         self.source_db: DatabaseConnection = None

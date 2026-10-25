@@ -153,6 +153,9 @@ class SettingsWidget(QWidget):
             "dashboard_layout": existing.get(
                 "dashboard_layout", DEFAULT_SETTINGS.get("dashboard_layout")
             ),
+            "plugins": existing.get(
+                "plugins", DEFAULT_SETTINGS.get("plugins")
+            ),
         }
         self.secure_store.set_settings(self.settings)
         QMessageBox.information(

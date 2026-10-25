@@ -28,10 +28,12 @@ SETTINGS_FILE = USER_DATA_DIR / "settings.enc"
 SSH_KEYS_FILE = USER_DATA_DIR / "ssh-keys.enc"
 SCHEDULED_BACKUPS_FILE = USER_DATA_DIR / "scheduled-backups.json"
 BACKUP_DIR = USER_DATA_DIR / "backups"
+PLUGINS_DIR = USER_DATA_DIR / "plugins"
 MASTER_KEY_FILE = USER_DATA_DIR / ".master-key"
 
 # Ensure backup directory exists
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+PLUGINS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Default alert thresholds (mirrored in monitoring.alerts.DEFAULT_ALERT_THRESHOLDS)
 DEFAULT_ALERT_THRESHOLDS = {
@@ -65,6 +67,14 @@ DEFAULT_DASHBOARD_LAYOUT = {
     },
 }
 
+# Local plugin marketplace prefs (enable/disable map; registry lives under PLUGINS_DIR)
+DEFAULT_PLUGINS_PREFS = {
+    "enabled": {
+        "migration": True,
+        "data_comparison": True,
+    }
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -76,6 +86,7 @@ DEFAULT_SETTINGS = {
     "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),
     "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),
+    "plugins": copy.deepcopy(DEFAULT_PLUGINS_PREFS),
 }
 
 # Database connection defaults

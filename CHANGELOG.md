@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Public **plugin SDK** (`db_storage_manager.plugins.sdk`, API `1.0`): `Plugin` / `PluginMetadata` / `PluginType`, `plugin.json` manifest load/validate, documented authoring contract
+- **Local plugin marketplace** (`LocalPluginMarketplace`): filesystem registry under user-data `plugins/`, sync built-ins (`migration`, `data_comparison`), install from path or http(s) zip/tar.gz, uninstall user installs, enable/disable via SecureStore `plugins.enabled`
+- Desktop **Plugins** tab (View → Plugins / Ctrl+6): list registry, enable/disable, install from path/URL, uninstall
+- Example third-party plugin `examples/plugins/hello_echo/` and tests (`tests/test_plugins_marketplace.py`)
 - Local **Web UI / REST companion** (`db_storage_manager.api`): `GET /api/v1/health|info|connections|backups`, `POST …/verify` and `…/dry-run`, static glance UI at `/`; bind `127.0.0.1:8765` by default; optional `DSM_API_TOKEN` Bearer auth; passwords redacted; console script `db-storage-manager-api`
 - Native helpers **zstd** compress/decompress and optional backup-file encryption offload (`encrypt_file` / `decrypt_file`); format `DSMENC1` = AES-256-GCM (1 MiB chunks) + PBKDF2-HMAC-SHA256 (200k iters); Rust path in `db_storage_native` 0.2.0 with Python fallbacks (`zstandard`, `cryptography`)
 - Local backups support `compression="zstd"` and `encryption=True` + `encryptionKey` (passphrase never written to `.meta.json`); restore / dry-run decrypt then decompress

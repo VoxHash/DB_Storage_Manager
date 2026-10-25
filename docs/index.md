@@ -26,7 +26,7 @@ Professional desktop application for visualizing and managing database storage, 
 
 ## Release alignment
 
-Package / docs target version **1.0.5** (`db_storage_manager.__version__`, `setup.py`, GitHub Release `v1.0.5`). Post-tag work on `main` (SSH tunnel UX, monitoring alerts UX, optional live connection probes) is tracked under **Unreleased** in [CHANGELOG.md](../CHANGELOG.md) until the next tag.
+Package / docs target version **1.0.5** (`db_storage_manager.__version__`, `setup.py`, GitHub Release `v1.0.5`). Post-tag work on `main` (plugin SDK + local marketplace, Web/REST companion, SSH/monitoring UX, and related features) is tracked under **Unreleased** in [CHANGELOG.md](../CHANGELOG.md) until the next tag.
 
 ## Project links
 

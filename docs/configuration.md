@@ -31,7 +31,11 @@ Key files:
 | `ssh-keys.enc` | Encrypted SSH bastion metadata index (host/user/key path per connection; passwords stay in `connections.enc`) |
 | `scheduled-backups.json` | Backup schedule definitions |
 | `backups/` | Local backup payloads |
+| `plugins/registry.json` | Local plugin marketplace registry (builtins + installs) |
+| `plugins/installed/` | Copied user-installed plugin packages |
 | `.master-key` | Fernet master key (Unix mode `600`) |
+
+Plugin enable/disable flags are stored under the encrypted settings key `plugins.enabled` (not in `registry.json`).
 
 ## Environment variables
 
