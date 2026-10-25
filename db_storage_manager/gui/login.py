@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -14,7 +16,7 @@ from PyQt6.QtWidgets import (
 
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import get_auth_manager
-from .utils import apply_glassmorphism
+from .utils import apply_theme_to_app
 
 
 class LoginDialog(QDialog):
@@ -26,13 +28,26 @@ class LoginDialog(QDialog):
         t = self.i18n.translate
         self.setWindowTitle(t("auth.login_title", default="Sign in"))
         self.setModal(True)
-        self.setMinimumWidth(360)
+        self.setMinimumWidth(420)
+        self.setMinimumHeight(280)
+        apply_theme_to_app(self)
         self._build()
-        apply_glassmorphism(self)
 
     def _build(self) -> None:
         t = self.i18n.translate
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(24, 24, 24, 24)
+
+        card = QFrame()
+        card.setObjectName("LoginCard")
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(28, 28, 28, 28)
+        layout.setSpacing(14)
+
+        title = QLabel(t("auth.login_title", default="Sign in"))
+        title.setObjectName("LoginTitle")
+        layout.addWidget(title)
+
         hint = QLabel(
             t(
                 "auth.login_hint",
@@ -42,10 +57,13 @@ class LoginDialog(QDialog):
                 ),
             )
         )
+        hint.setObjectName("LoginHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
 
         form = QFormLayout()
+        form.setSpacing(10)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.username_edit = QLineEdit()
         self.username_edit.setPlaceholderText("admin")
         form.addRow(
@@ -67,9 +85,15 @@ class LoginDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
         )
+        ok_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        if ok_btn is not None:
+            ok_btn.setObjectName("PrimaryButton")
+            ok_btn.setText(t("auth.sign_in", default="Sign in"))
         buttons.accepted.connect(self._try_login)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        outer.addWidget(card)
 
     def _try_login(self) -> None:
         t = self.i18n.translate

@@ -1,13 +1,15 @@
 """
-Main application window
+Main application window — modern desktop shell with library-style navigation.
 """
 
 from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
     QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QTabWidget,
     QMessageBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
 from PyQt6.QtGui import QAction
 
@@ -18,6 +20,7 @@ from .backups import BackupsWidget
 from .settings import SettingsWidget
 from .monitoring import MonitoringWidget
 from .plugins import PluginsWidget
+from .sidebar import NavSidebar
 from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
@@ -34,22 +37,34 @@ class MainWindow(QMainWindow):
         self.i18n = get_i18n_manager()
         self.theme_manager = get_theme_manager()
         self.connections = self.secure_store.get_connections()
+        self._syncing_nav = False
 
         self.setWindowTitle(self.i18n.translate("app.title"))
         self.setMinimumSize(1200, 800)
 
-        # Create central widget with tabs
         central_widget = QWidget()
+        central_widget.setObjectName("ContentShell")
         self.setCentralWidget(central_widget)
 
-        layout = QVBoxLayout(central_widget)
-        layout.setContentsMargins(0, 0, 0, 0)
+        shell = QHBoxLayout(central_widget)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.setSpacing(0)
 
-        # Create tab widget
+        self.sidebar = NavSidebar()
+        shell.addWidget(self.sidebar)
+
+        content = QFrame()
+        content.setObjectName("ContentShell")
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
         self.tab_widget = QTabWidget()
-        layout.addWidget(self.tab_widget)
+        self.tab_widget.setDocumentMode(True)
+        self.tab_widget.tabBar().setVisible(False)
+        content_layout.addWidget(self.tab_widget)
+        shell.addWidget(content, 1)
 
-        # Create tabs
         self.dashboard = DashboardWidget(self.connections)
         self.connections_widget = ConnectionsWidget(self.connections)
         self.query_widget = QueryWidget(self.connections)
@@ -58,12 +73,10 @@ class MainWindow(QMainWindow):
         self.plugins_widget = PluginsWidget()
         self.settings_widget = SettingsWidget()
 
-        # Connect settings widget signals
         self.settings_widget.theme_changed.connect(self._on_theme_changed)
         self.settings_widget.language_changed.connect(self._on_language_changed)
         self.settings_widget.users_admin.users_changed.connect(self.apply_rbac)
 
-        # Add tabs to tab widget
         self.tab_widget.addTab(self.dashboard, "")
         self.tab_widget.addTab(self.connections_widget, "")
         self.tab_widget.addTab(self.query_widget, "")
@@ -72,25 +85,29 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.plugins_widget, "")
         self.tab_widget.addTab(self.settings_widget, "")
 
+        self._nav_keys = [
+            "dashboard",
+            "connections",
+            "query",
+            "backups",
+            "monitoring",
+            "plugins",
+            "settings",
+        ]
+        self.sidebar.set_items([(k, "") for k in self._nav_keys])
+        self.sidebar.navigated.connect(self._on_sidebar_navigated)
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
         self._update_tabs()
 
-        # Connect connections widget to update other widgets
         self.connections_widget.connection_added.connect(self._on_connection_added)
         self.connections_widget.connection_updated.connect(self._on_connection_updated)
         self.connections_widget.connection_deleted.connect(self._on_connection_deleted)
 
-        # Create menu bar
         self._create_menu_bar()
-
-        # Create status bar
         self.statusBar().showMessage(self.i18n.translate("common.ready"))
 
-        # Apply theme
         self._apply_theme()
-
-        # Apply background to central widget
-        self._apply_central_widget_style()
-
         self.apply_rbac()
 
     def apply_rbac(self) -> None:
@@ -113,67 +130,58 @@ class MainWindow(QMainWindow):
                     role=auth.current_user.role.value,
                 )
             )
-        elif auth.is_rbac_active():
-            self.statusBar().showMessage(
+            self.sidebar.set_footer(
                 self.i18n.translate(
-                    "auth.rbac_active",
-                    default="RBAC active — sign in required for sensitive actions",
+                    "auth.signed_in",
+                    default="Signed in as {user} ({role})",
+                    user=auth.current_user.username,
+                    role=auth.current_user.role.value,
                 )
             )
+        elif auth.is_rbac_active():
+            msg = self.i18n.translate(
+                "auth.rbac_active",
+                default="RBAC active — sign in required for sensitive actions",
+            )
+            self.statusBar().showMessage(msg)
+            self.sidebar.set_footer(msg)
         else:
             self.statusBar().showMessage(self.i18n.translate("common.ready"))
+            self.sidebar.set_footer(
+                self.i18n.translate("common.ready", default="Ready")
+            )
 
     def _create_menu_bar(self):
         """Create application menu bar"""
         menubar = self.menuBar()
-
-        # Clear all existing menus to prevent duplicates
         menubar.clear()
 
         t = self.i18n.translate
 
-        # File menu
         file_menu = menubar.addMenu(t("menu.file"))
         exit_action = QAction(t("menu.exit"), self)
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
-        # View menu
         view_menu = menubar.addMenu(t("menu.view"))
-        dashboard_action = QAction(t("menu.dashboard"), self)
-        dashboard_action.setShortcut("Ctrl+1")
-        dashboard_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(0))
-        view_menu.addAction(dashboard_action)
+        targets = [
+            (t("menu.dashboard"), "Ctrl+1", 0),
+            (t("menu.connections"), "Ctrl+2", 1),
+            (t("menu.query_console"), "Ctrl+3", 2),
+            (t("menu.backups"), "Ctrl+4", 3),
+            (t("menu.monitoring"), "Ctrl+5", 4),
+            (t("menu.plugins", default="&Plugins"), "Ctrl+6", 5),
+            (t("tabs.settings", default="&Settings"), "Ctrl+7", 6),
+        ]
+        for label, shortcut, index in targets:
+            action = QAction(label, self)
+            action.setShortcut(shortcut)
+            action.triggered.connect(
+                lambda _checked=False, i=index: self.tab_widget.setCurrentIndex(i)
+            )
+            view_menu.addAction(action)
 
-        connections_action = QAction(t("menu.connections"), self)
-        connections_action.setShortcut("Ctrl+2")
-        connections_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(1))
-        view_menu.addAction(connections_action)
-
-        query_action = QAction(t("menu.query_console"), self)
-        query_action.setShortcut("Ctrl+3")
-        query_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(2))
-        view_menu.addAction(query_action)
-
-        backups_action = QAction(t("menu.backups"), self)
-        backups_action.setShortcut("Ctrl+4")
-        backups_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(3))
-        view_menu.addAction(backups_action)
-
-        monitoring_action = QAction(t("menu.monitoring"), self)
-        monitoring_action.setShortcut("Ctrl+5")
-        monitoring_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(4))
-        view_menu.addAction(monitoring_action)
-
-        plugins_action = QAction(
-            t("menu.plugins", default="&Plugins"), self
-        )
-        plugins_action.setShortcut("Ctrl+6")
-        plugins_action.triggered.connect(lambda: self.tab_widget.setCurrentIndex(5))
-        view_menu.addAction(plugins_action)
-
-        # Help menu
         help_menu = menubar.addMenu(t("menu.help"))
         about_action = QAction(t("menu.about"), self)
         about_action.triggered.connect(self._show_about)
@@ -192,47 +200,50 @@ class MainWindow(QMainWindow):
         )
 
     def _update_tabs(self):
-        """Update tab labels with translations"""
+        """Update tab / sidebar labels with translations"""
         t = self.i18n.translate
-        self.tab_widget.setTabText(0, t("tabs.dashboard"))
-        self.tab_widget.setTabText(1, t("tabs.connections"))
-        self.tab_widget.setTabText(2, t("tabs.query_console"))
-        self.tab_widget.setTabText(3, t("tabs.backups"))
-        self.tab_widget.setTabText(
-            4, t("tabs.monitoring", default="Monitoring")
+        labels = [
+            t("tabs.dashboard"),
+            t("tabs.connections"),
+            t("tabs.query_console"),
+            t("tabs.backups"),
+            t("tabs.monitoring", default="Monitoring"),
+            t("tabs.plugins", default="Plugins"),
+            t("tabs.settings"),
+        ]
+        for i, label in enumerate(labels):
+            self.tab_widget.setTabText(i, label)
+        self.sidebar.set_labels(labels)
+        self.sidebar.set_section_label(
+            t("nav.workspace", default="Workspace")
         )
-        self.tab_widget.setTabText(
-            5, t("tabs.plugins", default="Plugins")
-        )
-        self.tab_widget.setTabText(6, t("tabs.settings"))
+        self.sidebar.brand.setText(t("app.title", default="DB Storage Manager"))
+
+    def _on_sidebar_navigated(self, index: int) -> None:
+        if self._syncing_nav:
+            return
+        self._syncing_nav = True
+        try:
+            self.tab_widget.setCurrentIndex(index)
+        finally:
+            self._syncing_nav = False
+
+    def _on_tab_changed(self, index: int) -> None:
+        if self._syncing_nav:
+            return
+        self._syncing_nav = True
+        try:
+            self.sidebar.set_current_index(index)
+        finally:
+            self._syncing_nav = False
 
     def _apply_theme(self):
         """Apply theme to application"""
         apply_theme_to_app(self)
 
-    def _apply_central_widget_style(self):
-        """Apply proper styling to central widget"""
-        from ..themes.manager import get_theme_manager
-
-        theme_manager = get_theme_manager()
-        theme = theme_manager.get_theme()
-        colors = theme["colors"]
-
-        central_widget = self.centralWidget()
-        if central_widget:
-            central_widget.setStyleSheet(
-                f"""
-                QWidget {{
-                    background-color: {colors['background']};
-                    color: {colors['text']};
-                }}
-            """
-            )
-
     def _on_theme_changed(self, theme_key):
         """Handle theme change"""
         self._apply_theme()
-        # Recreate menu bar to apply theme
         self._create_menu_bar()
 
     def _on_language_changed(self, lang_code):
@@ -240,7 +251,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.i18n.translate("app.title"))
         self._create_menu_bar()
         self._update_tabs()
-        self.statusBar().showMessage(self.i18n.translate("common.ready"))
+        self.apply_rbac()
 
     def _on_connection_added(self, connection):
         """Handle connection added"""
