@@ -10,7 +10,7 @@
 
 1. Check existing issues
 2. Review [docs/troubleshooting.md](docs/troubleshooting.md) and [docs/faq.md](docs/faq.md)
-3. Confirm Python 3.10–3.12 and a clean venv install
+3. Confirm Python 3.10–3.12 and a single project `.venv` install (`pip show db-storage-manager` should point only at this repo; avoid duplicate user/system copies)
 4. Include OS, Python version, install command output, and reproduction steps
 
 ## Issue Templates

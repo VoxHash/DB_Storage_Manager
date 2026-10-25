@@ -24,6 +24,8 @@ Desktop remains primary. The companion exposes a local HTTP API and a small glan
 db-storage-manager-api
 # or
 python -m db_storage_manager.api
+# or (loads gitignored .env.api.local from the repo)
+./scripts/run-api-local.sh
 ```
 
 Defaults: `http://127.0.0.1:8765/` (Web UI) and `/api/v1/*`.
@@ -35,10 +37,23 @@ Defaults: `http://127.0.0.1:8765/` (Web UI) and `/api/v1/*`.
 | `--token` / `DSM_API_TOKEN` | If set, require `Authorization: Bearer …` (except `/api/v1/health`) |
 | `--backup-dir` | Override local backup directory |
 
-Example:
+### Local token file (recommended)
+
+Keep the Bearer token out of shell history and git:
 
 ```bash
-export DSM_API_TOKEN="$(openssl rand -hex 16)"
+cp .env.api.local.example .env.api.local
+# or generate a fresh token file (mode 600, gitignored via .env.*.local):
+./scripts/setup-api-token.sh
+./scripts/run-api-local.sh
+```
+
+`.env.api.local` sets `DSM_API_HOST`, `DSM_API_PORT`, and `DSM_API_TOKEN`. Never commit that file.
+
+Example without a file:
+
+```bash
+export DSM_API_TOKEN="$(openssl rand -hex 32)"
 db-storage-manager-api --port 8765
 curl -s http://127.0.0.1:8765/api/v1/health
 curl -s -H "Authorization: Bearer $DSM_API_TOKEN" http://127.0.0.1:8765/api/v1/connections

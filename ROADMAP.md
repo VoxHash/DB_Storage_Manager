@@ -5,6 +5,7 @@ Status as of **1.0.5** (+ Web/REST companion on `main`, 2026-10-25). Items alrea
 ## Now (1.x patch / minor)
 
 - Plugin marketplace and public SDK around `plugins/`
+  - Local development uses one project `.venv` editable install (`pip install -e ".[engines]"`, native via `maturin develop --release`, optional REST token in gitignored `.env.api.local`) before marketplace work
 
 ## Next
 

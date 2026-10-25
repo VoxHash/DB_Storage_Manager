@@ -7,20 +7,29 @@
 
 ## Standard install
 
+Prefer a **single** project virtualenv (`.venv`) as the only installed copy of this app. Avoid `pip install --user` or system-site installs of `db-storage-manager`.
+
 ```bash
 git clone https://github.com/VoxHash/DB_Storage_Manager.git
 cd DB_Storage_Manager
-python3.12 -m venv venv
-source venv/bin/activate
+python3.12 -m venv .venv
+source .venv/bin/activate
 pip install --upgrade pip setuptools wheel
 pip install -r requirements.txt
-pip install -e .
+pip install -e ".[engines]"   # or: pip install -e .
+```
+
+Optional: install `~/.local/bin` shims that point only at this repo’s `.venv` (after removing any other `db-storage-manager*` scripts on `PATH`):
+
+```bash
+./scripts/install-local-shims.sh
+which -a db-storage-manager db-storage-manager-api
 ```
 
 Entry points after editable install:
 
-- `python -m db_storage_manager.main`
-- `db-storage-manager`
+- `python -m db_storage_manager.main` / `db-storage-manager`
+- `python -m db_storage_manager.api` / `db-storage-manager-api` (see [cli.md](cli.md) for `DSM_API_TOKEN` / `.env.api.local`)
 
 ## Optional database engines
 
