@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DB Storage Manager — Companion</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="hero">
+    <p class="brand">DB Storage Manager</p>
+    <h1>Companion</h1>
+    <p class="lede">Local REST glance for connections and backup health. Desktop remains primary.</p>
+  </header>
+
+  <main>
+    <section id="status-panel" aria-labelledby="status-heading">
+      <h2 id="status-heading">Status</h2>
+      <pre id="status-out" class="panel">Loading…</pre>
+    </section>
+
+    <section aria-labelledby="conn-heading">
+      <h2 id="conn-heading">Connections</h2>
+      <div class="toolbar">
+        <button type="button" id="refresh-conn">Refresh</button>
+      </div>
+      <pre id="conn-out" class="panel">—</pre>
+    </section>
+
+    <section aria-labelledby="backup-heading">
+      <h2 id="backup-heading">Backups</h2>
+      <div class="toolbar">
+        <button type="button" id="refresh-backups">Refresh</button>
+        <button type="button" id="verify-selected">Verify selected</button>
+        <button type="button" id="dryrun-selected">Dry-run selected</button>
+      </div>
+      <ul id="backup-list" class="backup-list"></ul>
+      <pre id="backup-action-out" class="panel">Select a backup, then Verify or Dry-run.</pre>
+    </section>
+  </main>
+
+  <footer>
+    <p>API base <code>/api/v1</code> · set <code>DSM_API_TOKEN</code> for Bearer auth</p>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

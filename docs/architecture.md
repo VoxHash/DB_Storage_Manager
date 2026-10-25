@@ -47,6 +47,13 @@ Query → Safe Mode check → execute_query → QueryResult
 Backup → export → compress/encrypt → adapter → storage
 ```
 
+## REST / Web companion (optional process)
+
+- Package: `db_storage_manager.api` (stdlib `ThreadingHTTPServer`, no extra web framework dependency)
+- Reads the same SecureStore + local backup directory as the desktop app
+- Bind default `127.0.0.1:8765`; optional Bearer token via `DSM_API_TOKEN`
+- Desktop PyQt6 UI remains the primary product surface
+
 ## Native performance layer (optional)
 
 - Crate: `native/db_storage_native` (Rust + PyO3 / maturin, `abi3-py310`)

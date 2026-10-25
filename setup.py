@@ -73,6 +73,7 @@ setup(
     entry_points={
         "console_scripts": [
             "db-storage-manager=db_storage_manager.main:main",
+            "db-storage-manager-api=db_storage_manager.api.server:main",
         ],
     },
     classifiers=[

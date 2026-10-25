@@ -118,7 +118,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: Web UI / REST companion (desktop remains primary).
+See [ROADMAP.md](ROADMAP.md). Current focus: plugin marketplace and public SDK around `plugins/`.
 
 ## Contributing
 

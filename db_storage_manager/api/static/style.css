@@ -1,0 +1,145 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a222c;
+  --text: #e7eef7;
+  --muted: #8b9bb0;
+  --accent: #3d9cfd;
+  --ok: #3ecf8e;
+  --fail: #f07178;
+  --border: #2a3544;
+  --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", "Consolas", monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font);
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, #1c3a5a 0%, transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, #243028 0%, transparent 50%),
+    var(--bg);
+}
+
+.hero {
+  padding: 2.5rem 1.5rem 1rem;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.brand {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.hero h1 {
+  margin: 0.35rem 0 0.5rem;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.lede {
+  margin: 0;
+  color: var(--muted);
+  max-width: 36rem;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+  display: grid;
+  gap: 1.5rem;
+}
+
+section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  padding: 0.45rem 0.85rem;
+  border-radius: 6px;
+}
+
+button:hover { border-color: var(--accent); }
+
+.panel {
+  margin: 0;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.backup-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.backup-list li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.65rem 0.75rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.backup-list label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  width: 100%;
+  cursor: pointer;
+}
+
+.backup-list .meta {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ok { color: var(--ok); }
+.fail { color: var(--fail); }
+
+footer {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1.5rem 2rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}

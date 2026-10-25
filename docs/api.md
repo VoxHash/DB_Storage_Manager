@@ -57,6 +57,24 @@ asyncio.run(run())
 
 Abstract methods on `DatabaseConnection`: `connect`, `disconnect`, `analyze_storage`, `execute_query`, `get_schema`, `create_backup`, `restore_backup`, plus `test_connection`.
 
+## REST companion (local HTTP)
+
+```bash
+python -m db_storage_manager.api --host 127.0.0.1 --port 8765
+```
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/v1/health` | Liveness (no auth) |
+| GET | `/api/v1/info` | Version + native backend |
+| GET | `/api/v1/connections` | SecureStore profiles; passwords redacted |
+| GET | `/api/v1/backups` | Local backups (`?backup_dir=` optional) |
+| POST | `/api/v1/backups/{id}/verify` | SHA-256 verify |
+| POST | `/api/v1/backups/{id}/dry-run` | Checksum + payload dry-run (no live DB write) |
+| GET | `/` | Minimal Web UI |
+
+Set `DSM_API_TOKEN` to require Bearer auth on all routes except health. See [cli.md](cli.md).
+
 ## Native performance helpers
 
 ```python

@@ -1,19 +1,17 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ native zstd/encryption on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ Web/REST companion on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Web UI / REST companion (desktop remains primary)
+- Plugin marketplace and public SDK around `plugins/`
 
 ## Next
 
-- _(vacant — promote from Later when Web/REST companion ships)_
+- Multi-user / RBAC for shared workstation deployments
 
 ## Later
 
-- Plugin marketplace and public SDK around `plugins/`
-- Multi-user / RBAC for shared workstation deployments
 - Deeper cloud-managed database integrations (RDS, Cloud SQL, Azure SQL) beyond current SDK stubs
 
 ## Future platforms (exploratory)
@@ -42,6 +40,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Web UI / REST companion (`db_storage_manager.api`): stdlib `ThreadingHTTPServer` on `127.0.0.1:8765`, optional `DSM_API_TOKEN` Bearer auth, sanitized connections, local backup list/verify/dry-run, minimal glance Web UI; `db-storage-manager-api` / `python -m db_storage_manager.api` (`tests/test_api_companion.py`) (post-1.0.5)
 - Native zstd compress/decompress + optional backup-file encryption offload (`DSMENC1` AES-256-GCM + PBKDF2-HMAC-SHA256; Rust/PyO3 with `zstandard` / `cryptography` Python fallbacks); wired into local create/restore/verify/dry-run; `db_storage_native` 0.2.0 (`tests/test_backup_zstd_encrypt.py`, `tests/test_native.py`) (post-1.0.5)
 - Stronger backup verification UX: local `.meta.json` SHA-256 sidecars, `BackupManager.verify_backup_checksum` / `verify_backups_parallel` status fields, `dry_run_restore` (checksum → optional gzip decompress → SQLite header + `PRAGMA integrity_check`), Restore tab Verify Checksum / Verify All / Dry-run Restore with pass/fail coloring; unit + offscreen Qt smoke (`tests/test_backup_verification.py`) (post-1.0.5)
 - SQL engine connection pooling: `SQLEnginePool` with checkout/release, per-profile max size, close on app shutdown; wired through `DatabaseConnectionFactory.acquire` / `release` into dashboard, query, backups, monitoring, connections probe; real SQLite pool tests (`tests/test_connection_pool.py`) (post-1.0.5)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Local **Web UI / REST companion** (`db_storage_manager.api`): `GET /api/v1/health|info|connections|backups`, `POST …/verify` and `…/dry-run`, static glance UI at `/`; bind `127.0.0.1:8765` by default; optional `DSM_API_TOKEN` Bearer auth; passwords redacted; console script `db-storage-manager-api`
 - Native helpers **zstd** compress/decompress and optional backup-file encryption offload (`encrypt_file` / `decrypt_file`); format `DSMENC1` = AES-256-GCM (1 MiB chunks) + PBKDF2-HMAC-SHA256 (200k iters); Rust path in `db_storage_native` 0.2.0 with Python fallbacks (`zstandard`, `cryptography`)
 - Local backups support `compression="zstd"` and `encryption=True` + `encryptionKey` (passphrase never written to `.meta.json`); restore / dry-run decrypt then decompress
 - Tests for zstd/encrypt round-trips and encrypted local backup create/restore/dry-run (`tests/test_backup_zstd_encrypt.py`); extended `tests/test_native.py`

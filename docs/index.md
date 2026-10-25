@@ -11,8 +11,8 @@ Professional desktop application for visualizing and managing database storage, 
 | [Installation](installation.md) | Platform install, optional engines, troubleshooting installs |
 | [Configuration](configuration.md) | Settings, paths, and environment expectations |
 | [Usage](usage.md) | Connections, analysis, query console, backups |
-| [CLI](cli.md) | Console entry point and launch options |
-| [API](api.md) | Python package surfaces for extensions and automation |
+| [CLI](cli.md) | Desktop launcher + REST/Web companion entry points |
+| [API](api.md) | Python package surfaces and local REST companion |
 | [Architecture](architecture.md) | Module layout, security model, async design |
 | [Troubleshooting](troubleshooting.md) | Common failures and fixes |
 | [FAQ](faq.md) | Short answers to frequent questions |
