@@ -13,6 +13,7 @@ from ..config import (
     CONNECTIONS_FILE,
     SETTINGS_FILE,
     SSH_KEYS_FILE,
+    USERS_FILE,
     MASTER_KEY_FILE,
     USER_DATA_DIR,
 )
@@ -98,6 +99,10 @@ class SecureStore:
                 from ..plugins.marketplace import normalize_plugins_prefs
 
                 merged["plugins"] = normalize_plugins_prefs(loaded.get("plugins"))
+            if "rbac" in loaded and isinstance(loaded.get("rbac"), dict):
+                rbac = copy.deepcopy(defaults.get("rbac") or {})
+                rbac.update(loaded["rbac"])
+                merged["rbac"] = rbac
             return merged
         except Exception:
             return defaults
@@ -189,3 +194,34 @@ class SecureStore:
         keys = [k for k in existing if k.get("connection_id") != connection_id]
         if len(keys) != len(existing):
             self.save_ssh_keys(keys)
+
+    def get_users(self) -> Dict[str, Any]:
+        """Load encrypted local user accounts (RBAC). Empty dict if missing."""
+        if not USERS_FILE.exists():
+            return {"version": 1, "users": []}
+
+        try:
+            encrypted = USERS_FILE.read_text(encoding="utf-8")
+            data = self._decrypt(encrypted)
+            if not isinstance(data, dict):
+                return {"version": 1, "users": []}
+            users = data.get("users")
+            if not isinstance(users, list):
+                data["users"] = []
+            data.setdefault("version", 1)
+            return data
+        except Exception:
+            return {"version": 1, "users": []}
+
+    def save_users(self, payload: Dict[str, Any]) -> None:
+        """Persist encrypted local user accounts with restrictive permissions."""
+        if not isinstance(payload, dict):
+            raise TypeError("users payload must be a dict")
+        body = {
+            "version": int(payload.get("version") or 1),
+            "users": list(payload.get("users") or []),
+        }
+        encrypted = self._encrypt(body)
+        USERS_FILE.write_text(encrypted, encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(USERS_FILE, 0o600)

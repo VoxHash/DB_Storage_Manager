@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -12,6 +13,7 @@ from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from ..config import BACKUP_DIR
+from ..security.auth import PermissionDenied, get_auth_manager
 from . import service
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -56,26 +58,88 @@ class CompanionHandler(BaseHTTPRequestHandler):
         if self.command != "HEAD":
             self.wfile.write(body)
 
-    def _unauthorized(self) -> None:
+    def _unauthorized(self, hint: Optional[str] = None) -> None:
         status, body, ctype = _json_bytes(
-            {"ok": False, "error": "Unauthorized", "hint": "Bearer DSM_API_TOKEN"},
+            {
+                "ok": False,
+                "error": "Unauthorized",
+                "hint": hint
+                or "Bearer DSM_API_TOKEN or Basic username:password (RBAC)",
+            },
             401,
         )
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("WWW-Authenticate", 'Bearer realm="db-storage-manager-api"')
+        self.send_header(
+            "WWW-Authenticate",
+            'Bearer realm="db-storage-manager-api", Basic realm="db-storage-manager-api"',
+        )
         self.end_headers()
         self.wfile.write(body)
 
-    def _check_auth(self) -> bool:
-        expected = self.companion.api_token
-        if not expected:
-            return True
+    def _forbidden(self, permission: str) -> None:
+        status, body, ctype = _json_bytes(
+            {
+                "ok": False,
+                "error": "Forbidden",
+                "permission": permission,
+            },
+            403,
+        )
+        self._send(status, body, ctype)
+
+    def _authenticate_request(self) -> bool:
+        """
+        Establish API principal.
+
+        - Open mode (no RBAC users): optional Bearer DSM_API_TOKEN only.
+        - RBAC active: accept Bearer token as system admin, or HTTP Basic
+          as a local user. Unauthenticated requests are rejected.
+        """
+        auth = get_auth_manager()
+        auth.logout()
         header = self.headers.get("Authorization", "")
-        if header.startswith("Bearer ") and header[7:].strip() == expected:
+        expected = self.companion.api_token
+
+        if header.startswith("Bearer "):
+            token = header[7:].strip()
+            if expected and token == expected:
+                if auth.is_rbac_active():
+                    auth.set_system_admin(True)
+                return True
+            if not auth.is_rbac_active() and not expected:
+                return True
+            return False
+
+        if header.startswith("Basic "):
+            try:
+                raw = base64.b64decode(header[6:].strip()).decode("utf-8")
+                username, _, password = raw.partition(":")
+            except (ValueError, UnicodeDecodeError):
+                return False
+            user = auth.authenticate(username, password)
+            return user is not None
+
+        if auth.is_rbac_active():
+            # RBAC on: must authenticate
+            return False
+        # Open mode: token optional
+        if expected:
+            return False
+        return True
+
+    def _check_auth(self) -> bool:
+        return self._authenticate_request()
+
+    def _require_perm(self, permission: str) -> bool:
+        auth = get_auth_manager()
+        try:
+            auth.require(permission)
             return True
-        return False
+        except PermissionDenied:
+            self._forbidden(permission)
+            return False
 
     def _read_json(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)
@@ -121,16 +185,22 @@ class CompanionHandler(BaseHTTPRequestHandler):
             return self._unauthorized()
 
         if path == "/api/v1/info":
+            if not self._require_perm("api:read"):
+                return
             status, body, ctype = _json_bytes(service.info_payload())
             return self._send(status, body, ctype)
 
         if path == "/api/v1/connections":
+            if not self._require_perm("connections:read"):
+                return
             status, body, ctype = _json_bytes(
                 {"ok": True, "connections": service.list_connections()}
             )
             return self._send(status, body, ctype)
 
         if path == "/api/v1/backups":
+            if not self._require_perm("backups:read"):
+                return
             backup_dir = self._backup_dir_from_query(query)
             status, body, ctype = _json_bytes(
                 {
@@ -145,6 +215,8 @@ class CompanionHandler(BaseHTTPRequestHandler):
             parts = path.split("/")
             # /api/v1/backups/{id}
             if len(parts) == 5:
+                if not self._require_perm("backups:read"):
+                    return
                 backup_id = parts[4]
                 backup_dir = self._backup_dir_from_query(query)
                 item = service.get_backup(backup_id, backup_dir)
@@ -178,6 +250,8 @@ class CompanionHandler(BaseHTTPRequestHandler):
             backup_dir = Path(str(payload["backup_dir"]))
 
         if path == "/api/v1/backups/verify":
+            if not self._require_perm("backups:read"):
+                return
             result = service.verify_backup(
                 backup_id=payload.get("id") or payload.get("backup_id"),
                 path=payload.get("path"),
@@ -192,6 +266,8 @@ class CompanionHandler(BaseHTTPRequestHandler):
             return self._send(status, body, ctype)
 
         if path == "/api/v1/backups/dry-run":
+            if not self._require_perm("backups:restore"):
+                return
             result = service.dry_run_backup(
                 backup_id=payload.get("id") or payload.get("backup_id"),
                 path=payload.get("path"),
@@ -209,10 +285,14 @@ class CompanionHandler(BaseHTTPRequestHandler):
             backup_id = parts[4]
             action = parts[5]
             if action == "verify":
+                if not self._require_perm("backups:read"):
+                    return
                 result = service.verify_backup(
                     backup_id=backup_id, backup_dir=backup_dir
                 )
             elif action == "dry-run":
+                if not self._require_perm("backups:restore"):
+                    return
                 result = service.dry_run_backup(
                     backup_id=backup_id,
                     backup_dir=backup_dir,

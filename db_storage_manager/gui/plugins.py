@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 from ..i18n.manager import get_i18n_manager
 from ..plugins.marketplace import LocalPluginMarketplace
 from ..plugins.manifest import ManifestError
+from ..security.auth import PermissionDenied, get_auth_manager
 from .utils import apply_glassmorphism
 
 
@@ -39,6 +40,20 @@ class PluginsWidget(QWidget):
         self._rows: list[dict] = []
         self.init_ui()
         self.refresh()
+        self.apply_rbac()
+
+    def apply_rbac(self) -> None:
+        auth = get_auth_manager()
+        can_manage = auth.has_permission("plugins:manage")
+        for btn in (
+            self.enable_btn,
+            self.disable_btn,
+            self.install_path_btn,
+            self.install_url_btn,
+            self.uninstall_btn,
+        ):
+            btn.setEnabled(can_manage)
+        self.refresh_btn.setEnabled(auth.has_permission("plugins:read"))
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -169,7 +184,19 @@ class PluginsWidget(QWidget):
             return None
         return self._rows[idx]
 
+    def _deny(self, exc: PermissionDenied) -> None:
+        QMessageBox.warning(
+            self,
+            self.i18n.translate("auth.denied", default="Access denied"),
+            str(exc),
+        )
+
     def _set_selected_enabled(self, enabled: bool) -> None:
+        try:
+            get_auth_manager().require("plugins:manage")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         row = self._selected_row()
         if row is None:
             QMessageBox.information(
@@ -184,6 +211,11 @@ class PluginsWidget(QWidget):
         self.refresh()
 
     def _install_from_path(self) -> None:
+        try:
+            get_auth_manager().require("plugins:manage")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         t = self.i18n.translate
         path = QFileDialog.getExistingDirectory(
             self,
@@ -214,6 +246,11 @@ class PluginsWidget(QWidget):
         self.refresh()
 
     def _install_from_url(self) -> None:
+        try:
+            get_auth_manager().require("plugins:manage")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         t = self.i18n.translate
         url, ok = QInputDialog.getText(
             self,
@@ -248,6 +285,11 @@ class PluginsWidget(QWidget):
         self.refresh()
 
     def _uninstall_selected(self) -> None:
+        try:
+            get_auth_manager().require("plugins:manage")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         t = self.i18n.translate
         row = self._selected_row()
         if row is None:

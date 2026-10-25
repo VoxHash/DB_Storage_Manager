@@ -34,6 +34,7 @@ import uuid
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
+from ..security.auth import PermissionDenied, get_auth_manager
 from ..ssh import (
     SSHTunnelError,
     TunnelManager,
@@ -300,6 +301,14 @@ class ConnectionsWidget(QWidget):
         self.init_ui()
         apply_glassmorphism(self)
         self._update_table()
+        self.apply_rbac()
+
+    def apply_rbac(self) -> None:
+        """Gate mutation buttons by RBAC permissions."""
+        auth = get_auth_manager()
+        self.add_button.setEnabled(auth.has_permission("connections:write"))
+        # edit/delete/test still depend on selection; re-evaluate
+        self._on_selection_changed()
 
     def set_connections(self, connections: List[Dict[str, Any]]) -> None:
         """Replace the in-memory connection list (e.g. after SecureStore load)."""
@@ -383,10 +392,25 @@ class ConnectionsWidget(QWidget):
     def _on_selection_changed(self):
         """Handle table selection change"""
         has_selection = self._selected_row() >= 0
-        self.edit_button.setEnabled(has_selection)
-        self.delete_button.setEnabled(has_selection)
-        self.test_button.setEnabled(has_selection)
+        auth = get_auth_manager()
+        self.edit_button.setEnabled(
+            has_selection and auth.has_permission("connections:write")
+        )
+        self.delete_button.setEnabled(
+            has_selection and auth.has_permission("connections:delete")
+        )
+        self.test_button.setEnabled(
+            has_selection and auth.has_permission("connections:read")
+        )
         self._refresh_tunnel_controls()
+
+    def _deny(self, exc: PermissionDenied) -> None:
+        t = self.i18n.translate
+        QMessageBox.warning(
+            self,
+            t("auth.denied", default="Access denied"),
+            str(exc),
+        )
 
     def _ssh_enabled_for(self, connection: Dict[str, Any]) -> bool:
         ssh = connection.get("ssh_config") or {}
@@ -430,6 +454,11 @@ class ConnectionsWidget(QWidget):
 
     def _add_connection(self):
         """Add a new connection"""
+        try:
+            get_auth_manager().require("connections:write")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         dialog = ConnectionDialog(parent=self)
         if dialog.exec():
             connection = dialog.get_connection()
@@ -439,6 +468,11 @@ class ConnectionsWidget(QWidget):
 
     def _edit_connection(self):
         """Edit selected connection"""
+        try:
+            get_auth_manager().require("connections:write")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         row = self._selected_row()
         if row < 0:
             return
@@ -458,6 +492,11 @@ class ConnectionsWidget(QWidget):
 
     def _delete_connection(self):
         """Delete selected connection"""
+        try:
+            get_auth_manager().require("connections:delete")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
         row = self._selected_row()
         if row < 0:
             return

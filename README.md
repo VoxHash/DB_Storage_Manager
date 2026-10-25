@@ -14,6 +14,7 @@
 - **Multi-Database Support** — PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis; optional Oracle, SQL Server, ClickHouse, InfluxDB
 - **Storage Analysis Dashboard** — Metrics, table/index sizing, growth-oriented views
 - **Secure Connection Management** — Fernet-encrypted credential storage
+- **Multi-user / RBAC** — Optional local accounts (`users.enc`), roles, and permission checks for shared workstations
 - **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
 - **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh
 - **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL
@@ -120,7 +121,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: multi-user / RBAC for shared workstation deployments.
+See [ROADMAP.md](ROADMAP.md). Next focus: deeper cloud-managed database integrations (RDS, Cloud SQL, Azure SQL).
 
 ## Contributing
 

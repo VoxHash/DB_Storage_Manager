@@ -14,12 +14,14 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
 from ..config import DEFAULT_SETTINGS
 from ..i18n.manager import get_i18n_manager
 from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
+from .users import UsersAdminWidget
 from .utils import apply_glassmorphism
 
 
@@ -37,6 +39,7 @@ class SettingsWidget(QWidget):
         self.settings = self.secure_store.get_settings()
         self.init_ui()
         self._update_texts()
+        self.apply_rbac()
 
     def init_ui(self):
         """Initialize UI"""
@@ -102,10 +105,33 @@ class SettingsWidget(QWidget):
         self.save_button.clicked.connect(self._save_settings)
         layout.addWidget(self.save_button)
 
+        self.users_admin = UsersAdminWidget()
+        layout.addWidget(self.users_admin)
+
         layout.addStretch()
 
         self.setObjectName("glassmorphism")
         apply_glassmorphism(self)
+
+    def apply_rbac(self) -> None:
+        """Enable/disable settings save based on current permissions."""
+        auth = get_auth_manager()
+        can_write = auth.has_permission("settings:write")
+        self.save_button.setEnabled(can_write)
+        for widget in (
+            self.theme_combo,
+            self.language_combo,
+            self.safe_mode_check,
+            self.auto_connect_check,
+            self.notifications_check,
+            self.telemetry_check,
+        ):
+            widget.setEnabled(can_write or not auth.is_rbac_active())
+        # Theme/language preview still allowed for viewers when RBAC on
+        if auth.is_rbac_active() and not can_write:
+            self.theme_combo.setEnabled(True)
+            self.language_combo.setEnabled(True)
+        self.users_admin.refresh()
 
     def _update_texts(self):
         """Update all text labels with translations"""
@@ -135,7 +161,19 @@ class SettingsWidget(QWidget):
 
     def _save_settings(self):
         """Save settings"""
+        try:
+            get_auth_manager().require("settings:write")
+        except PermissionDenied as exc:
+            QMessageBox.warning(
+                self,
+                self.i18n.translate("auth.denied", default="Access denied"),
+                str(exc),
+            )
+            return
         existing = self.secure_store.get_settings()
+        auth = get_auth_manager()
+        rbac = dict(existing.get("rbac") or DEFAULT_SETTINGS.get("rbac") or {})
+        rbac["enabled"] = auth.is_rbac_active()
         self.settings = {
             "theme": self.theme_manager.current_theme,
             "language": self.i18n.current_language,
@@ -156,6 +194,7 @@ class SettingsWidget(QWidget):
             "plugins": existing.get(
                 "plugins", DEFAULT_SETTINGS.get("plugins")
             ),
+            "rbac": rbac,
         }
         self.secure_store.set_settings(self.settings)
         QMessageBox.information(

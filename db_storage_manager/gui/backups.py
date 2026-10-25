@@ -27,6 +27,7 @@ from ..backups.local import LocalBackupAdapter
 from ..backups.manager import BackupManager
 from ..config import BACKUP_DIR
 from ..i18n.manager import get_i18n_manager
+from ..security.auth import PermissionDenied, get_auth_manager
 from .utils import apply_glassmorphism
 
 _STATUS_COLORS = {
@@ -54,6 +55,16 @@ class BackupsWidget(QWidget):
         self.init_ui()
         apply_glassmorphism(self)
         self.refresh_backups()
+        self.apply_rbac()
+
+    def apply_rbac(self) -> None:
+        auth = get_auth_manager()
+        can_read = auth.has_permission("backups:read")
+        can_restore = auth.has_permission("backups:restore")
+        self.refresh_button.setEnabled(can_read)
+        self.verify_selected_button.setEnabled(can_read)
+        self.verify_all_button.setEnabled(can_read)
+        self.dry_run_button.setEnabled(can_restore)
 
     def init_ui(self):
         """Initialize UI"""
@@ -134,6 +145,11 @@ class BackupsWidget(QWidget):
     def refresh_backups(self) -> None:
         """Reload local backups into the table."""
         t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:read")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
         try:
             self._backups = asyncio.run(self._adapter().list_backups())
         except Exception as exc:
@@ -223,6 +239,11 @@ class BackupsWidget(QWidget):
     def verify_selected(self) -> None:
         """Verify SHA-256 for the selected backup."""
         t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:read")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
         backup = self._selected_backup()
         if backup is None:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
@@ -237,6 +258,11 @@ class BackupsWidget(QWidget):
     def verify_all(self) -> None:
         """Verify SHA-256 for every listed backup via parallel helpers."""
         t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:read")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
         if not self._backups:
             self._set_status(t("backups.no_backups"), "missing_checksum")
             return
@@ -274,6 +300,11 @@ class BackupsWidget(QWidget):
     def dry_run_selected(self) -> None:
         """Checksum + payload dry-run restore for the selected backup."""
         t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:restore")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
         backup = self._selected_backup()
         if backup is None:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")

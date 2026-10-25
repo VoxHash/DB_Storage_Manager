@@ -33,9 +33,20 @@ Key files:
 | `backups/` | Local backup payloads |
 | `plugins/registry.json` | Local plugin marketplace registry (builtins + installs) |
 | `plugins/installed/` | Copied user-installed plugin packages |
+| `users.enc` | Encrypted local RBAC accounts (password hashes; mode `600`) |
 | `.master-key` | Fernet master key (Unix mode `600`) |
 
 Plugin enable/disable flags are stored under the encrypted settings key `plugins.enabled` (not in `registry.json`).
+
+### Multi-user / RBAC
+
+When `users.enc` contains at least one account, RBAC is active: desktop login is required, and permissions gate connections, backups, settings, plugins, and companion API routes. Bootstrap:
+
+```bash
+db-storage-manager-bootstrap --username admin --password '…'
+```
+
+Settings key `rbac.enabled` mirrors whether accounts exist (informational). Roles: `admin`, `user`, `viewer`, `guest`.
 
 ## Environment variables
 

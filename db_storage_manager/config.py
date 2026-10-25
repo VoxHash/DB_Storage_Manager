@@ -26,6 +26,7 @@ USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
 CONNECTIONS_FILE = USER_DATA_DIR / "connections.enc"
 SETTINGS_FILE = USER_DATA_DIR / "settings.enc"
 SSH_KEYS_FILE = USER_DATA_DIR / "ssh-keys.enc"
+USERS_FILE = USER_DATA_DIR / "users.enc"
 SCHEDULED_BACKUPS_FILE = USER_DATA_DIR / "scheduled-backups.json"
 BACKUP_DIR = USER_DATA_DIR / "backups"
 PLUGINS_DIR = USER_DATA_DIR / "plugins"
@@ -75,6 +76,11 @@ DEFAULT_PLUGINS_PREFS = {
     }
 }
 
+# RBAC prefs (accounts themselves live in users.enc; this flag is informational)
+DEFAULT_RBAC_PREFS = {
+    "enabled": False,  # set True when users.enc has accounts (shared workstation)
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -87,6 +93,7 @@ DEFAULT_SETTINGS = {
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),
     "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),
     "plugins": copy.deepcopy(DEFAULT_PLUGINS_PREFS),
+    "rbac": copy.deepcopy(DEFAULT_RBAC_PREFS),
 }
 
 # Database connection defaults

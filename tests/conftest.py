@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+# Keep RBAC password hashing fast in the test suite (production default is 390k).
+os.environ.setdefault("DSM_PBKDF2_ITERATIONS", "12000")
 
 
 @pytest.fixture
@@ -21,5 +25,14 @@ def isolated_secure_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(store_mod, "CONNECTIONS_FILE", data_dir / "connections.enc")
     monkeypatch.setattr(store_mod, "SETTINGS_FILE", data_dir / "settings.enc")
     monkeypatch.setattr(store_mod, "SSH_KEYS_FILE", data_dir / "ssh-keys.enc")
+    monkeypatch.setattr(store_mod, "USERS_FILE", data_dir / "users.enc")
+
+    import db_storage_manager.config as config_mod
+
+    monkeypatch.setattr(config_mod, "USERS_FILE", data_dir / "users.enc")
+
+    from db_storage_manager.security.auth import reset_auth_manager
+
+    reset_auth_manager()
 
     return SecureStore(), data_dir

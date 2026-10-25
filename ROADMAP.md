@@ -1,10 +1,10 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ plugin marketplace/SDK and Web/REST companion on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ multi-user RBAC on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Multi-user / RBAC for shared workstation deployments
+_(clear — promote from Next when starting the next deliverable)_
 
 ## Next
 
@@ -40,6 +40,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Multi-user / RBAC for shared workstations: PBKDF2 password hashes in encrypted `users.enc`, roles (`admin` / `user` / `viewer` / `guest`) with real permission checks (not always-allow), SecureStore persistence, desktop login when accounts exist, Settings **Users & RBAC** admin UI, `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap`, API Basic auth + Bearer system-admin when RBAC active, enforcement on connections / backups / settings / plugins / companion endpoints; tests in `tests/test_rbac.py` (post-1.0.5)
 - Plugin marketplace and public SDK around `plugins/`: `plugins.sdk` (API `1.0`, `plugin.json` manifest), `LocalPluginMarketplace` (local registry, enable/disable via SecureStore, install from path or http(s) zip/tar.gz), desktop **Plugins** tab, example `examples/plugins/hello_echo/`, tests (`tests/test_plugins_marketplace.py`) (post-1.0.5)
 - Web UI / REST companion (`db_storage_manager.api`): stdlib `ThreadingHTTPServer` on `127.0.0.1:8765`, optional `DSM_API_TOKEN` Bearer auth, sanitized connections, local backup list/verify/dry-run, minimal glance Web UI; `db-storage-manager-api` / `python -m db_storage_manager.api` (`tests/test_api_companion.py`) (post-1.0.5)
 - Native zstd compress/decompress + optional backup-file encryption offload (`DSMENC1` AES-256-GCM + PBKDF2-HMAC-SHA256; Rust/PyO3 with `zstandard` / `cryptography` Python fallbacks); wired into local create/restore/verify/dry-run; `db_storage_native` 0.2.0 (`tests/test_backup_zstd_encrypt.py`, `tests/test_native.py`) (post-1.0.5)

@@ -18,6 +18,7 @@ from .backups import BackupsWidget
 from .settings import SettingsWidget
 from .monitoring import MonitoringWidget
 from .plugins import PluginsWidget
+from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
@@ -60,6 +61,7 @@ class MainWindow(QMainWindow):
         # Connect settings widget signals
         self.settings_widget.theme_changed.connect(self._on_theme_changed)
         self.settings_widget.language_changed.connect(self._on_language_changed)
+        self.settings_widget.users_admin.users_changed.connect(self.apply_rbac)
 
         # Add tabs to tab widget
         self.tab_widget.addTab(self.dashboard, "")
@@ -88,6 +90,38 @@ class MainWindow(QMainWindow):
 
         # Apply background to central widget
         self._apply_central_widget_style()
+
+        self.apply_rbac()
+
+    def apply_rbac(self) -> None:
+        """Refresh permission-gated controls after login / user changes."""
+        auth = get_auth_manager()
+        if hasattr(self.connections_widget, "apply_rbac"):
+            self.connections_widget.apply_rbac()
+        if hasattr(self.plugins_widget, "apply_rbac"):
+            self.plugins_widget.apply_rbac()
+        if hasattr(self.backups_widget, "apply_rbac"):
+            self.backups_widget.apply_rbac()
+        if hasattr(self.settings_widget, "apply_rbac"):
+            self.settings_widget.apply_rbac()
+        if auth.is_rbac_active() and auth.current_user:
+            self.statusBar().showMessage(
+                self.i18n.translate(
+                    "auth.signed_in",
+                    default="Signed in as {user} ({role})",
+                    user=auth.current_user.username,
+                    role=auth.current_user.role.value,
+                )
+            )
+        elif auth.is_rbac_active():
+            self.statusBar().showMessage(
+                self.i18n.translate(
+                    "auth.rbac_active",
+                    default="RBAC active — sign in required for sensitive actions",
+                )
+            )
+        else:
+            self.statusBar().showMessage(self.i18n.translate("common.ready"))
 
     def _create_menu_bar(self):
         """Create application menu bar"""

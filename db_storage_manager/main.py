@@ -37,6 +37,17 @@ def main():
     # Apply theme to application
     apply_theme_to_app(app)
 
+    # Multi-user RBAC: require sign-in when local users exist
+    from .security.auth import get_auth_manager
+    from .gui.login import LoginDialog
+    from PyQt6.QtWidgets import QDialog
+
+    auth = get_auth_manager()
+    if auth.is_rbac_active():
+        login = LoginDialog()
+        if login.exec() != QDialog.DialogCode.Accepted:
+            return 1
+
     # Create and show main window
     window = MainWindow()
     window.show()

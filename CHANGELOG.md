@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Multi-user / RBAC** for shared workstation deployments: local accounts with PBKDF2-HMAC-SHA256 password hashes in encrypted `users.enc`, roles `admin` / `user` / `viewer` / `guest`, and real permission checks on connections, backups, settings, plugins, and the REST companion
+- Desktop **sign-in** when RBAC is active; Settings **Users & RBAC** panel to bootstrap the first admin, add users, change roles, reset passwords, enable/disable, and delete (with last-admin guards)
+- CLI bootstrap: `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap` (`DSM_BOOTSTRAP_USERNAME` / `DSM_BOOTSTRAP_PASSWORD`)
+- Optional TOTP MFA (pyotp) after password; API accepts HTTP Basic (local user) or `DSM_API_TOKEN` Bearer as system admin when RBAC is on
+- Tests for hashing, open-mode vs enforced RBAC, viewer denials, MFA, API 401/403, and offscreen Qt smoke (`tests/test_rbac.py`)
 - Public **plugin SDK** (`db_storage_manager.plugins.sdk`, API `1.0`): `Plugin` / `PluginMetadata` / `PluginType`, `plugin.json` manifest load/validate, documented authoring contract
 - **Local plugin marketplace** (`LocalPluginMarketplace`): filesystem registry under user-data `plugins/`, sync built-ins (`migration`, `data_comparison`), install from path or http(s) zip/tar.gz, uninstall user installs, enable/disable via SecureStore `plugins.enabled`
 - Desktop **Plugins** tab (View → Plugins / Ctrl+6): list registry, enable/disable, install from path/URL, uninstall
