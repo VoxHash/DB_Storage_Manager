@@ -46,6 +46,25 @@ DEFAULT_ALERT_CHANNELS = {
     "in_app": True,
 }
 
+# Dashboard customization (watched summary metrics + table columns)
+DASHBOARD_METRIC_KEYS = ("total_size", "tables", "indexes")
+DASHBOARD_COLUMN_KEYS = ("name", "size", "rows", "index_size", "bloat")
+
+DEFAULT_DASHBOARD_LAYOUT = {
+    "watched_metrics": list(DASHBOARD_METRIC_KEYS),
+    "table_columns": list(DASHBOARD_COLUMN_KEYS),
+    "metric_order": list(DASHBOARD_METRIC_KEYS),
+    "last_connection_id": None,
+    "active_layout": "Default",
+    "saved_layouts": {
+        "Default": {
+            "watched_metrics": list(DASHBOARD_METRIC_KEYS),
+            "table_columns": list(DASHBOARD_COLUMN_KEYS),
+            "metric_order": list(DASHBOARD_METRIC_KEYS),
+        }
+    },
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -56,6 +75,7 @@ DEFAULT_SETTINGS = {
     "telemetry": False,
     "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),
+    "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),
 }
 
 # Database connection defaults

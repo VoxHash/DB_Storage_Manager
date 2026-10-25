@@ -1,14 +1,13 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ Query Console optimization suggestions on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ Dashboard customization on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Dashboard customization (saved layouts / watched metrics)
+- Connection pooling for long-lived SQL engine sessions
 
 ## Next
 
-- Connection pooling for long-lived SQL engine sessions
 - Stronger backup verification UX (checksum / restore dry-run) on top of the native SHA-256 helpers already wired into local backups
 - Extend native helpers to zstd compression and optional backup-file encryption offload
 
@@ -45,6 +44,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Dashboard customization: watched summary metrics + table column toggles, named saved layouts (Apply / Save / Save As / Delete / Reset), last-connection restore; SecureStore `dashboard_layout` prefs; unit + offscreen Qt smoke (`tests/test_dashboard_layout.py`) (post-1.0.5)
 - Query Console optimization suggestions: **Analyze** button + suggestions table; SQL heuristics plus live EXPLAIN (SQLite `EXPLAIN QUERY PLAN`, Postgres/MySQL `EXPLAIN`) with Safe Mode SELECT-only respect; unit + offscreen Qt smoke (`tests/test_query_suggestions.py`) (post-1.0.5)
 - Monitoring notification channels + threshold editing UI: Thresholds/Channels tabs, SecureStore-persisted `alert_thresholds` / `alert_channels`, `NotificationDispatcher` (desktop tray + in-app log) wired to AlertManager callbacks, threshold validation, query-time/disk-usage checks, unit + offscreen Qt smoke (post-1.0.5)
 - Documentation kit synchronized with **1.0.5** release tags (README features/SSH/monitoring, docs index release alignment, i18n About strings, FAQ/configuration for optional live probes); gitignored sibling-DB fixture + `tests/test_real_connections.py` (post-1.0.5)

@@ -143,12 +143,15 @@ class SettingsWidget(QWidget):
             "auto_connect": self.auto_connect_check.isChecked(),
             "notifications": self.notifications_check.isChecked(),
             "telemetry": self.telemetry_check.isChecked(),
-            # Preserve monitoring alert prefs edited in the Monitoring tab
+            # Preserve monitoring / dashboard prefs edited in their tabs
             "alert_thresholds": existing.get(
                 "alert_thresholds", DEFAULT_SETTINGS.get("alert_thresholds")
             ),
             "alert_channels": existing.get(
                 "alert_channels", DEFAULT_SETTINGS.get("alert_channels")
+            ),
+            "dashboard_layout": existing.get(
+                "dashboard_layout", DEFAULT_SETTINGS.get("dashboard_layout")
             ),
         }
         self.secure_store.set_settings(self.settings)

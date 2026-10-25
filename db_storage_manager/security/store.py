@@ -88,6 +88,12 @@ class SecureStore:
                 channels = copy.deepcopy(defaults["alert_channels"])
                 channels.update(loaded["alert_channels"])
                 merged["alert_channels"] = channels
+            if "dashboard_layout" in loaded:
+                from ..dashboard_prefs import normalize_dashboard_layout
+
+                merged["dashboard_layout"] = normalize_dashboard_layout(
+                    loaded.get("dashboard_layout")
+                )
             return merged
         except Exception:
             return defaults

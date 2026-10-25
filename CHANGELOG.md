@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Dashboard customization: **Customize dashboard** panel with watched summary metrics and table column toggles, named saved layouts (Apply / Save / Save As / Delete / Reset), and last-selected connection restore on restart
+- SecureStore `dashboard_layout` settings (merged/normalized via `db_storage_manager.dashboard_prefs`); Settings save preserves dashboard prefs
+- Unit tests for layout normalize/save/apply/delete + SecureStore round-trip and offscreen Qt smoke (`tests/test_dashboard_layout.py`)
 - Query Console **Analyze** action and optimization suggestions table: SQL heuristics (SELECT *, leading LIKE wildcards, missing WHERE, ORDER BY without LIMIT, etc.) plus live EXPLAIN analysis when a connection is available (SQLite `EXPLAIN QUERY PLAN`; Postgres/MySQL `EXPLAIN`), with Safe Mode blocking EXPLAIN for non-SELECT
 - `db_storage_manager.analysis.query_suggestions` (`suggest_for_query`, `analyze_sql_heuristics`, `analyze_explain_plan`, `fetch_explain_plan`); suggestions also refresh after Execute using `explainPlan` from the result when present
 - Unit tests with real SQLite EXPLAIN + offscreen Qt smoke for `QueryWidget` (`tests/test_query_suggestions.py`)
