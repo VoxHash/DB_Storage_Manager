@@ -225,7 +225,6 @@ class EnhancedQueryWidget(QWidget):
 
         try:
             config = ConnectionConfig(**connection)
-            db = DatabaseConnectionFactory.create_connection(config)
 
             import asyncio
 
@@ -233,10 +232,11 @@ class EnhancedQueryWidget(QWidget):
             asyncio.set_event_loop(loop)
 
             async def execute():
-                await db.connect()
-                result = await db.execute_query(query, safe_mode)
-                await db.disconnect()
-                return result
+                db = await DatabaseConnectionFactory.acquire(config)
+                try:
+                    return await db.execute_query(query, safe_mode)
+                finally:
+                    await DatabaseConnectionFactory.release(db)
 
             result = loop.run_until_complete(execute())
             loop.close()

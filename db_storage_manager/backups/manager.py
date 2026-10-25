@@ -58,9 +58,7 @@ class BackupManager:
         options: Optional[Dict[str, Any]] = None,
     ) -> BackupInfo:
         """Create a backup for a database connection"""
-        # Create database connection
-        db_connection = DatabaseConnectionFactory.create_connection(connection_config)
-        await db_connection.connect()
+        db_connection = await DatabaseConnectionFactory.acquire(connection_config)
 
         try:
             # Create temporary backup file
@@ -96,7 +94,7 @@ class BackupManager:
 
             return backup_info
         finally:
-            await db_connection.disconnect()
+            await DatabaseConnectionFactory.release(db_connection)
 
     async def restore_backup(
         self,
@@ -109,17 +107,13 @@ class BackupManager:
         local_backup_path = await adapter.restore_backup(backup_info)
 
         try:
-            # Create database connection
-            db_connection = DatabaseConnectionFactory.create_connection(
-                connection_config
-            )
-            await db_connection.connect()
+            db_connection = await DatabaseConnectionFactory.acquire(connection_config)
 
             try:
                 # Restore backup
                 await db_connection.restore_backup(local_backup_path)
             finally:
-                await db_connection.disconnect()
+                await DatabaseConnectionFactory.release(db_connection)
         finally:
             # Clean up temporary file if it was downloaded
             if local_backup_path != backup_info.path:

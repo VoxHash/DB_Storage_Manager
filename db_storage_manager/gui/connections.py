@@ -566,9 +566,15 @@ class ConnectionsWidget(QWidget):
             self._refresh_tunnel_controls()
             self._update_table()
             config = ConnectionConfig(**config_kwargs)
-            db = DatabaseConnectionFactory.create_connection(config)
 
-            result = asyncio.run(db.test_connection())
+            async def _probe() -> bool:
+                db = await DatabaseConnectionFactory.acquire(config)
+                try:
+                    return bool(db.connected)
+                finally:
+                    await DatabaseConnectionFactory.release(db)
+
+            result = asyncio.run(_probe())
 
             if result:
                 QMessageBox.information(

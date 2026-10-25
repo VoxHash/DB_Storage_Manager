@@ -118,7 +118,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: dashboard customization (saved layouts / watched metrics), connection pooling, and stronger backup verification UX.
+See [ROADMAP.md](ROADMAP.md). Current focus: stronger backup verification UX (checksum / restore dry-run), then native zstd / optional backup encryption.
 
 ## Contributing
 

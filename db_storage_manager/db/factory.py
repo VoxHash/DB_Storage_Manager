@@ -2,7 +2,6 @@
 Database connection factory
 """
 
-from typing import Optional
 from .base import DatabaseConnection, ConnectionConfig
 from .postgres import PostgreSQLConnection
 from .mysql import MySQLConnection
@@ -13,14 +12,20 @@ from .oracle import OracleConnection
 from .sqlserver import SQLServerConnection
 from .clickhouse import ClickHouseConnection
 from .influxdb import InfluxDBConnection
+from .pool import (
+    SQLEnginePool,
+    close_sql_engine_pool_blocking,
+    get_sql_engine_pool,
+    shutdown_sql_engine_pool,
+)
 
 
 class DatabaseConnectionFactory:
-    """Factory for creating database connections"""
+    """Factory for creating database connections and acquiring pooled sessions."""
 
     @staticmethod
     def create_connection(config: ConnectionConfig) -> DatabaseConnection:
-        """Create a database connection based on type"""
+        """Create a new (unpooled) database connection based on type."""
         db_type = config.type.lower()
 
         if db_type == "postgresql" or db_type == "postgres":
@@ -43,3 +48,28 @@ class DatabaseConnectionFactory:
             return InfluxDBConnection(config)
         else:
             raise ValueError(f"Unsupported database type: {db_type}")
+
+    @staticmethod
+    def get_pool() -> SQLEnginePool:
+        """Return the process-wide SQL engine connection pool."""
+        return get_sql_engine_pool()
+
+    @staticmethod
+    async def acquire(config: ConnectionConfig) -> DatabaseConnection:
+        """Checkout a connected session from the SQL engine pool."""
+        return await get_sql_engine_pool().checkout(config)
+
+    @staticmethod
+    async def release(connection: DatabaseConnection) -> None:
+        """Return a session to the pool (or disconnect if unpooled)."""
+        await get_sql_engine_pool().release(connection)
+
+    @staticmethod
+    async def shutdown_pool() -> None:
+        """Close all pooled sessions (call on application shutdown)."""
+        await shutdown_sql_engine_pool()
+
+    @staticmethod
+    def shutdown_pool_blocking() -> None:
+        """Synchronous shutdown helper for Qt ``closeEvent`` paths."""
+        close_sql_engine_pool_blocking()

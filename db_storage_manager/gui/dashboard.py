@@ -78,13 +78,13 @@ class AnalysisWorker(QThread):
             asyncio.set_event_loop(loop)
 
             config = ConnectionConfig(**self.connection_config)
-            db = DatabaseConnectionFactory.create_connection(config)
 
             async def analyze():
-                await db.connect()
-                analysis = await db.analyze_storage()
-                await db.disconnect()
-                return analysis
+                db = await DatabaseConnectionFactory.acquire(config)
+                try:
+                    return await db.analyze_storage()
+                finally:
+                    await DatabaseConnectionFactory.release(db)
 
             result = loop.run_until_complete(analyze())
             loop.close()

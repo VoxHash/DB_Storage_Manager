@@ -544,8 +544,7 @@ class MonitoringWidget(QWidget):
 
         try:
             config = ConnectionConfig(**_connection_config_kwargs(self.current_connection))
-            db = DatabaseConnectionFactory.create_connection(config)
-            asyncio.run(db.connect())
+            db = asyncio.run(DatabaseConnectionFactory.acquire(config))
 
             self._db = db
             self.monitor = DatabaseMonitor(db)
@@ -579,7 +578,7 @@ class MonitoringWidget(QWidget):
             self.monitor.metrics_collector.stop_collecting()
         if self._db is not None:
             try:
-                asyncio.run(self._db.disconnect())
+                asyncio.run(DatabaseConnectionFactory.release(self._db))
             except Exception:
                 pass
         self._cleanup_monitor()

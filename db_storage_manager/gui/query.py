@@ -154,23 +154,24 @@ class QueryWidget(QWidget):
 
         try:
             config = ConnectionConfig(**connection)
-            db = DatabaseConnectionFactory.create_connection(config)
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
             async def execute():
-                await db.connect()
-                result = await db.execute_query(query, safe_mode)
-                advice = await suggest_for_query(
-                    query,
-                    connection=db,
-                    explain_plan=result.get("explainPlan"),
-                    safe_mode=safe_mode,
-                    db_type=config.type,
-                )
-                await db.disconnect()
-                return result, advice
+                db = await DatabaseConnectionFactory.acquire(config)
+                try:
+                    result = await db.execute_query(query, safe_mode)
+                    advice = await suggest_for_query(
+                        query,
+                        connection=db,
+                        explain_plan=result.get("explainPlan"),
+                        safe_mode=safe_mode,
+                        db_type=config.type,
+                    )
+                    return result, advice
+                finally:
+                    await DatabaseConnectionFactory.release(db)
 
             result, advice = loop.run_until_complete(execute())
             loop.close()
@@ -210,8 +211,7 @@ class QueryWidget(QWidget):
                 if connection:
                     config = ConnectionConfig(**connection)
                     db_type = config.type
-                    db = DatabaseConnectionFactory.create_connection(config)
-                    await db.connect()
+                    db = await DatabaseConnectionFactory.acquire(config)
                 try:
                     return await suggest_for_query(
                         query,
@@ -221,7 +221,7 @@ class QueryWidget(QWidget):
                     )
                 finally:
                     if db is not None:
-                        await db.disconnect()
+                        await DatabaseConnectionFactory.release(db)
 
             advice = loop.run_until_complete(analyze())
             loop.close()

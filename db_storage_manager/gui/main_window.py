@@ -224,15 +224,28 @@ class MainWindow(QMainWindow):
         self.connections = [c for c in self.connections if c["id"] != connection_id]
         self.secure_store.save_connections(self.connections)
         self.secure_store.remove_ssh_settings_for_connection(connection_id)
+        try:
+            import asyncio
+            from ..db.factory import DatabaseConnectionFactory
+
+            asyncio.run(DatabaseConnectionFactory.get_pool().discard_key(connection_id))
+        except Exception:
+            pass
         self.dashboard.update_connections(self.connections)
         self.query_widget.update_connections(self.connections)
         self.backups_widget.update_connections(self.connections)
         self.monitoring_widget.update_connections(self.connections)
 
     def closeEvent(self, event):
-        """Ensure SSH tunnels are closed when the window shuts down."""
+        """Ensure SSH tunnels and pooled SQL sessions close on shutdown."""
         try:
             self.connections_widget.close_all_tunnels()
+        except Exception:
+            pass
+        try:
+            from ..db.factory import DatabaseConnectionFactory
+
+            DatabaseConnectionFactory.shutdown_pool_blocking()
         except Exception:
             pass
         super().closeEvent(event)
