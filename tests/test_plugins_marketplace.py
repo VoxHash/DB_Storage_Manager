@@ -219,28 +219,91 @@ def test_secure_store_merges_plugins(isolated_secure_store):
     assert reloaded["plugins"]["enabled"]["data_comparison"] is True
 
 
+def _plugins_table_ids(widget) -> list[str]:
+    return [
+        widget.table.item(r, 0).text() for r in range(widget.table.rowCount())
+    ]
+
+
+def _select_plugin_row(widget, plugin_id: str) -> int:
+    for row in range(widget.table.rowCount()):
+        if widget.table.item(row, 0).text() == plugin_id:
+            widget.table.selectRow(row)
+            return row
+    raise AssertionError(f"plugin {plugin_id!r} not in table")
+
+
+def _enabled_cell_text(widget, plugin_id: str) -> str:
+    row = _select_plugin_row(widget, plugin_id)
+    return widget.table.item(row, 5).text()
+
+
 def test_plugins_widget_offscreen_smoke(marketplace, monkeypatch):
-    """Offscreen Qt smoke for the Plugins tab."""
-    mp, _store, _plugins_dir = marketplace
+    """Offscreen Qt smoke: Plugins-tab install → enable → disable → uninstall."""
+    mp, store, plugins_dir = marketplace
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     pytest.importorskip("PyQt6.QtWidgets")
-    from PyQt6.QtWidgets import QApplication, QMessageBox
+    from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
     from db_storage_manager.gui.plugins import PluginsWidget
 
     monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: 0))
     monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: 0))
     monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: 0))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    monkeypatch.setattr(
+        QFileDialog,
+        "getExistingDirectory",
+        staticmethod(lambda *a, **k: str(EXAMPLE_PLUGIN)),
+    )
 
     app = QApplication.instance() or QApplication([])
     widget = PluginsWidget(marketplace=mp)
     assert widget.table.columnCount() == 7
     assert widget.table.rowCount() >= 2
-    mp.install_from_path(EXAMPLE_PLUGIN)
-    widget.refresh()
-    ids = [
-        widget.table.item(r, 0).text() for r in range(widget.table.rowCount())
-    ]
-    assert "hello_echo" in ids
+    assert "hello_echo" not in _plugins_table_ids(widget)
+
+    # Install via the same control the Plugins tab uses (Install from Path…)
+    widget.install_path_btn.click()
+    app.processEvents()
+    assert "hello_echo" in _plugins_table_ids(widget)
+    assert (plugins_dir / "installed" / "hello_echo" / "plugin.json").is_file()
+    assert any(
+        r["id"] == "hello_echo" and r["source"] == "path" for r in mp.list_installed()
+    )
+    assert mp.is_enabled("hello_echo") is True
+    assert _enabled_cell_text(widget, "hello_echo") in {"Yes", "yes"}
+
+    # Disable / enable through tab buttons
+    _select_plugin_row(widget, "hello_echo")
+    widget.disable_btn.click()
+    app.processEvents()
+    assert mp.is_enabled("hello_echo") is False
+    assert store.get_settings()["plugins"]["enabled"]["hello_echo"] is False
+    assert _enabled_cell_text(widget, "hello_echo") in {"No", "no"}
+
+    _select_plugin_row(widget, "hello_echo")
+    widget.enable_btn.click()
+    app.processEvents()
+    assert mp.is_enabled("hello_echo") is True
+    assert store.get_settings()["plugins"]["enabled"]["hello_echo"] is True
+    assert _enabled_cell_text(widget, "hello_echo") in {"Yes", "yes"}
+
+    # Uninstall via tab button (confirm mocked to Yes)
+    _select_plugin_row(widget, "hello_echo")
+    widget.uninstall_btn.click()
+    app.processEvents()
+    assert "hello_echo" not in _plugins_table_ids(widget)
+    assert not (plugins_dir / "installed" / "hello_echo").exists()
+    assert all(r["id"] != "hello_echo" for r in mp.list_installed())
+
+    # Reinstall for a clean registry state after the full cycle
+    widget.install_path_btn.click()
+    app.processEvents()
+    assert "hello_echo" in _plugins_table_ids(widget)
     widget.close()
     app.processEvents()
