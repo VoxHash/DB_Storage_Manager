@@ -2,6 +2,7 @@
 Configuration management for DB Storage Manager
 """
 
+import copy
 import os
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,19 @@ MASTER_KEY_FILE = USER_DATA_DIR / ".master-key"
 # Ensure backup directory exists
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
+# Default alert thresholds (mirrored in monitoring.alerts.DEFAULT_ALERT_THRESHOLDS)
+DEFAULT_ALERT_THRESHOLDS = {
+    "connection_count": {"warning": 50.0, "critical": 100.0},
+    "query_time": {"warning": 1000.0, "critical": 5000.0},
+    "cache_hit_ratio": {"warning": 80.0, "critical": 60.0},
+    "disk_usage": {"warning": 75.0, "critical": 90.0},
+}
+
+DEFAULT_ALERT_CHANNELS = {
+    "desktop": True,
+    "in_app": True,
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -40,6 +54,8 @@ DEFAULT_SETTINGS = {
     "auto_connect": False,
     "notifications": True,
     "telemetry": False,
+    "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
+    "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),
 }
 
 # Database connection defaults

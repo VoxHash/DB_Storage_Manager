@@ -62,19 +62,35 @@ class SecureStore:
         return json.loads(decrypted.decode("utf-8"))
 
     def get_settings(self) -> Dict[str, Any]:
-        """Get application settings"""
-        if not SETTINGS_FILE.exists():
-            from ..config import DEFAULT_SETTINGS
+        """Get application settings (merged with defaults for new keys)."""
+        from ..config import DEFAULT_SETTINGS
+        import copy
 
-            return DEFAULT_SETTINGS.copy()
+        defaults = copy.deepcopy(DEFAULT_SETTINGS)
+        if not SETTINGS_FILE.exists():
+            return defaults
 
         try:
             encrypted = SETTINGS_FILE.read_text(encoding="utf-8")
-            return self._decrypt(encrypted)
+            loaded = self._decrypt(encrypted)
+            if not isinstance(loaded, dict):
+                return defaults
+            merged = defaults
+            merged.update(loaded)
+            # Nested alert maps: keep defaults for missing metric/channel keys
+            if isinstance(loaded.get("alert_thresholds"), dict):
+                thresholds = copy.deepcopy(defaults["alert_thresholds"])
+                for metric, levels in loaded["alert_thresholds"].items():
+                    if isinstance(levels, dict):
+                        thresholds.setdefault(metric, {}).update(levels)
+                merged["alert_thresholds"] = thresholds
+            if isinstance(loaded.get("alert_channels"), dict):
+                channels = copy.deepcopy(defaults["alert_channels"])
+                channels.update(loaded["alert_channels"])
+                merged["alert_channels"] = channels
+            return merged
         except Exception:
-            from ..config import DEFAULT_SETTINGS
-
-            return DEFAULT_SETTINGS.copy()
+            return defaults
 
     def set_settings(self, settings: Dict[str, Any]) -> None:
         """Save application settings"""

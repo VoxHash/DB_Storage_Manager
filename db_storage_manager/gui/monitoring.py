@@ -5,17 +5,23 @@ Real-time monitoring dashboard widget
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional
+import copy
+from typing import Any, Dict, List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtGui import QBrush, QColor, QIcon
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
+    QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -30,11 +36,21 @@ from ..analysis import (
     QueryPerformanceAnalyzer,
     StorageGrowthPredictor,
 )
+from ..config import DEFAULT_ALERT_CHANNELS, DEFAULT_ALERT_THRESHOLDS
 from ..db.base import ConnectionConfig
 from ..db.factory import DatabaseConnectionFactory
 from ..i18n.manager import get_i18n_manager
-from ..monitoring import Alert, DatabaseMonitor
+from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
+from ..security.store import SecureStore
 from .utils import apply_glassmorphism
+
+_THRESHOLD_META: List[Tuple[str, str, float, float, float]] = [
+    # metric_key, label_key_suffix, min, max, step
+    ("connection_count", "connection_count", 1, 100000, 1),
+    ("query_time", "query_time", 1, 600000, 10),
+    ("cache_hit_ratio", "cache_hit_ratio", 0, 100, 0.5),
+    ("disk_usage", "disk_usage", 1, 100, 0.5),
+]
 
 _CONNECTION_FIELDS = {
     "id",
@@ -105,6 +121,7 @@ class MonitoringWidget(QWidget):
         super().__init__()
         self.connections = connections
         self.i18n = get_i18n_manager()
+        self.secure_store = SecureStore()
         self.current_connection = None
         self.monitor: Optional[DatabaseMonitor] = None
         self._db = None
@@ -112,8 +129,13 @@ class MonitoringWidget(QWidget):
         self.index_optimizer = None
         self.growth_predictor = None
         self.capacity_planner = None
+        self.notification_dispatcher = NotificationDispatcher()
+        self._tray_icon: Optional[QSystemTrayIcon] = None
+        self._threshold_spins: Dict[str, Dict[str, QDoubleSpinBox]] = {}
         self.setObjectName("glassmorphism")
         self.init_ui()
+        self._load_alert_prefs()
+        self._setup_desktop_notifications()
         apply_glassmorphism(self)
 
     def init_ui(self):
@@ -249,6 +271,110 @@ class MonitoringWidget(QWidget):
         health_layout.addWidget(self.health_table)
         tabs.addTab(health_widget, t("monitoring.health"))
 
+        thresholds_widget = QWidget()
+        thresholds_layout = QVBoxLayout(thresholds_widget)
+        self.thresholds_hint = QLabel(
+            t(
+                "monitoring.thresholds_hint",
+                default="Edit warning/critical thresholds. Saved encrypted via SecureStore.",
+            )
+        )
+        self.thresholds_hint.setWordWrap(True)
+        thresholds_layout.addWidget(self.thresholds_hint)
+
+        form = QFormLayout()
+        self._threshold_spins = {}
+        for metric, label_key, vmin, vmax, step in _THRESHOLD_META:
+            row = QHBoxLayout()
+            warn_spin = QDoubleSpinBox()
+            warn_spin.setRange(vmin, vmax)
+            warn_spin.setSingleStep(step)
+            warn_spin.setDecimals(1 if step < 1 else 0)
+            crit_spin = QDoubleSpinBox()
+            crit_spin.setRange(vmin, vmax)
+            crit_spin.setSingleStep(step)
+            crit_spin.setDecimals(1 if step < 1 else 0)
+            row.addWidget(QLabel(t("monitoring.warning", default="Warning")))
+            row.addWidget(warn_spin)
+            row.addWidget(QLabel(t("monitoring.critical", default="Critical")))
+            row.addWidget(crit_spin)
+            form.addRow(
+                t(f"monitoring.threshold_{label_key}", default=metric.replace("_", " ").title()),
+                row,
+            )
+            self._threshold_spins[metric] = {"warning": warn_spin, "critical": crit_spin}
+        thresholds_layout.addLayout(form)
+
+        threshold_actions = QHBoxLayout()
+        self.save_thresholds_button = QPushButton(
+            t("monitoring.save_thresholds", default="Save Thresholds")
+        )
+        self.save_thresholds_button.clicked.connect(self._save_thresholds)
+        threshold_actions.addWidget(self.save_thresholds_button)
+        self.reset_thresholds_button = QPushButton(
+            t("monitoring.reset_thresholds", default="Reset Defaults")
+        )
+        self.reset_thresholds_button.clicked.connect(self._reset_thresholds)
+        threshold_actions.addWidget(self.reset_thresholds_button)
+        threshold_actions.addStretch()
+        thresholds_layout.addLayout(threshold_actions)
+        thresholds_layout.addStretch()
+        tabs.addTab(
+            thresholds_widget, t("monitoring.thresholds", default="Thresholds")
+        )
+
+        channels_widget = QWidget()
+        channels_layout = QVBoxLayout(channels_widget)
+        channels_group = QGroupBox(
+            t("monitoring.notification_channels", default="Notification channels")
+        )
+        channels_form = QVBoxLayout(channels_group)
+        self.desktop_channel_check = QCheckBox(
+            t(
+                "monitoring.channel_desktop",
+                default="Desktop notifications (system tray)",
+            )
+        )
+        self.in_app_channel_check = QCheckBox(
+            t("monitoring.channel_in_app", default="In-app notification log")
+        )
+        channels_form.addWidget(self.desktop_channel_check)
+        channels_form.addWidget(self.in_app_channel_check)
+        channels_layout.addWidget(channels_group)
+
+        channel_actions = QHBoxLayout()
+        self.save_channels_button = QPushButton(
+            t("monitoring.save_channels", default="Save Channels")
+        )
+        self.save_channels_button.clicked.connect(self._save_channels)
+        channel_actions.addWidget(self.save_channels_button)
+        self.clear_notif_button = QPushButton(
+            t("monitoring.clear_notification_log", default="Clear Log")
+        )
+        self.clear_notif_button.clicked.connect(self._clear_notification_log)
+        channel_actions.addWidget(self.clear_notif_button)
+        channel_actions.addStretch()
+        channels_layout.addLayout(channel_actions)
+
+        self.notification_log = QTableWidget()
+        self.notification_log.setColumnCount(4)
+        self.notification_log.setHorizontalHeaderLabels(
+            [
+                t("monitoring.alert_time"),
+                t("monitoring.severity"),
+                t("monitoring.channel", default="Channel"),
+                t("monitoring.message"),
+            ]
+        )
+        self.notification_log.horizontalHeader().setSectionResizeMode(
+            3, QHeaderView.ResizeMode.Stretch
+        )
+        self.notification_log.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        channels_layout.addWidget(self.notification_log)
+        tabs.addTab(
+            channels_widget, t("monitoring.channels", default="Channels")
+        )
+
         layout.addWidget(tabs)
 
         self.update_timer = QTimer(self)
@@ -264,6 +390,153 @@ class MonitoringWidget(QWidget):
             self.current_connection = None
             self.start_button.setEnabled(False)
 
+    def _load_alert_prefs(self) -> None:
+        """Load thresholds and channel toggles from SecureStore into the UI."""
+        settings = self.secure_store.get_settings()
+        thresholds = settings.get("alert_thresholds") or copy.deepcopy(
+            DEFAULT_ALERT_THRESHOLDS
+        )
+        self._populate_threshold_spins(thresholds)
+        channels = settings.get("alert_channels") or copy.deepcopy(
+            DEFAULT_ALERT_CHANNELS
+        )
+        master_on = bool(settings.get("notifications", True))
+        self.desktop_channel_check.setChecked(
+            master_on and bool(channels.get("desktop", True))
+        )
+        self.in_app_channel_check.setChecked(
+            master_on and bool(channels.get("in_app", True))
+        )
+        self.notification_dispatcher.configure(
+            {
+                "desktop": self.desktop_channel_check.isChecked(),
+                "in_app": self.in_app_channel_check.isChecked(),
+            }
+        )
+
+    def _populate_threshold_spins(
+        self, thresholds: Dict[str, Dict[str, float]]
+    ) -> None:
+        for metric, spins in self._threshold_spins.items():
+            levels = thresholds.get(metric) or DEFAULT_ALERT_THRESHOLDS.get(metric, {})
+            spins["warning"].setValue(float(levels.get("warning", 0)))
+            spins["critical"].setValue(float(levels.get("critical", 0)))
+
+    def _read_threshold_spins(self) -> Dict[str, Dict[str, float]]:
+        result: Dict[str, Dict[str, float]] = {}
+        for metric, spins in self._threshold_spins.items():
+            result[metric] = {
+                "warning": float(spins["warning"].value()),
+                "critical": float(spins["critical"].value()),
+            }
+        return result
+
+    def _apply_thresholds_to_monitor(
+        self, thresholds: Dict[str, Dict[str, float]]
+    ) -> None:
+        if self.monitor:
+            self.monitor.alert_manager.apply_thresholds(thresholds)
+
+    def _save_thresholds(self) -> None:
+        t = self.i18n.translate
+        thresholds = self._read_threshold_spins()
+        # Validate via a temporary AlertManager
+        from ..monitoring import AlertManager
+
+        errors = AlertManager(thresholds).validate_thresholds()
+        if errors:
+            QMessageBox.warning(
+                self,
+                t("common.error"),
+                "\n".join(errors),
+            )
+            return
+        settings = self.secure_store.get_settings()
+        settings["alert_thresholds"] = thresholds
+        self.secure_store.set_settings(settings)
+        self._apply_thresholds_to_monitor(thresholds)
+        QMessageBox.information(
+            self,
+            t("common.success"),
+            t(
+                "monitoring.thresholds_saved",
+                default="Alert thresholds saved.",
+            ),
+        )
+
+    def _reset_thresholds(self) -> None:
+        self._populate_threshold_spins(copy.deepcopy(DEFAULT_ALERT_THRESHOLDS))
+
+    def _save_channels(self) -> None:
+        t = self.i18n.translate
+        channels = {
+            "desktop": self.desktop_channel_check.isChecked(),
+            "in_app": self.in_app_channel_check.isChecked(),
+        }
+        settings = self.secure_store.get_settings()
+        settings["alert_channels"] = channels
+        # Keep global notifications flag in sync when either channel is on
+        settings["notifications"] = channels["desktop"] or channels["in_app"]
+        self.secure_store.set_settings(settings)
+        self.notification_dispatcher.configure(channels)
+        QMessageBox.information(
+            self,
+            t("common.success"),
+            t(
+                "monitoring.channels_saved",
+                default="Notification channels saved.",
+            ),
+        )
+
+    def _clear_notification_log(self) -> None:
+        self.notification_dispatcher.clear_in_app_log()
+        self._refresh_notification_log()
+
+    def _refresh_notification_log(self) -> None:
+        entries = list(reversed(self.notification_dispatcher.in_app_log[-100:]))
+        self.notification_log.setRowCount(len(entries))
+        for row, entry in enumerate(entries):
+            self.notification_log.setItem(
+                row, 0, QTableWidgetItem(str(entry.get("timestamp", "")))
+            )
+            sev = str(entry.get("severity", "info")).lower()
+            brush = QBrush(_SEVERITY_COLORS.get(sev, _SEVERITY_COLORS["info"]))
+            sev_item = QTableWidgetItem(sev.upper())
+            chan_item = QTableWidgetItem(str(entry.get("channel", "")))
+            msg_item = QTableWidgetItem(
+                f"{entry.get('title', '')}: {entry.get('message', '')}"
+            )
+            for item in (sev_item, chan_item, msg_item):
+                item.setForeground(brush)
+            self.notification_log.setItem(row, 1, sev_item)
+            self.notification_log.setItem(row, 2, chan_item)
+            self.notification_log.setItem(row, 3, msg_item)
+
+    def _setup_desktop_notifications(self) -> None:
+        """Create a system-tray icon for real OS desktop notifications when available."""
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            self.notification_dispatcher.set_desktop_handler(None)
+            return
+        if self._tray_icon is None:
+            self._tray_icon = QSystemTrayIcon(self)
+            self._tray_icon.setIcon(self.windowIcon() or QIcon())
+            self._tray_icon.setToolTip(
+                self.i18n.translate("app.title", default="DB Storage Manager")
+            )
+            self._tray_icon.setVisible(True)
+
+        def _show(title: str, message: str, severity: str) -> None:
+            if self._tray_icon is None:
+                return
+            icon = QSystemTrayIcon.MessageIcon.Warning
+            if severity == AlertSeverity.CRITICAL.value:
+                icon = QSystemTrayIcon.MessageIcon.Critical
+            elif severity == AlertSeverity.INFO.value:
+                icon = QSystemTrayIcon.MessageIcon.Information
+            self._tray_icon.showMessage(title, message, icon, 8000)
+
+        self.notification_dispatcher.set_desktop_handler(_show)
+
     def _start_monitoring(self):
         """Start monitoring via timer-driven poll_once against real modules."""
         if not self.current_connection:
@@ -277,6 +550,8 @@ class MonitoringWidget(QWidget):
             self._db = db
             self.monitor = DatabaseMonitor(db)
             self.monitor.monitoring = True
+            # Apply persisted thresholds before the first poll
+            self.monitor.alert_manager.apply_thresholds(self._read_threshold_spins())
             self.monitor.alert_manager.add_alert_callback(self._on_alert)
             self.monitor._on_metrics = self._on_metrics
             self.performance_analyzer = QueryPerformanceAnalyzer(db)
@@ -340,9 +615,9 @@ class MonitoringWidget(QWidget):
             )
 
     def _on_alert(self, alert: Alert):
-        """Handle new alert from AlertManager callbacks."""
-        # Display refresh happens after poll_once; keep hook for future signals.
-        _ = alert
+        """Handle new alert from AlertManager callbacks — fire notification channels."""
+        self.notification_dispatcher.notify(alert)
+        self._refresh_notification_log()
 
     def _on_metrics(self, metrics: Dict[str, Any]):
         """Handle new metrics callback."""

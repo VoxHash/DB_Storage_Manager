@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Monitoring **Thresholds** and **Channels** tabs: editable warning/critical spinboxes for connection count, query time, cache hit ratio, and disk usage; desktop (system tray) + in-app notification channel toggles with live notification log
+- `NotificationDispatcher` routes AlertManager emissions to enabled channels; `QSystemTrayIcon.showMessage` for real desktop notifications when a system tray is available
+- Durable `alert_thresholds` / `alert_channels` in SecureStore settings (merged with defaults); Settings save preserves monitoring prefs
+- `AlertManager.apply_thresholds` / `validate_thresholds`, constructor thresholds, and threshold checks for `queryTime` / `diskUsage` when present in metrics
+- Tests for notification channels, threshold persistence, validation, and expanded offscreen Qt smoke (`tests/test_monitoring.py`)
 - Optional live sibling-DB connection probes: gitignored `tests/fixtures/connections.local.json` (example template committed), `DSM_E2E_CONNECTIONS_FILE` / `DSM_E2E_CONNECT_TIMEOUT`, and `tests/test_real_connections.py` (SELECT-only `test_connection()`, skip when unreachable)
 - Monitoring tab presentation: live status banner (health + alert counts), severity-colored alerts with source column, **Acknowledge Selected** / **Acknowledge All** / **Refresh Now**, health overall label + detail column, human-readable metric labels
 - `DatabaseMonitor.poll_once()` for Qt-timer / script one-shot collect → health → threshold evaluation; `get_status_summary()` for banner data

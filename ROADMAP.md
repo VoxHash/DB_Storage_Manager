@@ -1,14 +1,13 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ docs kit sync + sibling connection probes on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ monitoring notification channels / threshold editing UI on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Real-time monitoring refinements and actionable alerts (notification channels, threshold editing UI)
+- Query optimization suggestions surfaced in the Query Console
 
 ## Next
 
-- Query optimization suggestions surfaced in the Query Console
 - Dashboard customization (saved layouts / watched metrics)
 - Connection pooling for long-lived SQL engine sessions
 - Stronger backup verification UX (checksum / restore dry-run) on top of the native SHA-256 helpers already wired into local backups
@@ -47,6 +46,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Monitoring notification channels + threshold editing UI: Thresholds/Channels tabs, SecureStore-persisted `alert_thresholds` / `alert_channels`, `NotificationDispatcher` (desktop tray + in-app log) wired to AlertManager callbacks, threshold validation, query-time/disk-usage checks, unit + offscreen Qt smoke (post-1.0.5)
 - Documentation kit synchronized with **1.0.5** release tags (README features/SSH/monitoring, docs index release alignment, i18n About strings, FAQ/configuration for optional live probes); gitignored sibling-DB fixture + `tests/test_real_connections.py` (post-1.0.5)
 - Monitoring/alerts UX: status banner with health + alert counts, severity-colored alerts table with acknowledge/refresh, health detail column, timer-driven `DatabaseMonitor.poll_once()` wired to real collectors, AlertManager id/dedupe/counts, unit + offscreen Qt smoke tests (post-1.0.5)
 - Connections UI SSH tunnel UX: bastion host/user/key/password/port fields, open/close status, Paramiko local port forward, encrypted `ssh_config` + SecureStore bastion index, unit tests with mocked network (post-1.0.5)

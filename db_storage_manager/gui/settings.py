@@ -135,6 +135,7 @@ class SettingsWidget(QWidget):
 
     def _save_settings(self):
         """Save settings"""
+        existing = self.secure_store.get_settings()
         self.settings = {
             "theme": self.theme_manager.current_theme,
             "language": self.i18n.current_language,
@@ -142,6 +143,13 @@ class SettingsWidget(QWidget):
             "auto_connect": self.auto_connect_check.isChecked(),
             "notifications": self.notifications_check.isChecked(),
             "telemetry": self.telemetry_check.isChecked(),
+            # Preserve monitoring alert prefs edited in the Monitoring tab
+            "alert_thresholds": existing.get(
+                "alert_thresholds", DEFAULT_SETTINGS.get("alert_thresholds")
+            ),
+            "alert_channels": existing.get(
+                "alert_channels", DEFAULT_SETTINGS.get("alert_channels")
+            ),
         }
         self.secure_store.set_settings(self.settings)
         QMessageBox.information(
