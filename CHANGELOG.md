@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Native helpers **zstd** compress/decompress and optional backup-file encryption offload (`encrypt_file` / `decrypt_file`); format `DSMENC1` = AES-256-GCM (1 MiB chunks) + PBKDF2-HMAC-SHA256 (200k iters); Rust path in `db_storage_native` 0.2.0 with Python fallbacks (`zstandard`, `cryptography`)
+- Local backups support `compression="zstd"` and `encryption=True` + `encryptionKey` (passphrase never written to `.meta.json`); restore / dry-run decrypt then decompress
+- Tests for zstd/encrypt round-trips and encrypted local backup create/restore/dry-run (`tests/test_backup_zstd_encrypt.py`); extended `tests/test_native.py`
 - Stronger backup verification UX: Restore tab lists local backups with **Verify Checksum**, **Verify All**, and **Dry-run Restore**; color-coded PASS / FAIL / MISSING CHECKSUM status banner and table columns
 - Local backup `.meta.json` sidecars persist SHA-256 (and related metadata) so `list_backups` reloads expected digests after restart
-- `BackupManager.dry_run_restore`: real checksum verify, optional gzip decompress to temp, SQLite header + `PRAGMA integrity_check` without writing to a live database
+- `BackupManager.dry_run_restore`: real checksum verify, optional decrypt + gzip/zstd decompress to temp, SQLite header + `PRAGMA integrity_check` without writing to a live database
 - Clearer `verify_backup_checksum` / `verify_backups_parallel` results (`status`: `pass` / `fail` / `missing_checksum` / `not_found`; missing stored digest is not treated as success)
 - Unit tests for sidecar persistence, checksum pass/fail/parallel, gzip + SQLite dry-run, and offscreen Qt smoke (`tests/test_backup_verification.py`)
 - SQL engine connection pooling (`db_storage_manager.db.pool.SQLEnginePool`): reuse long-lived sessions per connection profile, safe checkout/return, discard on profile delete, close on main-window shutdown

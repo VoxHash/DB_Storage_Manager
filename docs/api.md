@@ -65,6 +65,10 @@ from db_storage_manager.native import (
     is_available,
     gzip_compress_file,
     gzip_decompress_file,
+    zstd_compress_file,
+    zstd_decompress_file,
+    encrypt_file,
+    decrypt_file,
     sha256_file,
     sha256_files_parallel,
     aggregate_f64,
@@ -72,6 +76,7 @@ from db_storage_manager.native import (
 )
 
 backend_info()  # {'available': True, 'language': 'rust', ...} or Python fallback
+# encrypt_file / decrypt_file use DSMENC1 (AES-256-GCM + PBKDF2); native ↔ Python compatible
 ```
 
 Install a Release wheel or build with maturin (see [installation.md](installation.md)). Backup verification:
@@ -83,9 +88,10 @@ manager = BackupManager()
 manager.verify_backup_checksum(backup_info)
 manager.verify_backups_parallel([backup_info, ...])
 manager.dry_run_restore(backup_info)  # checksum + payload checks; never writes to a live DB
+manager.dry_run_restore(backup_info, encryption_key="passphrase")  # encrypted backups
 ```
 
-`verify_*` results include `ok`, `status` (`pass` / `fail` / `missing_checksum` / `not_found`), and digests. Local backups persist SHA-256 in a `.meta.json` sidecar next to the backup file.
+`verify_*` results include `ok`, `status` (`pass` / `fail` / `missing_checksum` / `not_found`), and digests. Local backups persist SHA-256 in a `.meta.json` sidecar next to the backup file. Passphrases are never written to sidecars.
 
 
 ## Secure storage

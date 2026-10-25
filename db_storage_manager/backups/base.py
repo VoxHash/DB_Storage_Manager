@@ -46,7 +46,11 @@ class BackupAdapter(ABC):
         pass
 
     @abstractmethod
-    async def restore_backup(self, backup_info: BackupInfo) -> str:
+    async def restore_backup(
+        self,
+        backup_info: BackupInfo,
+        encryption_key: Optional[str] = None,
+    ) -> str:
         """Restore a backup and return local file path"""
         pass
 

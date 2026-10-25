@@ -118,7 +118,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: native zstd compression and optional backup-file encryption offload.
+See [ROADMAP.md](ROADMAP.md). Current focus: Web UI / REST companion (desktop remains primary).
 
 ## Contributing
 

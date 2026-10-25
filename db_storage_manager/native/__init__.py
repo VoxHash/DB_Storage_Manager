@@ -12,13 +12,18 @@ Or::
 
 When the compiled module is unavailable, callers transparently use Python
 implementations so the desktop app keeps working.
+
+Backup-file encryption uses the ``DSMENC1`` format (AES-256-GCM, chunked,
+PBKDF2-HMAC-SHA256 key derivation). Native and Python paths are wire-compatible.
 """
 
 from __future__ import annotations
 
 import gzip
 import hashlib
+import os
 import shutil
+import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -30,6 +35,16 @@ try:
 except Exception as exc:  # pragma: no cover - import path varies by build
     _NATIVE_ERROR = str(exc)
     _NATIVE = None
+
+# On-disk encryption format (must match native/db_storage_native)
+ENCRYPTION_FORMAT = "DSMENC1"
+ENCRYPTION_SCHEME = "aes-256-gcm-pbkdf2"
+_ENC_MAGIC = b"DSMENC1\0"
+_ENC_SALT_LEN = 16
+_ENC_NONCE_LEN = 12
+_ENC_TAG_LEN = 16
+_ENC_PBKDF2_ITERS = 200_000
+_ENC_CHUNK = 1024 * 1024
 
 
 def is_available() -> bool:
@@ -47,6 +62,8 @@ def backend_info() -> Dict[str, Any]:
                 "language": lang,
                 "version": version,
                 "module": "db_storage_native",
+                "encryption_format": ENCRYPTION_FORMAT,
+                "encryption_scheme": ENCRYPTION_SCHEME,
             }
         except Exception as exc:  # pragma: no cover
             return {
@@ -60,6 +77,8 @@ def backend_info() -> Dict[str, Any]:
         "language": "python",
         "version": None,
         "error": _NATIVE_ERROR,
+        "encryption_format": ENCRYPTION_FORMAT,
+        "encryption_scheme": ENCRYPTION_SCHEME,
     }
 
 
@@ -92,6 +111,156 @@ def gzip_decompress_file(src: str | Path, dst: str | Path) -> int:
                     break
                 f_out.write(chunk)
                 written += len(chunk)
+    return written
+
+
+def zstd_compress_file(
+    src: str | Path, dst: str | Path, level: int = 3
+) -> int:
+    """Compress ``src`` to zstd ``dst``. Returns destination size in bytes."""
+    src_s, dst_s = str(src), str(dst)
+    if _NATIVE is not None and hasattr(_NATIVE, "zstd_compress_file"):
+        return int(_NATIVE.zstd_compress_file(src_s, dst_s, level))
+
+    try:
+        import zstandard as zstd
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "zstd compression requires the 'zstandard' package "
+            "(pip install zstandard) or the db_storage_native extension"
+        ) from exc
+
+    level = max(1, min(int(level), 22))
+    cctx = zstd.ZstdCompressor(level=level)
+    with open(src_s, "rb") as f_in, open(dst_s, "wb") as f_out:
+        cctx.copy_stream(f_in, f_out)
+    return Path(dst_s).stat().st_size
+
+
+def zstd_decompress_file(src: str | Path, dst: str | Path) -> int:
+    """Decompress zstd ``src`` to ``dst``. Returns bytes written."""
+    src_s, dst_s = str(src), str(dst)
+    if _NATIVE is not None and hasattr(_NATIVE, "zstd_decompress_file"):
+        return int(_NATIVE.zstd_decompress_file(src_s, dst_s))
+
+    try:
+        import zstandard as zstd
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError(
+            "zstd decompression requires the 'zstandard' package "
+            "(pip install zstandard) or the db_storage_native extension"
+        ) from exc
+
+    dctx = zstd.ZstdDecompressor()
+    written = 0
+    with open(src_s, "rb") as f_in, open(dst_s, "wb") as f_out:
+        with dctx.stream_reader(f_in) as reader:
+            while True:
+                chunk = reader.read(1024 * 1024)
+                if not chunk:
+                    break
+                f_out.write(chunk)
+                written += len(chunk)
+    return written
+
+
+def _derive_key(passphrase: str, salt: bytes) -> bytes:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=_ENC_PBKDF2_ITERS,
+    )
+    return kdf.derive(passphrase.encode("utf-8"))
+
+
+def encrypt_file(src: str | Path, dst: str | Path, passphrase: str) -> int:
+    """Encrypt ``src`` to ``dst`` using DSMENC1 (AES-256-GCM + PBKDF2).
+
+    Returns destination size in bytes. Native Rust offload when available;
+    otherwise cryptography AESGCM (same on-disk format).
+    """
+    if not passphrase:
+        raise ValueError("encryption passphrase must not be empty")
+
+    src_s, dst_s = str(src), str(dst)
+    if _NATIVE is not None and hasattr(_NATIVE, "encrypt_file"):
+        return int(_NATIVE.encrypt_file(src_s, dst_s, passphrase))
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    salt = os.urandom(_ENC_SALT_LEN)
+    key = _derive_key(passphrase, salt)
+    aesgcm = AESGCM(key)
+
+    with open(src_s, "rb") as f_in, open(dst_s, "wb") as f_out:
+        f_out.write(_ENC_MAGIC)
+        f_out.write(salt)
+        while True:
+            chunk = f_in.read(_ENC_CHUNK)
+            if not chunk:
+                break
+            nonce = os.urandom(_ENC_NONCE_LEN)
+            ciphertext = aesgcm.encrypt(nonce, chunk, None)
+            f_out.write(struct.pack(">I", len(chunk)))
+            f_out.write(nonce)
+            f_out.write(ciphertext)
+        f_out.write(struct.pack(">I", 0))
+    return Path(dst_s).stat().st_size
+
+
+def decrypt_file(src: str | Path, dst: str | Path, passphrase: str) -> int:
+    """Decrypt a DSMENC1 file to ``dst``. Returns bytes written."""
+    if not passphrase:
+        raise ValueError("encryption passphrase must not be empty")
+
+    src_s, dst_s = str(src), str(dst)
+    if _NATIVE is not None and hasattr(_NATIVE, "decrypt_file"):
+        return int(_NATIVE.decrypt_file(src_s, dst_s, passphrase))
+
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.exceptions import InvalidTag
+
+    written = 0
+    with open(src_s, "rb") as f_in, open(dst_s, "wb") as f_out:
+        magic = f_in.read(8)
+        if magic != _ENC_MAGIC:
+            raise ValueError(
+                "not a DSMENC1 encrypted backup (bad magic header)"
+            )
+        salt = f_in.read(_ENC_SALT_LEN)
+        if len(salt) != _ENC_SALT_LEN:
+            raise ValueError("truncated DSMENC1 header (salt)")
+        key = _derive_key(passphrase, salt)
+        aesgcm = AESGCM(key)
+        while True:
+            len_bytes = f_in.read(4)
+            if len(len_bytes) != 4:
+                raise ValueError("truncated DSMENC1 stream (chunk length)")
+            plain_len = struct.unpack(">I", len_bytes)[0]
+            if plain_len == 0:
+                break
+            if plain_len > _ENC_CHUNK:
+                raise ValueError("encrypted chunk length exceeds frame limit")
+            nonce = f_in.read(_ENC_NONCE_LEN)
+            if len(nonce) != _ENC_NONCE_LEN:
+                raise ValueError("truncated DSMENC1 stream (nonce)")
+            ciphertext = f_in.read(plain_len + _ENC_TAG_LEN)
+            if len(ciphertext) != plain_len + _ENC_TAG_LEN:
+                raise ValueError("truncated DSMENC1 stream (ciphertext)")
+            try:
+                plain = aesgcm.decrypt(nonce, ciphertext, None)
+            except InvalidTag as exc:
+                raise ValueError(
+                    "AES-GCM decrypt failed (wrong key or corrupt file)"
+                ) from exc
+            if len(plain) != plain_len:
+                raise ValueError("decrypted chunk length mismatch")
+            f_out.write(plain)
+            written += len(plain)
     return written
 
 
@@ -154,12 +323,18 @@ def hash_rows_parallel(rows: Sequence[Sequence[Any]]) -> List[str]:
 
 
 __all__ = [
+    "ENCRYPTION_FORMAT",
+    "ENCRYPTION_SCHEME",
     "aggregate_f64",
     "backend_info",
+    "decrypt_file",
+    "encrypt_file",
     "gzip_compress_file",
     "gzip_decompress_file",
     "hash_rows_parallel",
     "is_available",
     "sha256_file",
     "sha256_files_parallel",
+    "zstd_compress_file",
+    "zstd_decompress_file",
 ]

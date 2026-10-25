@@ -9,12 +9,16 @@ from pathlib import Path
 from db_storage_manager.native import (
     aggregate_f64,
     backend_info,
+    decrypt_file,
+    encrypt_file,
     gzip_compress_file,
     gzip_decompress_file,
     hash_rows_parallel,
     is_available,
     sha256_file,
     sha256_files_parallel,
+    zstd_compress_file,
+    zstd_decompress_file,
 )
 
 
@@ -87,3 +91,28 @@ def test_gzip_compatible_with_stdlib(tmp_path: Path):
     gzip_compress_file(src, gz)
     with gzip.open(gz, "rb") as fh:
         assert fh.read() == src.read_bytes()
+
+
+def test_zstd_roundtrip_native_api(tmp_path: Path):
+    src = tmp_path / "z.bin"
+    zst = tmp_path / "z.bin.zst"
+    out = tmp_path / "z.out"
+    payload = b"zstd-native-api\n" * 800
+    src.write_bytes(payload)
+    assert zstd_compress_file(src, zst) > 0
+    assert zstd_decompress_file(zst, out) == len(payload)
+    assert out.read_bytes() == payload
+
+
+def test_encrypt_decrypt_native_api(tmp_path: Path):
+    src = tmp_path / "e.bin"
+    enc = tmp_path / "e.bin.enc"
+    out = tmp_path / "e.out"
+    payload = b"enc-native-api\n" * 600
+    src.write_bytes(payload)
+    assert encrypt_file(src, enc, "api-pass") > 0
+    assert decrypt_file(enc, out, "api-pass") == len(payload)
+    assert out.read_bytes() == payload
+    info = backend_info()
+    assert info.get("encryption_format") == "DSMENC1"
+    assert info.get("encryption_scheme") == "aes-256-gcm-pbkdf2"

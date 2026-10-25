@@ -279,6 +279,14 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch):
     assert dry.get("stage") == "complete"
     assert "PASS" in widget.verify_status_label.text()
 
+    # Dry-run must not mutate the live source DB
+    conn = sqlite3.connect(str(source))
+    try:
+        live_count = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
+    finally:
+        conn.close()
+    assert live_count == 2
+
     # Tamper file → checksum fail presentation
     Path(info.path).write_bytes(Path(info.path).read_bytes() + b"x")
     widget.refresh_backups()

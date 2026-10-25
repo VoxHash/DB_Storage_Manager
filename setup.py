@@ -38,6 +38,7 @@ setup(
         "google-auth-httplib2>=0.1.1",
         "google-auth-oauthlib>=1.1.0",
         "cryptography>=41.0.0",
+        "zstandard>=0.22.0",
         "pynacl>=1.5.0",
         "python-dotenv>=1.0.0",
         "schedule>=1.2.0",

@@ -3,15 +3,26 @@ Local file system backup adapter
 """
 
 import json
+import os
 import shutil
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..config import BACKUP_DIR
-from ..native import gzip_compress_file, gzip_decompress_file, sha256_file
+from ..native import (
+    ENCRYPTION_SCHEME,
+    decrypt_file,
+    encrypt_file,
+    gzip_compress_file,
+    gzip_decompress_file,
+    sha256_file,
+    zstd_compress_file,
+    zstd_decompress_file,
+)
 
 
 def meta_path_for(backup_path: Path) -> Path:
@@ -45,6 +56,20 @@ class LocalBackupAdapter(BackupAdapter):
         except (OSError, json.JSONDecodeError, TypeError):
             return None
 
+    def _infer_compression(self, backup_file: Path, stored: Dict[str, Any]) -> str:
+        compression = stored.get("compression")
+        if compression is not None:
+            return str(compression)
+        name = backup_file.name
+        # Strip .enc suffix for compression detection
+        if name.endswith(".enc"):
+            name = name[: -len(".enc")]
+        if name.endswith(".gz"):
+            return "gzip"
+        if name.endswith(".zst"):
+            return "zstd"
+        return "none"
+
     async def create_backup(self, options: BackupOptions) -> BackupInfo:
         """Create a local backup"""
         backup_id = str(uuid.uuid4())
@@ -58,39 +83,73 @@ class LocalBackupAdapter(BackupAdapter):
                 f"Backup source file not found: {options.backupPath}"
             )
 
-        processed_path = source_path
+        intermediate: Optional[Path] = None
+        processed_path: Path
 
-        # Apply compression if requested (Rust/PyO3 when available)
-        if options.compression == "gzip":
+        compression = (options.compression or "none").lower()
+        if compression == "gzip":
             compressed_path = self.base_path / f"{original_filename}.gz"
             gzip_compress_file(source_path, compressed_path)
             processed_path = compressed_path
-            final_filename += ".gz"
+            final_filename = f"{original_filename}.gz"
+            intermediate = compressed_path
+        elif compression == "zstd":
+            compressed_path = self.base_path / f"{original_filename}.zst"
+            zstd_compress_file(source_path, compressed_path)
+            processed_path = compressed_path
+            final_filename = f"{original_filename}.zst"
+            intermediate = compressed_path
         else:
-            # Copy to backup directory
+            compression = "none"
             final_path = self.base_path / final_filename
             shutil.copy2(source_path, final_path)
             processed_path = final_path
 
-        # Apply encryption if requested (placeholder - implement with cryptography)
-        if options.encryption and options.encryptionKey:
-            # TODO: Implement encryption
-            final_filename += ".enc"
+        encrypted = False
+        if options.encryption:
+            if not options.encryptionKey:
+                raise ValueError(
+                    "encryption=True requires encryptionKey (passphrase)"
+                )
+            enc_path = self.base_path / f"{final_filename}.enc"
+            encrypt_file(processed_path, enc_path, options.encryptionKey)
+            if intermediate is not None and intermediate.exists():
+                intermediate.unlink(missing_ok=True)
+                meta_path_for(intermediate).unlink(missing_ok=True)
+            elif processed_path != source_path and processed_path.exists():
+                # Unencrypted copy in backup dir — replace with ciphertext
+                if processed_path != enc_path:
+                    processed_path.unlink(missing_ok=True)
+            processed_path = enc_path
+            final_filename = f"{final_filename}.enc"
+            encrypted = True
 
         size = processed_path.stat().st_size
         checksum = sha256_file(processed_path)
         created_at = datetime.now()
         metadata = {
             "id": backup_id,
-            "compression": options.compression or "none",
-            "encryption": options.encryption or False,
+            "compression": compression,
+            "encryption": encrypted,
+            "encryptionScheme": ENCRYPTION_SCHEME if encrypted else None,
             "databaseType": options.databaseType,
             "connectionId": options.connectionId,
             "connectionName": options.connectionName,
             "sha256": checksum,
             "createdAt": created_at.isoformat(),
         }
+        # Never persist the passphrase
         self._write_meta(processed_path, metadata)
+
+        info_meta: Dict[str, Any] = {
+            "compression": compression,
+            "encryption": encrypted,
+            "databaseType": options.databaseType,
+            "connectionId": options.connectionId,
+            "sha256": checksum,
+        }
+        if encrypted:
+            info_meta["encryptionScheme"] = ENCRYPTION_SCHEME
 
         return BackupInfo(
             id=backup_id,
@@ -99,30 +158,69 @@ class LocalBackupAdapter(BackupAdapter):
             size=size,
             createdAt=created_at,
             status="completed",
-            metadata={
-                "compression": metadata["compression"],
-                "encryption": metadata["encryption"],
-                "databaseType": options.databaseType,
-                "connectionId": options.connectionId,
-                "sha256": checksum,
-            },
+            metadata=info_meta,
         )
 
-    async def restore_backup(self, backup_info: BackupInfo) -> str:
-        """Restore a local backup"""
+    async def restore_backup(
+        self,
+        backup_info: BackupInfo,
+        encryption_key: Optional[str] = None,
+    ) -> str:
+        """Restore a local backup; returns a local payload path (may be temp)."""
         backup_path = Path(backup_info.path)
         if not backup_path.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
 
-        # Handle decompression (Rust/PyO3 when available)
-        if backup_info.metadata.get("compression") == "gzip":
-            import tempfile
+        metadata = backup_info.metadata or {}
+        passphrase = encryption_key or metadata.get("encryptionKey")
+        temps: List[Path] = []
+        current = backup_path
 
-            temp_path = Path(tempfile.mktemp(suffix=".backup"))
-            gzip_decompress_file(backup_path, temp_path)
-            return str(temp_path)
+        try:
+            if metadata.get("encryption"):
+                if not passphrase:
+                    raise ValueError(
+                        "Encrypted backup requires encryption_key / encryptionKey"
+                    )
+                fd, temp_name = tempfile.mkstemp(suffix=".dec.backup")
+                os.close(fd)
+                dec_path = Path(temp_name)
+                temps.append(dec_path)
+                decrypt_file(current, dec_path, str(passphrase))
+                current = dec_path
 
-        return str(backup_path)
+            compression = str(metadata.get("compression") or "none").lower()
+            if compression == "gzip":
+                fd, temp_name = tempfile.mkstemp(suffix=".backup")
+                os.close(fd)
+                out_path = Path(temp_name)
+                gzip_decompress_file(current, out_path)
+                if current in temps:
+                    current.unlink(missing_ok=True)
+                    temps.remove(current)
+                temps.append(out_path)
+                return str(out_path)
+            if compression == "zstd":
+                fd, temp_name = tempfile.mkstemp(suffix=".backup")
+                os.close(fd)
+                out_path = Path(temp_name)
+                zstd_decompress_file(current, out_path)
+                if current in temps:
+                    current.unlink(missing_ok=True)
+                    temps.remove(current)
+                temps.append(out_path)
+                return str(out_path)
+
+            # Decrypted plaintext temp or original path
+            if current in temps:
+                # Leave temp for caller; do not delete in finally
+                temps.remove(current)
+                return str(current)
+            return str(current)
+        except Exception:
+            for path in temps:
+                path.unlink(missing_ok=True)
+            raise
 
     async def list_backups(self) -> list[BackupInfo]:
         """List all local backups"""
@@ -136,20 +234,26 @@ class LocalBackupAdapter(BackupAdapter):
 
             stored = self._read_meta(backup_file) or {}
             backup_id = str(stored.get("id") or uuid.uuid4())
-            compression = stored.get("compression")
-            if compression is None:
-                compression = "gzip" if backup_file.suffix == ".gz" else "none"
+            compression = self._infer_compression(backup_file, stored)
             encryption = stored.get("encryption")
             if encryption is None:
-                encryption = backup_file.suffix == ".enc"
+                encryption = backup_file.name.endswith(".enc")
 
             metadata: Dict[str, Any] = {
                 "compression": compression,
                 "encryption": bool(encryption),
             }
-            for key in ("databaseType", "connectionId", "connectionName", "sha256"):
+            for key in (
+                "databaseType",
+                "connectionId",
+                "connectionName",
+                "sha256",
+                "encryptionScheme",
+            ):
                 if key in stored and stored[key] is not None:
                     metadata[key] = stored[key]
+            if metadata["encryption"] and "encryptionScheme" not in metadata:
+                metadata["encryptionScheme"] = ENCRYPTION_SCHEME
 
             created_at = datetime.fromtimestamp(backup_file.stat().st_mtime)
             created_raw = stored.get("createdAt")

@@ -51,16 +51,17 @@ Backup → export → compress/encrypt → adapter → storage
 
 - Crate: `native/db_storage_native` (Rust + PyO3 / maturin, `abi3-py310`)
 - Python API: `db_storage_manager.native` — feature-detects `db_storage_native`, else pure Python
-- Wired into: local backup gzip + SHA-256 metadata/sidecars, backup checksum verification and restore dry-run, data comparison fingerprints, query timing aggregates
+- Wired into: local backup gzip/zstd + optional DSMENC1 encryption, SHA-256 metadata/sidecars, backup checksum verification and restore dry-run, data comparison fingerprints, query timing aggregates
+- Encryption: `DSMENC1` AES-256-GCM (chunked) with PBKDF2-HMAC-SHA256; passphrase never stored in sidecars
 - Install: prebuilt wheels from GitHub Releases (no Rust), or `maturin develop --release` for local builds (see [installation.md](installation.md))
 - CI: `.github/workflows/native-wheels.yml`
 
 ## Technology stack
 
 - Python 3.10+, PyQt6 / PyQt6-Charts
-- Optional Rust extension for compression, checksums, and parallel helpers
+- Optional Rust extension for gzip/zstd, AES-GCM file encryption, checksums, and parallel helpers
 - Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional oracledb (Thin/Thick), pyodbc (+ ODBC Driver 18), clickhouse-driver, influxdb-client
-- cryptography (Fernet), paramiko, boto3, Google API client, schedule, pandas/numpy/matplotlib
+- cryptography (Fernet + AESGCM), zstandard (Python zstd fallback), paramiko, boto3, Google API client, schedule, pandas/numpy/matplotlib
 
 ## Packaging and CI
 

@@ -1,14 +1,14 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ backup verification UX on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ native zstd/encryption on `main`, 2026-10-25). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Extend native helpers to zstd compression and optional backup-file encryption offload
+- Web UI / REST companion (desktop remains primary)
 
 ## Next
 
-- Web UI / REST companion (desktop remains primary)
+- _(vacant — promote from Later when Web/REST companion ships)_
 
 ## Later
 
@@ -42,6 +42,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Native zstd compress/decompress + optional backup-file encryption offload (`DSMENC1` AES-256-GCM + PBKDF2-HMAC-SHA256; Rust/PyO3 with `zstandard` / `cryptography` Python fallbacks); wired into local create/restore/verify/dry-run; `db_storage_native` 0.2.0 (`tests/test_backup_zstd_encrypt.py`, `tests/test_native.py`) (post-1.0.5)
 - Stronger backup verification UX: local `.meta.json` SHA-256 sidecars, `BackupManager.verify_backup_checksum` / `verify_backups_parallel` status fields, `dry_run_restore` (checksum → optional gzip decompress → SQLite header + `PRAGMA integrity_check`), Restore tab Verify Checksum / Verify All / Dry-run Restore with pass/fail coloring; unit + offscreen Qt smoke (`tests/test_backup_verification.py`) (post-1.0.5)
 - SQL engine connection pooling: `SQLEnginePool` with checkout/release, per-profile max size, close on app shutdown; wired through `DatabaseConnectionFactory.acquire` / `release` into dashboard, query, backups, monitoring, connections probe; real SQLite pool tests (`tests/test_connection_pool.py`) (post-1.0.5)
 - Dashboard customization: watched summary metrics + table column toggles, named saved layouts (Apply / Save / Save As / Delete / Reset), last-connection restore; SecureStore `dashboard_layout` prefs; unit + offscreen Qt restore-after-restart smoke (`tests/test_dashboard_layout.py`) (post-1.0.5)

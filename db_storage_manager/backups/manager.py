@@ -101,10 +101,13 @@ class BackupManager:
         adapter: BackupAdapter,
         backup_info: BackupInfo,
         connection_config: ConnectionConfig,
+        encryption_key: Optional[str] = None,
     ) -> None:
         """Restore a backup to a database connection"""
         # Download backup from adapter if needed
-        local_backup_path = await adapter.restore_backup(backup_info)
+        local_backup_path = await adapter.restore_backup(
+            backup_info, encryption_key=encryption_key
+        )
 
         try:
             db_connection = await DatabaseConnectionFactory.acquire(connection_config)
@@ -253,18 +256,26 @@ class BackupManager:
             )
         return results
 
-    def dry_run_restore(self, backup_info: BackupInfo) -> Dict[str, Any]:
+    def dry_run_restore(
+        self,
+        backup_info: BackupInfo,
+        encryption_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Validate a backup can be restored without writing to a live database.
 
-        Steps: SHA-256 verify → optional gzip decompress to a temp file →
-        payload readability checks (SQLite header + PRAGMA integrity_check when
-        the payload is a SQLite database).
+        Steps: SHA-256 verify → optional decrypt (DSMENC1) → optional
+        gzip/zstd decompress to a temp file → payload readability checks
+        (SQLite header + PRAGMA integrity_check when the payload is SQLite).
         """
         import os
         import sqlite3
         import tempfile
 
-        from ..native import gzip_decompress_file
+        from ..native import (
+            decrypt_file,
+            gzip_decompress_file,
+            zstd_decompress_file,
+        )
 
         checksum = self.verify_backup_checksum(backup_info)
         if not checksum.get("ok"):
@@ -278,16 +289,39 @@ class BackupManager:
 
         source = Path(backup_info.path)
         metadata = backup_info.metadata or {}
-        temp_path: Optional[Path] = None
+        passphrase = encryption_key or metadata.get("encryptionKey")
+        temps: List[Path] = []
         try:
-            if metadata.get("compression") == "gzip":
+            current = source
+            if metadata.get("encryption"):
+                if not passphrase:
+                    return {
+                        "ok": False,
+                        "status": "fail",
+                        "stage": "decrypt",
+                        "checksum": checksum,
+                        "error": "Encrypted backup requires encryption_key",
+                    }
+                fd, temp_name = tempfile.mkstemp(suffix=".dryrun.dec")
+                os.close(fd)
+                dec_path = Path(temp_name)
+                temps.append(dec_path)
+                decrypt_file(current, dec_path, str(passphrase))
+                current = dec_path
+
+            compression = str(metadata.get("compression") or "none").lower()
+            if compression in ("gzip", "zstd"):
                 fd, temp_name = tempfile.mkstemp(suffix=".dryrun.backup")
                 os.close(fd)
                 temp_path = Path(temp_name)
-                gzip_decompress_file(source, temp_path)
+                temps.append(temp_path)
+                if compression == "gzip":
+                    gzip_decompress_file(current, temp_path)
+                else:
+                    zstd_decompress_file(current, temp_path)
                 payload = temp_path
             else:
-                payload = source
+                payload = current
 
             if not payload.exists() or payload.stat().st_size == 0:
                 return {
@@ -352,5 +386,5 @@ class BackupManager:
                 "error": str(exc),
             }
         finally:
-            if temp_path is not None:
+            for temp_path in temps:
                 temp_path.unlink(missing_ok=True)

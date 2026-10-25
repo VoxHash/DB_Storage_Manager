@@ -5,7 +5,7 @@ Google Drive backup adapter
 import json
 import tempfile
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from datetime import datetime
 import uuid
 from google.oauth2 import service_account
@@ -95,7 +95,11 @@ class GoogleDriveBackupAdapter(BackupAdapter):
         except HttpError as error:
             raise RuntimeError(f"Google Drive upload failed: {error}")
 
-    async def restore_backup(self, backup_info: BackupInfo) -> str:
+    async def restore_backup(
+        self,
+        backup_info: BackupInfo,
+        encryption_key: Optional[str] = None,
+    ) -> str:
         """Restore a Google Drive backup"""
         import tempfile
         import io
