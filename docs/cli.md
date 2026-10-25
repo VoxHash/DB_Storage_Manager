@@ -16,6 +16,8 @@ python -m db_storage_manager.main
 
 Both call `db_storage_manager.main:main`, which starts a PyQt6 `QApplication`, initializes i18n/theme managers, and shows `MainWindow`.
 
+When RBAC is active (`users.enc` has accounts), launch shows a **Sign in** dialog before the main window. Credentials for a workstation bootstrap are typically kept in gitignored `.env.rbac.local` (see `.env.rbac.local.example`).
+
 ## RBAC bootstrap (shared workstation)
 
 Create the first local admin (writes encrypted `users.enc`):
@@ -27,7 +29,7 @@ python -m db_storage_manager.security.bootstrap --username admin
 # password via prompt, or DSM_BOOTSTRAP_USERNAME / DSM_BOOTSTRAP_PASSWORD
 ```
 
-After bootstrap, start the desktop app and sign in. Manage additional users under **Settings → Users & RBAC**.
+After bootstrap, start the desktop app and sign in with that admin. Manage additional users under **Settings → Users & RBAC**. Store the password only in a local gitignored file such as `.env.rbac.local` (mode `600`); never commit it.
 
 ## REST + Web UI companion
 

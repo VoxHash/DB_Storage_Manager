@@ -32,6 +32,6 @@ db-storage-manager-bootstrap --username admin --password 'choose-a-long-password
 
 Or use **Settings → Users & RBAC → Bootstrap first admin…** in the GUI.
 
-After bootstrap, the desktop prompts for sign-in. The REST companion requires HTTP Basic (username/password) or a configured `DSM_API_TOKEN` (treated as system admin). Permissions are enforced per role — viewers cannot mutate connections, manage plugins, change settings, or run restore dry-runs.
+After bootstrap, the desktop prompts for sign-in on every launch. Keep the admin password in a gitignored local file such as `.env.rbac.local` (mode `600`; see `.env.rbac.local.example`) — never commit secrets. The REST companion requires HTTP Basic (username/password) or a configured `DSM_API_TOKEN` (treated as system admin). Permissions are enforced per role — viewers cannot mutate connections, manage plugins, change settings, or run restore dry-runs.
 
 Architecture and encryption details: [docs/architecture.md](docs/architecture.md)
