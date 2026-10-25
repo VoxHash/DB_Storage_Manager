@@ -33,9 +33,10 @@ DB Storage Manager is a cross-platform desktop application built with Python and
 ### Cross-cutting
 
 - `themes/` — light/dark/dracula-style themes
-- `i18n/` — language manager
-- `ssh/` — Paramiko tunnels
-- `monitoring/`, `analysis/`, `cloud/`, `data/`, `plugins/` — advanced features shipped in-tree
+- `i18n/` — language manager (About strings track release `1.0.5`)
+- `ssh/` — Paramiko tunnels (`SSHTunnel`, `TunnelManager`; Connections UI Open/Close Tunnel)
+- `monitoring/` — `DatabaseMonitor.poll_once()`, `AlertManager` dedupe/acknowledge, GUI status banner
+- `analysis/`, `cloud/`, `data/`, `plugins/` — advanced features shipped in-tree
 
 ## Data flow
 

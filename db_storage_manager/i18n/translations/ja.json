@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "DBストレージマネージャー",
-    "version": "バージョン 1.0.0"
+    "version": "バージョン 1.0.5"
   },
   "menu": {
     "file": "&ファイル",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "DB Storage Managerについて",
-    "version": "DB Storage Manager v1.0.0",
+    "version": "DB Storage Manager v1.0.5",
     "description": "データベースストレージとバックアップを管理するプロフェッショナルなデスクトップアプリケーション。",
     "built_with": "PythonとPyQt6で構築。",
     "copyright": "© 2024 VoxHash"

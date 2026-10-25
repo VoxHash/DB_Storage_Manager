@@ -1,0 +1,37 @@
+{
+  "generated_note": "Copy to connections.local.json (gitignored) or set DSM_E2E_CONNECTIONS_FILE. Never commit real passwords.",
+  "connections": [
+    {
+      "id": "example-project",
+      "name": "example.project",
+      "project": "example.project",
+      "source_root": "/path/to/sibling/project",
+      "profiles": [
+        {
+          "id": "example-database-url",
+          "name": "example.project (DATABASE_URL)",
+          "type": "postgresql",
+          "host": "127.0.0.1",
+          "port": 5432,
+          "database": "app",
+          "username": "app",
+          "password": "",
+          "source_key": "DATABASE_URL",
+          "safe_mode": true
+        },
+        {
+          "id": "example-sqlite",
+          "name": "example.project (sqlite)",
+          "type": "sqlite",
+          "host": null,
+          "port": null,
+          "database": "/absolute/path/to/app.db",
+          "username": "",
+          "password": "",
+          "source_key": "DATABASE_URL",
+          "safe_mode": true
+        }
+      ]
+    }
+  ]
+}

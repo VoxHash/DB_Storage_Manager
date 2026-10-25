@@ -99,3 +99,7 @@ temp/
 native/**/target/
 dist-native/
 *.pyd
+
+# Local E2E / sibling DB credentials (never commit)
+.env.e2e.local
+tests/fixtures/connections.local.json

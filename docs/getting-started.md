@@ -58,7 +58,13 @@ Credentials are encrypted with Fernet and stored under the user data directory (
 3. Keep **Safe Mode** enabled for production databases (blocks non-SELECT statements)
 4. Execute and inspect results / explain plans when available
 
-### 4. Backups
+### 4. Monitoring
+
+1. Open the **Monitoring** tab
+2. Select a saved connection and **Start Monitoring**
+3. Review the health banner, metrics, and alerts; acknowledge as needed
+
+### 5. Backups
 
 1. Open the **Backups** tab
 2. Choose Local, S3, or Google Drive adapter

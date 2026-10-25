@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Andmebaasi Hoidla Haldur",
-    "version": "Versioon 1.0.0"
+    "version": "Versioon 1.0.5"
   },
   "menu": {
     "file": "&Fail",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "Teave DB Storage Managerist",
-    "version": "DB Storage Manager v1.0.0",
+    "version": "DB Storage Manager v1.0.5",
     "description": "Professionaalne töölauarakendus andmebaasi hoidla ja varukoopiate haldamiseks.",
     "built_with": "Loodud Pythoni ja PyQt6 abil.",
     "copyright": "© 2024 VoxHash"

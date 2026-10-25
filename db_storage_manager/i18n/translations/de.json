@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "DB-Speicher-Manager",
-    "version": "Version 1.0.0"
+    "version": "Version 1.0.5"
   },
   "menu": {
     "file": "&Datei",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "Über DB Storage Manager",
-    "version": "DB Storage Manager v1.0.0",
+    "version": "DB Storage Manager v1.0.5",
     "description": "Eine professionelle Desktop-Anwendung zur Verwaltung von Datenbankspeicher und Backups.",
     "built_with": "Erstellt mit Python und PyQt6.",
     "copyright": "© 2024 VoxHash"

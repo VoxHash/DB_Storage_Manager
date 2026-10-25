@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Gerenciador de Armazenamento de BD",
-    "version": "Versão 1.0.0"
+    "version": "Versão 1.0.5"
   },
   "menu": {
     "file": "&Arquivo",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "Sobre o DB Storage Manager",
-    "version": "DB Storage Manager v1.0.0",
+    "version": "DB Storage Manager v1.0.5",
     "description": "Um aplicativo de desktop profissional para gerenciar armazenamento de banco de dados e backups.",
     "built_with": "Construído com Python e PyQt6.",
     "copyright": "© 2024 VoxHash"

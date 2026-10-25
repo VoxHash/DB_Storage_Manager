@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "DB 스토리지 관리자",
-    "version": "버전 1.0.0"
+    "version": "버전 1.0.5"
   },
   "menu": {
     "file": "&파일",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "DB 스토리지 관리자 정보",
-    "version": "DB 스토리지 관리자 v1.0.0",
+    "version": "DB 스토리지 관리자 v1.0.5",
     "description": "데이터베이스 스토리지 및 백업을 관리하는 전문 데스크톱 애플리케이션입니다.",
     "built_with": "Python 및 PyQt6로 구축되었습니다.",
     "copyright": "© 2024 VoxHash"

@@ -1,14 +1,13 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.5** (+ monitoring alerts UX on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status as of **1.0.5** (+ docs kit sync + sibling connection probes on `main`, 2026-10-24). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
 
 ## Now (1.x patch / minor)
 
-- Keep documentation kit synchronized with release tags
+- Real-time monitoring refinements and actionable alerts (notification channels, threshold editing UI)
 
 ## Next
 
-- Real-time monitoring refinements and actionable alerts (notification channels, threshold editing UI)
 - Query optimization suggestions surfaced in the Query Console
 - Dashboard customization (saved layouts / watched metrics)
 - Connection pooling for long-lived SQL engine sessions
@@ -48,6 +47,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- Documentation kit synchronized with **1.0.5** release tags (README features/SSH/monitoring, docs index release alignment, i18n About strings, FAQ/configuration for optional live probes); gitignored sibling-DB fixture + `tests/test_real_connections.py` (post-1.0.5)
 - Monitoring/alerts UX: status banner with health + alert counts, severity-colored alerts table with acknowledge/refresh, health detail column, timer-driven `DatabaseMonitor.poll_once()` wired to real collectors, AlertManager id/dedupe/counts, unit + offscreen Qt smoke tests (post-1.0.5)
 - Connections UI SSH tunnel UX: bastion host/user/key/password/port fields, open/close status, Paramiko local port forward, encrypted `ssh_config` + SecureStore bastion index, unit tests with mocked network (post-1.0.5)
 - Hardened optional engine installs: `oracledb` (Thin default / Instant Client only for Thick via `ORACLE_CLIENT_LIB_DIR`), clearer missing-driver `ImportError`s pointing at setup extras, SQL Server ODBC Driver 18→17 selection, platform Instant Client / ODBC docs (incl. Arch/Garuda helper), extras + missing-driver tests (1.0.5)

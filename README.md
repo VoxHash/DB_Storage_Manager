@@ -14,6 +14,8 @@
 - **Multi-Database Support** — PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis; optional Oracle, SQL Server, ClickHouse, InfluxDB
 - **Storage Analysis Dashboard** — Metrics, table/index sizing, growth-oriented views
 - **Secure Connection Management** — Fernet-encrypted credential storage
+- **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
+- **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
 - **Backup & Restore** — Local, S3, and Google Drive adapters with scheduling
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
@@ -82,10 +84,11 @@ Developers building from source still need Rust + maturin (`pip install -e ".[na
 
 ## Usage
 
-1. **Connections** — add/test/save encrypted profiles
+1. **Connections** — add/test/save encrypted profiles (optional SSH bastion tunnel)
 2. **Dashboard** — analyze storage for a selected connection
 3. **Query Console** — run queries; keep Safe Mode on for production
-4. **Backups** — local/S3/Google Drive with optional schedules
+4. **Monitoring** — health metrics and acknowledgeable alerts
+5. **Backups** — local/S3/Google Drive with optional schedules
 
 Details: [docs/usage.md](docs/usage.md)
 
@@ -115,7 +118,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Current focus: monitoring/alerts presentation polish and keeping the documentation kit synchronized with release tags.
+See [ROADMAP.md](ROADMAP.md). Current focus: monitoring refinements (notification channels / threshold UI), Query Console optimization hints, and dashboard customization.
 
 ## Contributing
 

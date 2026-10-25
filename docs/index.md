@@ -24,6 +24,10 @@ Professional desktop application for visualizing and managing database storage, 
 | [Example 01 — SQLite storage analysis](examples/example-01.md) | Local SQLite connect, query, and analyze |
 | [Example 02 — Encrypted connection store](examples/example-02.md) | Save and load credentials with Fernet encryption |
 
+## Release alignment
+
+Package / docs target version **1.0.5** (`db_storage_manager.__version__`, `setup.py`, GitHub Release `v1.0.5`). Post-tag work on `main` (SSH tunnel UX, monitoring alerts UX, optional live connection probes) is tracked under **Unreleased** in [CHANGELOG.md](../CHANGELOG.md) until the next tag.
+
 ## Project links
 
 - [README](../README.md)

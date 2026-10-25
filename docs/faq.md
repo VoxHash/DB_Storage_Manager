@@ -37,6 +37,16 @@ Older docs and extras pointed at obsolete `cx_Oracle`, which always needed Oracl
 
 Email contact@voxhash.dev — see [SECURITY.md](../SECURITY.md).
 
+## How do I run live connection probes against real databases?
+
+Copy `tests/fixtures/connections.local.json.example` to `tests/fixtures/connections.local.json` (gitignored), fill real host/engine/database/user/password from your local projects, then:
+
+```bash
+pytest -v tests/test_real_connections.py
+```
+
+Unreachable ports and missing SQLite files are skipped. Probes call `test_connection()` only (Safe Mode / no writes). Optional: `DSM_E2E_CONNECTIONS_FILE` and `DSM_E2E_CONNECT_TIMEOUT` — see [configuration.md](configuration.md).
+
 ## How do I contribute?
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md). Use Conventional Commits and the PR template under `.github/`.

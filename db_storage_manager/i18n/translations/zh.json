@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "数据库存储管理器",
-    "version": "版本 1.0.0"
+    "version": "版本 1.0.5"
   },
   "menu": {
     "file": "&文件",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "关于数据库存储管理器",
-    "version": "数据库存储管理器 v1.0.0",
+    "version": "数据库存储管理器 v1.0.5",
     "description": "用于管理数据库存储和备份的专业桌面应用程序。",
     "built_with": "使用Python和PyQt6构建。",
     "copyright": "© 2024 VoxHash"

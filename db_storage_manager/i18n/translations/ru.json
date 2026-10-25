@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Менеджер хранилища БД",
-    "version": "Версия 1.0.0"
+    "version": "Версия 1.0.5"
   },
   "menu": {
     "file": "&Файл",
@@ -119,7 +119,7 @@
   },
   "about": {
     "title": "О программе DB Storage Manager",
-    "version": "DB Storage Manager v1.0.0",
+    "version": "DB Storage Manager v1.0.5",
     "description": "Профессиональное настольное приложение для управления хранилищем баз данных и резервными копиями.",
     "built_with": "Создано с использованием Python и PyQt6.",
     "copyright": "© 2024 VoxHash"

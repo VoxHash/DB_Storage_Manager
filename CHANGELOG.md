@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Optional live sibling-DB connection probes: gitignored `tests/fixtures/connections.local.json` (example template committed), `DSM_E2E_CONNECTIONS_FILE` / `DSM_E2E_CONNECT_TIMEOUT`, and `tests/test_real_connections.py` (SELECT-only `test_connection()`, skip when unreachable)
 - Monitoring tab presentation: live status banner (health + alert counts), severity-colored alerts with source column, **Acknowledge Selected** / **Acknowledge All** / **Refresh Now**, health overall label + detail column, human-readable metric labels
 - `DatabaseMonitor.poll_once()` for Qt-timer / script one-shot collect → health → threshold evaluation; `get_status_summary()` for banner data
 - `Alert` stable `id`, `AlertManager.emit_alert` / `acknowledge_by_id` / `acknowledge_all` / `get_counts`, active-alert dedupe on threshold re-checks
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit tests for SSH validation, mocked Paramiko connect/auth paths, TunnelManager lifecycle, and SecureStore SSH settings (`tests/test_ssh_tunnel.py`)
 
 ### Changed
+- Documentation kit aligned with **1.0.5** (README features for SSH/monitoring, docs index release note, FAQ/configuration for E2E fixtures, i18n About strings → 1.0.5)
 - Monitoring UI collects via timer-driven `poll_once()` instead of discarding a short-lived asyncio loop after `start_monitoring()`
 - Health-failure alerts go through `AlertManager.emit_alert` (callbacks + dedupe) instead of a silent list append
 
