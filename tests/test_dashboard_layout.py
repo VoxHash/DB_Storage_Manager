@@ -164,3 +164,101 @@ def test_dashboard_widget_offscreen_smoke(isolated_secure_store, monkeypatch):
     widget.close()
     widget2.close()
     app.processEvents()
+
+
+def test_dashboard_layout_restore_after_restart(isolated_secure_store, monkeypatch):
+    """End-to-end: save non-default layout, simulate app restart via SecureStore disk reload."""
+    store, data_dir = isolated_secure_store
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
+
+    from db_storage_manager.gui.dashboard import DashboardWidget
+    from db_storage_manager.security import store as store_mod
+    from db_storage_manager.security.store import SecureStore
+
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: 0))
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(lambda *a, **k: 0))
+    monkeypatch.setattr(QMessageBox, "critical", staticmethod(lambda *a, **k: 0))
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    # Drive Save As through the real widget path (QInputDialog)
+    monkeypatch.setattr(
+        QInputDialog,
+        "getText",
+        staticmethod(lambda *a, **k: ("Ops glance", True)),
+    )
+
+    app = QApplication.instance() or QApplication([])
+    connections = [
+        {
+            "id": "restart-conn",
+            "name": "Restart SQLite",
+            "type": "sqlite",
+            "database": ":memory:",
+        }
+    ]
+
+    widget = DashboardWidget(connections)
+    # Non-default watched metrics / columns
+    widget._metric_checks["indexes"].setChecked(False)
+    widget._metric_checks["tables"].setChecked(False)
+    widget._column_checks["bloat"].setChecked(False)
+    widget._column_checks["index_size"].setChecked(False)
+    widget.connection_combo.setCurrentIndex(1)
+    widget._save_layout_as()
+
+    assert widget.layout_prefs["active_layout"] == "Ops glance"
+    assert widget.layout_prefs["watched_metrics"] == ["total_size"]
+    assert widget.layout_prefs["table_columns"] == ["name", "size", "rows"]
+    assert (data_dir / "settings.enc").is_file()
+    widget.close()
+    app.processEvents()
+
+    # Simulate restart: fresh SecureStore + widget reading the same on-disk prefs
+    reopened = SecureStore()
+    disk_layout = reopened.get_settings()["dashboard_layout"]
+    assert disk_layout["active_layout"] == "Ops glance"
+    assert disk_layout["watched_metrics"] == ["total_size"]
+    assert disk_layout["table_columns"] == ["name", "size", "rows"]
+    assert disk_layout["last_connection_id"] == "restart-conn"
+    assert disk_layout["saved_layouts"]["Ops glance"]["watched_metrics"] == [
+        "total_size"
+    ]
+    assert store_mod.SETTINGS_FILE == data_dir / "settings.enc"
+
+    restored = DashboardWidget(connections)
+    prefs = restored.layout_prefs
+    assert prefs["active_layout"] == "Ops glance"
+    assert prefs["watched_metrics"] == ["total_size"]
+    assert prefs["table_columns"] == ["name", "size", "rows"]
+    assert prefs["last_connection_id"] == "restart-conn"
+    assert restored.layout_combo.currentText() == "Ops glance"
+    assert restored.connection_combo.currentIndex() == 1
+    assert restored._metric_checks["total_size"].isChecked() is True
+    assert restored._metric_checks["tables"].isChecked() is False
+    assert restored._metric_checks["indexes"].isChecked() is False
+    assert restored._column_checks["bloat"].isChecked() is False
+    assert restored._column_checks["index_size"].isChecked() is False
+    # isHidden() reflects setVisible() without requiring the parent to be shown
+    assert restored._metric_labels["total_size"].isHidden() is False
+    assert restored._metric_labels["tables"].isHidden() is True
+    assert restored._metric_labels["indexes"].isHidden() is True
+    assert restored.tables_table.isColumnHidden(
+        list(DASHBOARD_COLUMN_KEYS).index("bloat")
+    )
+    assert restored.tables_table.isColumnHidden(
+        list(DASHBOARD_COLUMN_KEYS).index("index_size")
+    )
+    assert not restored.tables_table.isColumnHidden(
+        list(DASHBOARD_COLUMN_KEYS).index("name")
+    )
+
+    # Original fixture store still agrees with the restored widget
+    assert store.get_settings()["dashboard_layout"]["active_layout"] == "Ops glance"
+
+    restored.close()
+    app.processEvents()
