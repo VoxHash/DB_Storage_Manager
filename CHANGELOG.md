@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
 
 ### Added
+- **Proton Drive cloud backup** adapter (`db_storage_manager.backups.protondrive`): real upload/list/download/delete/verify via rclone `protondrive` remote; prefers DSMENC1-encrypted payloads + SHA-256 sidecar before upload; credentials from SecureStore `proton_drive`, `.env.protondrive.local`, or env (`DSM_PROTONDRIVE_*` / `RCLONE_PROTONDRIVE_*`) — never committed; `ProtonDriveNotConfiguredError` when rclone or account config is missing
+- Backups UI: destination selector (Local / Proton Drive), encryption passphrase field, Proton status line, and **Refresh Proton Drive** list/verify/dry-run path
+- `.env.protondrive.local.example` plus configuration/usage/installation docs for live rclone setup
+- Unit tests with an in-memory rclone test double at the HTTP/rclone boundary (`tests/test_proton_drive_backup.py`)
 - Offscreen Qt shell smoke tests for main window navigation + login, plus post-sign-in click-through of all seven nav sections and Atmospheric / Light / Dracula theme rotation (`tests/test_gui_shell.py`)
 - **Multi-user / RBAC** for shared workstation deployments: local accounts with PBKDF2-HMAC-SHA256 password hashes in encrypted `users.enc`, roles `admin` / `user` / `viewer` / `guest`, and real permission checks on connections, backups, settings, plugins, and the REST companion
 - Desktop **sign-in** when RBAC is active; Settings **Users & RBAC** panel to bootstrap the first admin, add users, change roles, reset passwords, enable/disable, and delete (with last-admin guards)

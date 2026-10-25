@@ -60,9 +60,23 @@ No required secrets for core operation. Useful optional variables:
 | `DSM_E2E_CONNECTIONS_FILE` | Absolute path to a local JSON fixture of real DB profiles for optional live probes (`tests/test_real_connections.py`) |
 | `DSM_E2E_CONNECT_TIMEOUT` | Seconds for each live `test_connection()` probe (default `8`) |
 | AWS / Google credentials | Only for S3 or Google Drive backup adapters |
+| `DSM_PROTONDRIVE_USERNAME` / `DSM_PROTONDRIVE_PASSWORD` | Proton Drive account for rclone-backed cloud backups (or use an existing rclone `protondrive` remote) |
+| `DSM_PROTONDRIVE_REMOTE` | rclone remote name (default `protondrive`) |
+| `DSM_PROTONDRIVE_PATH` | Folder on Proton Drive (default `db-storage-manager-backups`) |
+| `DSM_PROTONDRIVE_RCLONE` | rclone binary path (default `rclone` on `PATH`) |
+| `DSM_PROTONDRIVE_OTP_SECRET` / `DSM_PROTONDRIVE_2FA` | Optional TOTP secret or one-shot 2FA code |
+| `RCLONE_PROTONDRIVE_*` | Alternate env names accepted by rclone itself |
 | LDAP / MFA related settings | Only when auth features are enabled |
 
-Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.e2e.local`, and `tests/fixtures/connections.local.json` are gitignored. Ship only `tests/fixtures/connections.local.json.example` (empty password placeholders) and `.env.e2e.local.example`.
+Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
+
+### Proton Drive backups
+
+1. Install [rclone](https://rclone.org/install/) with the `protondrive` backend.
+2. Log into Proton Drive once in a browser so account keys exist (rclone requirement).
+3. Either run `rclone config` and create a `protondrive` remote, **or** copy `.env.protondrive.local.example` → `.env.protondrive.local` and set username/password (optional OTP secret).
+4. Non-secret defaults (`remote`, `path`, `prefer_encryption`) can also live under SecureStore settings key `proton_drive`.
+5. Prefer encryption on: payloads are DSMENC1-encrypted and checksummed locally before upload.
 
 ## Default ports
 

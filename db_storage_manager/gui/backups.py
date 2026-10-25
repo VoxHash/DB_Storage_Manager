@@ -6,14 +6,19 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -25,7 +30,13 @@ from PyQt6.QtWidgets import (
 from ..backups.base import BackupInfo
 from ..backups.local import LocalBackupAdapter
 from ..backups.manager import BackupManager
+from ..backups.protondrive import (
+    ProtonDriveBackupAdapter,
+    ProtonDriveNotConfiguredError,
+    configuration_status as proton_drive_status,
+)
 from ..config import BACKUP_DIR
+from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
 from .utils import apply_glassmorphism
@@ -35,6 +46,7 @@ _STATUS_COLORS = {
     "fail": QColor(190, 55, 55),
     "missing_checksum": QColor(190, 140, 40),
     "not_found": QColor(190, 55, 55),
+    "not_configured": QColor(190, 140, 40),
     "unknown": QColor(120, 120, 120),
     "idle": QColor(120, 120, 120),
 }
@@ -51,20 +63,25 @@ class BackupsWidget(QWidget):
         self.backup_dir = backup_dir or BACKUP_DIR
         self._backups: List[BackupInfo] = []
         self._verify_results: Dict[str, Dict[str, Any]] = {}
+        self._list_source = "local"
         self.setObjectName("glassmorphism")
         self.init_ui()
         apply_glassmorphism(self)
         self.refresh_backups()
+        self._refresh_proton_status()
         self.apply_rbac()
 
     def apply_rbac(self) -> None:
         auth = get_auth_manager()
         can_read = auth.has_permission("backups:read")
+        can_create = auth.has_permission("backups:create")
         can_restore = auth.has_permission("backups:restore")
         self.refresh_button.setEnabled(can_read)
+        self.refresh_proton_button.setEnabled(can_read)
         self.verify_selected_button.setEnabled(can_read)
         self.verify_all_button.setEnabled(can_read)
         self.dry_run_button.setEnabled(can_restore)
+        self.create_button.setEnabled(can_create)
 
     def init_ui(self):
         """Initialize UI"""
@@ -77,7 +94,47 @@ class BackupsWidget(QWidget):
 
         create_widget = QWidget()
         create_layout = QVBoxLayout(create_widget)
-        create_layout.addWidget(QLabel(t("backups.create_backup")))
+        create_form = QFormLayout()
+        self.connection_combo = QComboBox()
+        self._reload_connection_combo()
+        create_form.addRow(t("backups.connection"), self.connection_combo)
+
+        self.adapter_combo = QComboBox()
+        self.adapter_combo.addItem(t("backups.local"), "local")
+        self.adapter_combo.addItem(t("backups.proton_drive"), "protondrive")
+        self.adapter_combo.currentIndexChanged.connect(self._refresh_proton_status)
+        create_form.addRow(t("backups.adapter"), self.adapter_combo)
+
+        self.compression_combo = QComboBox()
+        self.compression_combo.addItem(t("backups.none"), "none")
+        self.compression_combo.addItem(t("backups.gzip"), "gzip")
+        self.compression_combo.addItem(t("backups.zstd"), "zstd")
+        create_form.addRow(t("backups.compression"), self.compression_combo)
+
+        self.encrypt_checkbox = QCheckBox(t("backups.encryption"))
+        self.encrypt_checkbox.setChecked(True)
+        create_form.addRow("", self.encrypt_checkbox)
+
+        self.encryption_key_edit = QLineEdit()
+        self.encryption_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.encryption_key_edit.setPlaceholderText(
+            t("backups.encryption_key_placeholder")
+        )
+        create_form.addRow(t("backups.encryption_key"), self.encryption_key_edit)
+        create_layout.addLayout(create_form)
+
+        self.proton_status_label = QLabel("")
+        self.proton_status_label.setWordWrap(True)
+        self.proton_status_label.setObjectName("backupProtonStatus")
+        create_layout.addWidget(self.proton_status_label)
+
+        create_actions = QHBoxLayout()
+        self.create_button = QPushButton(t("backups.create"))
+        self.create_button.clicked.connect(self.create_backup)
+        create_actions.addWidget(self.create_button)
+        create_actions.addStretch()
+        create_layout.addLayout(create_actions)
+        create_layout.addStretch()
         tabs.addTab(create_widget, t("backups.create_backup"))
 
         restore_widget = QWidget()
@@ -93,6 +150,10 @@ class BackupsWidget(QWidget):
         self.refresh_button = QPushButton(t("backups.refresh"))
         self.refresh_button.clicked.connect(self.refresh_backups)
         actions.addWidget(self.refresh_button)
+
+        self.refresh_proton_button = QPushButton(t("backups.refresh_proton"))
+        self.refresh_proton_button.clicked.connect(self.refresh_proton_backups)
+        actions.addWidget(self.refresh_proton_button)
 
         self.verify_selected_button = QPushButton(t("backups.verify_checksum"))
         self.verify_selected_button.clicked.connect(self.verify_selected)
@@ -138,9 +199,123 @@ class BackupsWidget(QWidget):
     def update_connections(self, connections):
         """Update connections list"""
         self.connections = connections
+        self._reload_connection_combo()
+
+    def _reload_connection_combo(self) -> None:
+        current = self.connection_combo.currentData() if hasattr(self, "connection_combo") else None
+        self.connection_combo.clear()
+        for conn in self.connections or []:
+            if isinstance(conn, ConnectionConfig):
+                self.connection_combo.addItem(conn.name, conn)
+            elif isinstance(conn, dict):
+                name = str(conn.get("name") or conn.get("id") or "connection")
+                self.connection_combo.addItem(name, conn)
+        if current is not None:
+            for idx in range(self.connection_combo.count()):
+                if self.connection_combo.itemData(idx) == current:
+                    self.connection_combo.setCurrentIndex(idx)
+                    break
 
     def _adapter(self) -> LocalBackupAdapter:
         return LocalBackupAdapter(base_path=self.backup_dir)
+
+    def _refresh_proton_status(self) -> None:
+        t = self.i18n.translate
+        status = proton_drive_status()
+        if status.get("configured"):
+            text = t(
+                "backups.proton_ready",
+                remote=status.get("remote"),
+                path=status.get("remote_path"),
+            )
+            color = _STATUS_COLORS["pass"]
+        else:
+            text = t(
+                "backups.proton_not_configured",
+                error=status.get("error") or status.get("message") or "",
+            )
+            color = _STATUS_COLORS["not_configured"]
+        self.proton_status_label.setText(text)
+        self.proton_status_label.setStyleSheet(f"color: {color.name()};")
+
+    def _as_connection_config(self, value: Any) -> Optional[ConnectionConfig]:
+        if isinstance(value, ConnectionConfig):
+            return value
+        if isinstance(value, dict):
+            allowed = {
+                "id",
+                "name",
+                "type",
+                "host",
+                "port",
+                "database",
+                "username",
+                "password",
+                "connection_string",
+                "ssh_config",
+                "extra",
+            }
+            payload = {k: value[k] for k in allowed if k in value}
+            if not payload.get("id") or not payload.get("name") or not payload.get("type"):
+                return None
+            return ConnectionConfig(**payload)
+        return None
+
+    def create_backup(self) -> None:
+        """Create a local or Proton Drive backup for the selected connection."""
+        t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:create")
+        except PermissionDenied as exc:
+            self.proton_status_label.setText(str(exc))
+            return
+
+        connection = self._as_connection_config(self.connection_combo.currentData())
+        if connection is None:
+            self.proton_status_label.setText(t("backups.no_connection_selected"))
+            return
+
+        adapter_type = self.adapter_combo.currentData() or "local"
+        compression = self.compression_combo.currentData() or "none"
+        encrypt = self.encrypt_checkbox.isChecked()
+        enc_key = self.encryption_key_edit.text().strip() or None
+        if adapter_type == "protondrive" and encrypt and not enc_key:
+            self.proton_status_label.setText(t("backups.encryption_key_required"))
+            return
+
+        options = {
+            "compression": compression,
+            "encryption": encrypt,
+            "encryptionKey": enc_key,
+            "adapterType": adapter_type,
+        }
+        try:
+            if adapter_type == "protondrive":
+                adapter = self.backup_manager.get_adapter("protondrive")
+                if adapter is None:
+                    raise ProtonDriveNotConfiguredError(
+                        t("backups.proton_not_configured", error="adapter unavailable")
+                    )
+            else:
+                adapter = self._adapter()
+            info = asyncio.run(
+                self.backup_manager.create_backup(adapter, connection, options)
+            )
+            self.proton_status_label.setText(
+                t("backups.backup_created_detail", name=info.name, path=info.path)
+            )
+            if adapter_type == "protondrive":
+                self.refresh_proton_backups()
+            else:
+                self.refresh_backups()
+        except ProtonDriveNotConfiguredError as exc:
+            self.proton_status_label.setText(
+                t("backups.proton_not_configured", error=str(exc))
+            )
+        except Exception as exc:
+            self.proton_status_label.setText(
+                t("backups.backup_failed_detail", error=str(exc))
+            )
 
     def refresh_backups(self) -> None:
         """Reload local backups into the table."""
@@ -150,6 +325,7 @@ class BackupsWidget(QWidget):
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
+        self._list_source = "local"
         try:
             self._backups = asyncio.run(self._adapter().list_backups())
         except Exception as exc:
@@ -165,6 +341,44 @@ class BackupsWidget(QWidget):
         self._populate_table()
         self._set_status(
             t("backups.verify_idle_count", count=len(self._backups)),
+            "idle",
+        )
+
+    def refresh_proton_backups(self) -> None:
+        """List backups from Proton Drive when credentials/rclone are available."""
+        t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:read")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
+        self._list_source = "protondrive"
+        try:
+            adapter = self.backup_manager.get_adapter("protondrive")
+            if adapter is None:
+                raise ProtonDriveNotConfiguredError("Proton Drive adapter unavailable")
+            self._backups = asyncio.run(adapter.list_backups())
+        except ProtonDriveNotConfiguredError as exc:
+            self._backups = []
+            self._set_status(
+                t("backups.proton_not_configured", error=str(exc)),
+                "not_configured",
+            )
+            self._populate_table()
+            return
+        except Exception as exc:
+            self._backups = []
+            self._set_status(
+                t("backups.refresh_failed", error=str(exc)),
+                "fail",
+            )
+            self._populate_table()
+            return
+
+        self._verify_results.clear()
+        self._populate_table()
+        self._set_status(
+            t("backups.proton_listed", count=len(self._backups)),
             "idle",
         )
 
@@ -249,7 +463,20 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
 
-        result = self.backup_manager.verify_backup_checksum(backup)
+        if self._list_source == "protondrive" or (
+            backup.metadata or {}
+        ).get("destination") == "protondrive":
+            adapter = self.backup_manager.get_adapter("protondrive")
+            if isinstance(adapter, ProtonDriveBackupAdapter):
+                result = adapter.verify_remote_checksum(backup)
+            else:
+                result = {
+                    "ok": False,
+                    "status": "not_configured",
+                    "error": "Proton Drive adapter unavailable",
+                }
+        else:
+            result = self.backup_manager.verify_backup_checksum(backup)
         self._verify_results[backup.id] = result
         self._verify_results[backup.path] = result
         self._populate_table()
@@ -310,7 +537,37 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
 
-        result = self.backup_manager.dry_run_restore(backup)
+        local_info = backup
+        temp_download: Optional[Path] = None
+        try:
+            if self._list_source == "protondrive" or (
+                backup.metadata or {}
+            ).get("destination") == "protondrive":
+                adapter = self.backup_manager.get_adapter("protondrive")
+                if not isinstance(adapter, ProtonDriveBackupAdapter):
+                    self._set_status(
+                        t(
+                            "backups.proton_not_configured",
+                            error="adapter unavailable",
+                        ),
+                        "not_configured",
+                    )
+                    return
+                temp_download = Path(asyncio.run(adapter.restore_backup(backup)))
+                local_info = BackupInfo(
+                    id=backup.id,
+                    name=backup.name,
+                    path=str(temp_download),
+                    size=backup.size,
+                    createdAt=backup.createdAt,
+                    status=backup.status,
+                    metadata=dict(backup.metadata or {}),
+                )
+            result = self.backup_manager.dry_run_restore(local_info)
+        finally:
+            if temp_download is not None:
+                temp_download.unlink(missing_ok=True)
+
         self._verify_results[backup.id] = result
         self._verify_results[backup.path] = result
         self._populate_table()
@@ -343,6 +600,15 @@ class BackupsWidget(QWidget):
             return
         if status == "not_found":
             self._set_status(t("backups.verify_not_found"), "not_found")
+            return
+        if status == "not_configured":
+            self._set_status(
+                t(
+                    "backups.proton_not_configured",
+                    error=result.get("error") or "",
+                ),
+                "not_configured",
+            )
             return
         expected = result.get("expected") or "—"
         actual = result.get("actual") or "—"

@@ -35,8 +35,15 @@ Adapters:
 - **Local** — files under the user data `backups/` directory
 - **S3** — requires AWS credentials and bucket configuration
 - **Google Drive** — requires Google API credentials
+- **Proton Drive** — uploads via rclone `protondrive` remote (credentials from `.env.protondrive.local` / SecureStore / env; never commit secrets)
 
-Options typically include compression and optional encryption. Scheduled backups are stored in `scheduled-backups.json`.
+On the **Backups** tab:
+
+1. **Create Backup** — pick a connection, adapter (Local or Proton Drive), compression, and encryption passphrase (required for Proton Drive when encryption is on; preferred for opsec).
+2. **Restore** — **Refresh** lists local backups; **Refresh Proton Drive** lists remote objects when rclone + account are configured.
+3. **Verify Checksum** / **Dry-run Restore** work on local rows; for Proton Drive rows the app downloads to a temp file, verifies SHA-256 against the `.meta.json` sidecar, then cleans up.
+
+Proton Drive is not configured until rclone is installed and either an rclone remote exists or `DSM_PROTONDRIVE_USERNAME` + `DSM_PROTONDRIVE_PASSWORD` are set — the UI shows a clear status line instead of a fake local path. Scheduled backups are stored in `scheduled-backups.json`.
 
 ## Themes and language
 

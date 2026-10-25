@@ -179,6 +179,10 @@ flake8 db_storage_manager/ --count --select=E9,F63,F7,F82
 
 GitHub Releases may include platform executables built by `.github/workflows/release.yml` (Windows `.exe`, macOS `.dmg`, Linux AppImage). Prefer source install for development; use release assets for end-user distribution when available.
 
+## Optional: Proton Drive cloud backups
+
+Proton Drive uploads use [rclone](https://rclone.org/install/)’s `protondrive` backend (official Proton third-party SDKs do not yet expose standalone auth). Install rclone on the host, then either create a remote with `rclone config` or copy `.env.protondrive.local.example` to `.env.protondrive.local` (gitignored) and set account credentials. See [configuration.md](configuration.md) and [usage.md](usage.md).
+
 ## Install failures checklist
 
 1. Confirm Python version: `python --version` (use 3.12 if system Python is 3.14+)
@@ -188,3 +192,4 @@ GitHub Releases may include platform executables built by `.github/workflows/rel
 5. For Oracle Thick mode only: confirm Instant Client and `ORACLE_CLIENT_LIB_DIR`
 6. On Linux, install system PyQt6 packages if Qt plugins fail to load
 7. Re-create the virtual environment if imports resolve to the wrong tree
+8. For Proton Drive backups: confirm `rclone version` works and credentials are only in gitignored local env / SecureStore

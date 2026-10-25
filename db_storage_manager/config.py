@@ -81,6 +81,16 @@ DEFAULT_RBAC_PREFS = {
     "enabled": False,  # set True when users.enc has accounts (shared workstation)
 }
 
+# Proton Drive cloud backup (credentials via env / SecureStore — never commit secrets)
+DEFAULT_PROTON_DRIVE = {
+    "remote": "protondrive",
+    "path": "db-storage-manager-backups",
+    "rclone_bin": "rclone",
+    "prefer_encryption": True,
+    # username / password / otp_secret_key stay unset here; load from
+    # .env.protondrive.local or SecureStore settings["proton_drive"]
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -94,6 +104,7 @@ DEFAULT_SETTINGS = {
     "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),
     "plugins": copy.deepcopy(DEFAULT_PLUGINS_PREFS),
     "rbac": copy.deepcopy(DEFAULT_RBAC_PREFS),
+    "proton_drive": copy.deepcopy(DEFAULT_PROTON_DRIVE),
 }
 
 # Database connection defaults

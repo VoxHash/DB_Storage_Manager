@@ -48,6 +48,12 @@ class BackupManager:
             adapter = GoogleDriveBackupAdapter(config)
             self.register_adapter("googledrive", adapter)
             return adapter
+        elif adapter_type in ("protondrive", "proton_drive", "proton"):
+            from .protondrive import ProtonDriveBackupAdapter
+
+            adapter = ProtonDriveBackupAdapter(config or {})
+            self.register_adapter("protondrive", adapter)
+            return adapter
 
         return None
 

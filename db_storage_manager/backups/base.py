@@ -33,7 +33,7 @@ class BackupOptions:
     encryption: bool = False
     encryptionKey: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-    adapterType: Optional[str] = None  # local, s3, googledrive
+    adapterType: Optional[str] = None  # local, s3, googledrive, protondrive
     adapterConfig: Optional[Dict[str, Any]] = None
 
 

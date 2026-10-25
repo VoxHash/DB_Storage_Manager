@@ -26,9 +26,9 @@ DB Storage Manager is a cross-platform desktop application built with Python and
 
 ### Backups
 
-- Adapter pattern: Local, S3, Google Drive
+- Adapter pattern: Local, S3, Google Drive, Proton Drive (rclone `protondrive` boundary)
 - Scheduler for recurring jobs
-- Compression and optional encryption supported by adapters/manager
+- Compression and optional encryption supported by adapters/manager (Proton Drive prefers DSMENC1 before upload)
 
 ### Cross-cutting
 

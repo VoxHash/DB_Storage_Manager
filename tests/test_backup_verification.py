@@ -234,12 +234,16 @@ def test_delete_removes_sidecar(local_adapter: LocalBackupAdapter, tmp_path: Pat
     assert not sidecar.exists()
 
 
-def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch):
+def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_secure_store):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     pytest.importorskip("PyQt6.QtWidgets")
     from PyQt6.QtWidgets import QApplication
 
     from db_storage_manager.gui.backups import BackupsWidget
+    from db_storage_manager.security.auth import reset_auth_manager
+
+    _store, _ = isolated_secure_store
+    reset_auth_manager()
 
     app = QApplication.instance() or QApplication([])
     backup_dir = tmp_path / "ui-backups"
