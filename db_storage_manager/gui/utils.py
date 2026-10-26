@@ -1,18 +1,111 @@
 """
-GUI utilities for styling and i18n
+GUI utilities for styling, page chrome, and dense tab content.
 """
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Optional, Tuple
 
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QSizePolicy,
+    QTableWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..themes.manager import get_theme_manager
+
+# Consistent tab content rhythm on the modern shell
+PAGE_MARGINS = (20, 16, 20, 16)
+PAGE_SPACING = 12
+DENSE_ROW_HEIGHT = 28
 
 
 def _c(colors: Mapping[str, str], key: str, fallback: str) -> str:
     return colors.get(key) or fallback
+
+
+def apply_page_layout(layout: QVBoxLayout) -> None:
+    """Apply shared content margins and spacing to a tab root layout."""
+    layout.setContentsMargins(*PAGE_MARGINS)
+    layout.setSpacing(PAGE_SPACING)
+
+
+def make_page_header(
+    title: str, subtitle: Optional[str] = None, *, parent: Optional[QWidget] = None
+) -> QWidget:
+    """Build a page title + optional muted subtitle for tab content hierarchy."""
+    header = QWidget(parent)
+    header.setObjectName("PageHeader")
+    column = QVBoxLayout(header)
+    column.setContentsMargins(0, 0, 0, 0)
+    column.setSpacing(2)
+
+    title_label = QLabel(title)
+    title_label.setObjectName("PageTitle")
+    column.addWidget(title_label)
+
+    if subtitle:
+        sub = QLabel(subtitle)
+        sub.setObjectName("PageSubtitle")
+        sub.setWordWrap(True)
+        column.addWidget(sub)
+
+    return header
+
+
+def make_metric_card(
+    caption: str,
+    value: str = "—",
+    *,
+    object_name: str = "",
+    parent: Optional[QWidget] = None,
+) -> Tuple[QFrame, QLabel]:
+    """
+    Build a compact dashboard metric card.
+
+    Returns ``(card_frame, value_label)`` so callers can update the value
+    without rebuilding the card.
+    """
+    card = QFrame(parent)
+    card.setObjectName("MetricCard")
+    card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    card.setMinimumWidth(120)
+
+    column = QVBoxLayout(card)
+    column.setContentsMargins(14, 12, 14, 12)
+    column.setSpacing(4)
+
+    caption_label = QLabel(caption)
+    caption_label.setObjectName("MetricCaption")
+    column.addWidget(caption_label)
+
+    value_label = QLabel(value)
+    value_label.setObjectName(object_name or "MetricValue")
+    value_label.setProperty("cssClass", "metricValue")
+    value_label.setAlignment(
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+    )
+    column.addWidget(value_label)
+
+    return card, value_label
+
+
+def configure_dense_table(
+    table: QTableWidget, *, row_height: int = DENSE_ROW_HEIGHT
+) -> None:
+    """Tighten list/table density for inventory-style tabs."""
+    table.setAlternatingRowColors(True)
+    table.setShowGrid(False)
+    table.setWordWrap(False)
+    vh = table.verticalHeader()
+    vh.setVisible(False)
+    vh.setDefaultSectionSize(row_height)
+    vh.setMinimumSectionSize(max(22, row_height - 4))
+    table.setObjectName("DenseTable")
 
 
 def build_app_stylesheet(colors: Mapping[str, str]) -> str:
@@ -154,6 +247,53 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
         }}
         #NavSidebar QPushButton#NavItem:focus-visible {{
             border: 1px solid {primary};
+        }}
+        #PageHeader {{
+            background: transparent;
+            border: none;
+        }}
+        #PageTitle {{
+            color: {text};
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }}
+        #PageSubtitle {{
+            color: {muted};
+            font-size: 12px;
+            font-weight: 500;
+            background: transparent;
+            border: none;
+            padding: 0 0 4px 0;
+        }}
+        #MetricCard {{
+            background-color: {elevated};
+            border: 1px solid {border};
+            border-radius: 10px;
+            min-height: 72px;
+        }}
+        #MetricCaption {{
+            color: {muted};
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            background: transparent;
+            border: none;
+        }}
+        #MetricValue, QLabel[cssClass="metricValue"] {{
+            color: {text};
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+            background: transparent;
+            border: none;
+        }}
+        QTableWidget#DenseTable::item, QTableView#DenseTable::item {{
+            padding: 3px 8px;
         }}
         QTabWidget::pane {{
             border: none;
@@ -371,7 +511,7 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
 
 
 def apply_glassmorphism(widget: QWidget) -> None:
-    """Apply elevated surface styling to a panel widget."""
+    """Apply elevated surface styling to a panel widget without boxing every child."""
     theme_manager = get_theme_manager()
     theme = theme_manager.get_theme()
     glass = theme["glassmorphism"]
@@ -382,18 +522,53 @@ def apply_glassmorphism(widget: QWidget) -> None:
     text = _c(colors, "text", "#E8EEF4")
     muted = _c(colors, "text_secondary", "#94A3B8")
     surface = _c(colors, "surface", "#121820")
+    elevated = _c(colors, "surface_elevated", surface)
     border = _c(colors, "border", "#243044")
     input_bg = _c(colors, "input_bg", surface)
+    row_alt = _c(colors, "row_alt", surface)
 
     widget.setStyleSheet(
         f"""
-        QWidget {{
+        QWidget#glassmorphism {{
             background-color: {glass['background']};
             border: 1px solid {glass['border']};
             border-radius: 10px;
         }}
         QLabel {{
             color: {text};
+            background: transparent;
+            border: none;
+        }}
+        #PageTitle {{
+            color: {text};
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+        }}
+        #PageSubtitle {{
+            color: {muted};
+            font-size: 12px;
+            font-weight: 500;
+        }}
+        #MetricCard {{
+            background-color: {elevated};
+            border: 1px solid {border};
+            border-radius: 10px;
+        }}
+        #MetricCaption {{
+            color: {muted};
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            background: transparent;
+            border: none;
+        }}
+        #MetricValue, QLabel[cssClass="metricValue"] {{
+            color: {text};
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
             background: transparent;
             border: none;
         }}
@@ -425,15 +600,18 @@ def apply_glassmorphism(widget: QWidget) -> None:
             border: 1px solid {border};
             border-radius: 6px;
             gridline-color: {border};
-            alternate-background-color: {_c(colors, 'row_alt', surface)};
+            alternate-background-color: {row_alt};
         }}
         QTableWidget::item {{
-            padding: 4px;
+            padding: 3px 8px;
+        }}
+        QTableWidget#DenseTable::item {{
+            padding: 2px 8px;
         }}
         QHeaderView::section {{
             background-color: {_c(colors, 'surface_elevated', surface)};
             color: {muted};
-            padding: 6px;
+            padding: 6px 8px;
             border: none;
             border-bottom: 1px solid {border};
             font-weight: 600;
@@ -474,7 +652,14 @@ def apply_theme_to_app(app: Any) -> None:
 
 
 __all__ = [
+    "DENSE_ROW_HEIGHT",
+    "PAGE_MARGINS",
+    "PAGE_SPACING",
     "apply_glassmorphism",
+    "apply_page_layout",
     "apply_theme_to_app",
     "build_app_stylesheet",
+    "configure_dense_table",
+    "make_metric_card",
+    "make_page_header",
 ]

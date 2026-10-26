@@ -8,7 +8,6 @@ _(clear — promote from Next when starting the next deliverable)_
 
 ## Next
 
-- Optional per-tab content polish (dashboard cards, connection list density) on top of the shipped modern desktop shell
 - Native Android / GrapheneOS companion APK (sideload / F-Droid first) once credential-export and privacy review land — interim path documented in [docs/android-grapheneos.md](docs/android-grapheneos.md)
 - Meta Quest WebXR / Unity glance client after UX research — interim path documented in [docs/quest.md](docs/quest.md)
 
@@ -44,6 +43,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- **Per-tab content polish** on the modern desktop shell: page titles/subtitles, dashboard metric cards (caption + value), denser connection/inventory tables, shared page margins/spacing, Primary CTA object names; glassmorphism scoped to panel roots so nested cards are not double-boxed; offscreen smoke in `tests/test_tab_content_polish.py` (post-1.0.5)
 - **Platform guides + opsec**: desktop production client ([docs/desktop.md](docs/desktop.md)); Android/GrapheneOS and Quest interim browser→API guides; cross-platform companion trust model ([docs/cross-platform.md](docs/cross-platform.md)); linked from docs index / README / this roadmap (post-1.0.5)
 - **Cloud credential local setup**: gitignored `.env.cloud.local` via `scripts/setup-cloud-env.sh` (mode 600, default credential chains — no invented static keys); GCP extra package name corrected to PyPI `google-cloud-sql`; `pip install -e ".[cloud]"` install path verified (post-1.0.5)
 - **Cloud-managed databases (RDS / Cloud SQL / Azure SQL)**: real discovery via boto3 / googleapiclient|google-cloud-sql / azure-mgmt-sql; IAM auth tokens (RDS) and Entra ODBC tokens (Azure SQL); SSL guidance; `CloudManager` + SecureStore `cloud_managed` / `.env.cloud.local`; Connections **Discover Cloud…**; setup extras `aws`/`gcp`/`azure`/`cloud`; clear errors when SDKs/creds missing; mocked boundary tests in `tests/test_cloud_managed.py` (post-1.0.5)

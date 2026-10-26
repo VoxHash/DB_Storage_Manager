@@ -41,7 +41,12 @@ from ..ssh import (
     normalize_ssh_config,
     validate_ssh_config,
 )
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_page_header,
+)
 
 
 class CloudDiscoverDialog(QDialog):
@@ -529,12 +534,25 @@ class ConnectionsWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
         t = self.i18n.translate
+
+        self.page_header = make_page_header(
+            t("tabs.connections"),
+            t(
+                "connections.page_subtitle",
+                default="Encrypted connection profiles — 0 saved",
+            ),
+        )
+        # Keep a handle on the subtitle label for live density count updates
+        self.count_label = self.page_header.findChild(QLabel, "PageSubtitle")
+        layout.addWidget(self.page_header)
 
         # Buttons
         button_layout = QHBoxLayout()
+        button_layout.setSpacing(8)
         self.add_button = QPushButton(t("connections.add_connection"))
+        self.add_button.setObjectName("PrimaryButton")
         self.add_button.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_button)
 
@@ -573,6 +591,7 @@ class ConnectionsWidget(QWidget):
         layout.addLayout(button_layout)
 
         self.tunnel_status_label = QLabel(t("ssh.tunnel_inactive", "Tunnel Inactive"))
+        self.tunnel_status_label.setObjectName("PageSubtitle")
         self.tunnel_status_label.setWordWrap(True)
         self.tunnel_status_label.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
@@ -597,6 +616,7 @@ class ConnectionsWidget(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
+        configure_dense_table(self.table)
         layout.addWidget(self.table)
 
     def _selected_row(self) -> int:
@@ -882,10 +902,19 @@ class ConnectionsWidget(QWidget):
 
     def _update_table(self):
         """Update connections table"""
-        self.table.setRowCount(len(self.connections))
+        count = len(self.connections)
+        self.table.setRowCount(count)
         for row, conn in enumerate(self.connections):
             self.table.setItem(row, 0, QTableWidgetItem(conn.get("name", "")))
             self.table.setItem(row, 1, QTableWidgetItem(conn.get("type", "")))
             self.table.setItem(row, 2, QTableWidgetItem(conn.get("host", "") or ""))
             self.table.setItem(row, 3, QTableWidgetItem(conn.get("database", "") or ""))
             self.table.setItem(row, 4, QTableWidgetItem(self._tunnel_status_text(conn)))
+        if self.count_label is not None:
+            self.count_label.setText(
+                self.i18n.translate(
+                    "connections.page_subtitle",
+                    default="Encrypted connection profiles — {count} saved",
+                    count=count,
+                )
+            )

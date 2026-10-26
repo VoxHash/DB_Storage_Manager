@@ -42,7 +42,12 @@ from ..db.factory import DatabaseConnectionFactory
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
 from ..security.store import SecureStore
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_page_header,
+)
 
 _THRESHOLD_META: List[Tuple[str, str, float, float, float]] = [
     # metric_key, label_key_suffix, min, max, step
@@ -141,10 +146,21 @@ class MonitoringWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
         t = self.i18n.translate
 
+        layout.addWidget(
+            make_page_header(
+                t("tabs.monitoring"),
+                t(
+                    "monitoring.page_subtitle",
+                    default="Live health, alerts, thresholds, and notification channels",
+                ),
+            )
+        )
+
         connection_layout = QHBoxLayout()
+        connection_layout.setSpacing(8)
         connection_layout.addWidget(QLabel(f"{t('monitoring.connection')}"))
         self.connection_combo = QComboBox()
         self.connection_combo.addItem(t("monitoring.select_connection"))
@@ -154,6 +170,7 @@ class MonitoringWidget(QWidget):
         connection_layout.addWidget(self.connection_combo)
 
         self.start_button = QPushButton(t("monitoring.start_monitoring"))
+        self.start_button.setObjectName("PrimaryButton")
         self.start_button.clicked.connect(self._start_monitoring)
         self.start_button.setEnabled(False)
         connection_layout.addWidget(self.start_button)
@@ -188,6 +205,7 @@ class MonitoringWidget(QWidget):
         self.metrics_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
+        configure_dense_table(self.metrics_table)
         metrics_layout.addWidget(self.metrics_table)
         tabs.addTab(metrics_widget, t("monitoring.metrics"))
 
@@ -241,6 +259,7 @@ class MonitoringWidget(QWidget):
         )
         self.alerts_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.alerts_table.itemSelectionChanged.connect(self._on_alert_selection_changed)
+        configure_dense_table(self.alerts_table)
         alerts_layout.addWidget(self.alerts_table)
         tabs.addTab(alerts_widget, t("monitoring.alerts"))
 
@@ -268,6 +287,7 @@ class MonitoringWidget(QWidget):
             QHeaderView.ResizeMode.Stretch
         )
         self.health_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        configure_dense_table(self.health_table)
         health_layout.addWidget(self.health_table)
         tabs.addTab(health_widget, t("monitoring.health"))
 

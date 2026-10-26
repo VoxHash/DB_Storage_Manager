@@ -22,7 +22,7 @@ from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
 from .users import UsersAdminWidget
-from .utils import apply_glassmorphism
+from .utils import apply_glassmorphism, apply_page_layout, make_page_header
 
 
 class SettingsWidget(QWidget):
@@ -44,7 +44,17 @@ class SettingsWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
+        t = self.i18n.translate
+        layout.addWidget(
+            make_page_header(
+                t("tabs.settings"),
+                t(
+                    "settings.page_subtitle",
+                    default="Theme, language, Safe Mode, and Users & RBAC",
+                ),
+            )
+        )
 
         form = QFormLayout()
 

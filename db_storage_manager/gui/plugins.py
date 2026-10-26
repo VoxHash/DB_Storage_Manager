@@ -25,7 +25,12 @@ from ..i18n.manager import get_i18n_manager
 from ..plugins.marketplace import LocalPluginMarketplace
 from ..plugins.manifest import ManifestError
 from ..security.auth import PermissionDenied, get_auth_manager
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_page_header,
+)
 
 
 class PluginsWidget(QWidget):
@@ -57,27 +62,22 @@ class PluginsWidget(QWidget):
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
 
         t = self.i18n.translate
-        self.title_label = QLabel(
-            t("plugins.title", default="Plugins (local marketplace)")
-        )
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(self.title_label)
-
-        self.hint_label = QLabel(
-            t(
-                "plugins.hint",
-                default=(
-                    "Built-in and user-installed plugins. Enable/disable is saved "
-                    "locally. Install from a folder with plugin.json, or from an "
-                    "http(s) zip/tar.gz URL. No remote catalog is shipped yet."
+        layout.addWidget(
+            make_page_header(
+                t("tabs.plugins"),
+                t(
+                    "plugins.hint",
+                    default=(
+                        "Built-in and user-installed plugins. Enable/disable is saved "
+                        "locally. Install from a folder with plugin.json, or from an "
+                        "http(s) zip/tar.gz URL. No remote catalog is shipped yet."
+                    ),
                 ),
             )
         )
-        self.hint_label.setWordWrap(True)
-        layout.addWidget(self.hint_label)
 
         self.table = QTableWidget()
         self.table.setColumnCount(7)
@@ -97,7 +97,7 @@ class PluginsWidget(QWidget):
         )
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.setAlternatingRowColors(True)
+        configure_dense_table(self.table)
         layout.addWidget(self.table)
 
         actions = QHBoxLayout()

@@ -54,6 +54,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "page_subtitle": "Storage analysis for the selected connection",
     "connection": "Connection:",
     "select_connection": "Select a connection...",
     "analyze": "Analyze",
@@ -89,6 +90,7 @@
   },
   "connections": {
     "title": "Connections",
+    "page_subtitle": "Encrypted connection profiles — {count} saved",
     "add_connection": "Add Connection",
     "discover_cloud": "Discover Cloud…",
     "discover_cloud_title": "Discover Cloud Databases",
@@ -123,6 +125,7 @@
   },
   "query": {
     "title": "Query Console",
+    "page_subtitle": "Run SELECT-friendly queries with Safe Mode and Analyze",
     "connection": "Connection:",
     "select_connection": "Select a connection...",
     "safe_mode": "Safe Mode",
@@ -145,6 +148,7 @@
   },
   "backups": {
     "title": "Backups",
+    "page_subtitle": "Create, verify, and restore local or Proton Drive backups",
     "create_backup": "Create Backup",
     "restore_backup": "Restore Backup",
     "scheduled_backups": "Scheduled Backups",
@@ -212,6 +216,7 @@
   },
   "settings": {
     "title": "Settings",
+    "page_subtitle": "Theme, language, Safe Mode, and Users & RBAC",
     "theme": "Theme:",
     "light": "Light",
     "dark": "Dark",
@@ -274,6 +279,7 @@
     "permission_denied": "Permission denied"
   },
   "monitoring": {
+    "page_subtitle": "Live health, alerts, thresholds, and notification channels",
     "connection": "Connection:",
     "select_connection": "Select a connection...",
     "start_monitoring": "Start Monitoring",

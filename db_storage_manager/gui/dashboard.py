@@ -8,10 +8,11 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -36,7 +37,13 @@ from ..db.base import ConnectionConfig
 from ..db.factory import DatabaseConnectionFactory
 from ..i18n.manager import get_i18n_manager
 from ..security.store import SecureStore
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_metric_card,
+    make_page_header,
+)
 
 _METRIC_I18N = {
     "total_size": "dashboard.metric_total_size",
@@ -105,6 +112,7 @@ class DashboardWidget(QWidget):
         self.secure_store = SecureStore()
         self.layout_prefs: Dict[str, Any] = normalize_dashboard_layout(None)
         self._metric_labels: Dict[str, QLabel] = {}
+        self._metric_cards: Dict[str, QFrame] = {}
         self._metric_checks: Dict[str, QCheckBox] = {}
         self._column_checks: Dict[str, QCheckBox] = {}
         self._updating_prefs_ui = False
@@ -116,10 +124,21 @@ class DashboardWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
+        t = self.i18n.translate
+
+        layout.addWidget(
+            make_page_header(
+                t("tabs.dashboard"),
+                t(
+                    "dashboard.page_subtitle",
+                    default="Storage analysis for the selected connection",
+                ),
+            )
+        )
 
         connection_layout = QHBoxLayout()
-        t = self.i18n.translate
+        connection_layout.setSpacing(8)
         connection_layout.addWidget(QLabel(f"{t('dashboard.connection')}"))
         self.connection_combo = QComboBox()
         self.connection_combo.addItem(t("dashboard.select_connection"))
@@ -129,6 +148,7 @@ class DashboardWidget(QWidget):
         connection_layout.addWidget(self.connection_combo)
 
         self.analyze_button = QPushButton(t("dashboard.analyze"))
+        self.analyze_button.setObjectName("PrimaryButton")
         self.analyze_button.clicked.connect(self._analyze_database)
         self.analyze_button.setEnabled(False)
         connection_layout.addWidget(self.analyze_button)
@@ -137,11 +157,16 @@ class DashboardWidget(QWidget):
         layout.addLayout(connection_layout)
 
         self.summary_layout = QHBoxLayout()
+        self.summary_layout.setSpacing(12)
         for key in DASHBOARD_METRIC_KEYS:
-            label = QLabel(self._metric_placeholder(key))
-            label.setObjectName(f"dashboardMetric_{key}")
-            self._metric_labels[key] = label
-            self.summary_layout.addWidget(label)
+            card, value_label = make_metric_card(
+                t(_METRIC_I18N[key]),
+                self._metric_placeholder(key),
+                object_name=f"dashboardMetric_{key}",
+            )
+            self._metric_cards[key] = card
+            self._metric_labels[key] = value_label
+            self.summary_layout.addWidget(card)
         self.summary_layout.addStretch()
         layout.addLayout(self.summary_layout)
 
@@ -154,6 +179,7 @@ class DashboardWidget(QWidget):
             QHeaderView.ResizeMode.Stretch
         )
         self.tables_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        configure_dense_table(self.tables_table)
         layout.addWidget(self.tables_table)
 
         customize = QGroupBox(t("dashboard.customize_title"))
@@ -214,12 +240,8 @@ class DashboardWidget(QWidget):
         layout.addWidget(customize)
 
     def _metric_placeholder(self, key: str) -> str:
-        t = self.i18n.translate
-        if key == "total_size":
-            return t("dashboard.total_size", size="N/A")
-        if key == "tables":
-            return t("dashboard.tables", count="N/A")
-        return t("dashboard.indexes", count="N/A")
+        """Placeholder value shown inside a metric card before analysis."""
+        return "—"
 
     def _load_layout_prefs(self) -> None:
         settings = self.secure_store.get_settings()
@@ -295,7 +317,7 @@ class DashboardWidget(QWidget):
         order = self.layout_prefs.get("metric_order") or list(DASHBOARD_METRIC_KEYS)
         watched = set(self.layout_prefs.get("watched_metrics") or [])
 
-        # Re-order summary labels to match metric_order
+        # Re-order metric cards to match metric_order
         while self.summary_layout.count():
             item = self.summary_layout.takeAt(0)
             widget = item.widget()
@@ -303,14 +325,18 @@ class DashboardWidget(QWidget):
                 widget.setParent(None)
 
         for key in order:
-            label = self._metric_labels[key]
-            label.setVisible(key in watched)
-            self.summary_layout.addWidget(label)
+            card = self._metric_cards[key]
+            visible = key in watched
+            card.setVisible(visible)
+            self._metric_labels[key].setVisible(visible)
+            self.summary_layout.addWidget(card)
         for key in DASHBOARD_METRIC_KEYS:
             if key not in order:
-                label = self._metric_labels[key]
-                label.setVisible(key in watched)
-                self.summary_layout.addWidget(label)
+                card = self._metric_cards[key]
+                visible = key in watched
+                card.setVisible(visible)
+                self._metric_labels[key].setVisible(visible)
+                self.summary_layout.addWidget(card)
         self.summary_layout.addStretch()
 
         visible_columns = self.layout_prefs.get("table_columns") or list(
@@ -483,17 +509,10 @@ class DashboardWidget(QWidget):
 
     def _update_display(self, analysis):
         """Update display with analysis results"""
-        t = self.i18n.translate
         total_size = analysis.get("totalSize", 0)
-        self._metric_labels["total_size"].setText(
-            t("dashboard.total_size", size=self._format_size(total_size))
-        )
-        self._metric_labels["tables"].setText(
-            t("dashboard.tables", count=analysis.get("tableCount", 0))
-        )
-        self._metric_labels["indexes"].setText(
-            t("dashboard.indexes", count=analysis.get("indexCount", 0))
-        )
+        self._metric_labels["total_size"].setText(self._format_size(total_size))
+        self._metric_labels["tables"].setText(str(analysis.get("tableCount", 0)))
+        self._metric_labels["indexes"].setText(str(analysis.get("indexCount", 0)))
 
         tables = analysis.get("tables", [])
         self.tables_table.setRowCount(len(tables))

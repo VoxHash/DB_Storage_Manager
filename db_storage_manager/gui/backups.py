@@ -39,7 +39,12 @@ from ..config import BACKUP_DIR
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_page_header,
+)
 
 _STATUS_COLORS = {
     "pass": QColor(45, 140, 75),
@@ -86,8 +91,18 @@ class BackupsWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
         t = self.i18n.translate
+
+        layout.addWidget(
+            make_page_header(
+                t("tabs.backups"),
+                t(
+                    "backups.page_subtitle",
+                    default="Create, verify, and restore local or Proton Drive backups",
+                ),
+            )
+        )
 
         tabs = QTabWidget()
         layout.addWidget(tabs)
@@ -130,6 +145,7 @@ class BackupsWidget(QWidget):
 
         create_actions = QHBoxLayout()
         self.create_button = QPushButton(t("backups.create"))
+        self.create_button.setObjectName("PrimaryButton")
         self.create_button.clicked.connect(self.create_backup)
         create_actions.addWidget(self.create_button)
         create_actions.addStretch()
@@ -188,6 +204,7 @@ class BackupsWidget(QWidget):
         )
         self.backups_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.backups_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        configure_dense_table(self.backups_table)
         restore_layout.addWidget(self.backups_table)
         tabs.addTab(restore_widget, t("backups.restore_backup"))
 

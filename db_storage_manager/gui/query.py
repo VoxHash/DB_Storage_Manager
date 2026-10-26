@@ -26,7 +26,12 @@ from ..analysis.query_suggestions import suggest_for_query
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
-from .utils import apply_glassmorphism
+from .utils import (
+    apply_glassmorphism,
+    apply_page_layout,
+    configure_dense_table,
+    make_page_header,
+)
 
 _SEVERITY_COLORS = {
     "high": QColor(220, 80, 80),
@@ -50,11 +55,22 @@ class QueryWidget(QWidget):
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
+        apply_page_layout(layout)
         t = self.i18n.translate
+
+        layout.addWidget(
+            make_page_header(
+                t("tabs.query_console"),
+                t(
+                    "query.page_subtitle",
+                    default="Run SELECT-friendly queries with Safe Mode and Analyze",
+                ),
+            )
+        )
 
         # Connection selection
         connection_layout = QHBoxLayout()
+        connection_layout.setSpacing(8)
         connection_layout.addWidget(QLabel(f"{t('query.connection')}"))
         self.connection_combo = QComboBox()
         self.connection_combo.addItem(t("query.select_connection"))
@@ -67,6 +83,7 @@ class QueryWidget(QWidget):
         connection_layout.addWidget(self.safe_mode_check)
 
         self.execute_button = QPushButton(t("query.execute"))
+        self.execute_button.setObjectName("PrimaryButton")
         self.execute_button.clicked.connect(self._execute_query)
         connection_layout.addWidget(self.execute_button)
 
@@ -89,6 +106,7 @@ class QueryWidget(QWidget):
         self.results_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
+        configure_dense_table(self.results_table)
         splitter.addWidget(self.results_table)
 
         # Optimization suggestions
@@ -126,6 +144,7 @@ class QueryWidget(QWidget):
         self.suggestions_table.setSelectionBehavior(
             QAbstractItemView.SelectionBehavior.SelectRows
         )
+        configure_dense_table(self.suggestions_table)
         suggestions_layout.addWidget(self.suggestions_table)
         splitter.addWidget(suggestions_panel)
 
