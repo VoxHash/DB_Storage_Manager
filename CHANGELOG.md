@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
 
 ### Added
+- **Cloud-managed database integrations** (`db_storage_manager.cloud`): deepened AWS RDS, GCP Cloud SQL, and Azure SQL beyond stubs — paginated discovery, connection-profile import, SSL guidance, RDS IAM `generate_db_auth_token`, Azure Entra access tokens for ODBC, clear `CloudSDKMissingError` / `CloudNotConfiguredError` when SDKs or credentials are missing
+- Credentials from SecureStore `cloud_managed`, `.env.cloud.local`, or env (`DSM_AWS_*` / `DSM_GCP_*` / `DSM_AZURE_*`); never committed — `.env.cloud.local.example` shipped
+- Connections UI **Discover Cloud…** dialog (status, refresh, multi-select import with password or IAM/Entra auth mode); PostgreSQL / MySQL / SQL Server drivers apply cloud auth/SSL from `ConnectionConfig.extra`
+- Setup extras `aws`, `gcp`, `azure`, `cloud`; unit tests at SDK boundaries with optional live skip (`tests/test_cloud_managed.py`)
 - **Proton Drive cloud backup** adapter (`db_storage_manager.backups.protondrive`): real upload/list/download/delete/verify via rclone `protondrive` remote; prefers DSMENC1-encrypted payloads + SHA-256 sidecar before upload; credentials from SecureStore `proton_drive`, `.env.protondrive.local`, or env (`DSM_PROTONDRIVE_*` / `RCLONE_PROTONDRIVE_*`) — never committed; `ProtonDriveNotConfiguredError` when rclone or account config is missing
 - Backups UI: destination selector (Local / Proton Drive), encryption passphrase field, Proton status line, and **Refresh Proton Drive** list/verify/dry-run path
 - `.env.protondrive.local.example` plus configuration/usage/installation docs for live rclone setup

@@ -69,6 +69,25 @@ setup(
             "clickhouse-driver>=0.2.6",
             "influxdb-client>=1.38.0",
         ],
+        # Cloud-managed databases (discovery / IAM / Entra). boto3 is already core.
+        "aws": ["boto3>=1.34.0"],
+        "gcp": [
+            "google-cloud-sqladmin>=1.12.0",
+            "cloud-sql-python-connector>=1.12.0",
+            "google-auth>=2.23.0",
+        ],
+        "azure": [
+            "azure-identity>=1.15.0",
+            "azure-mgmt-sql>=3.0.1",
+        ],
+        "cloud": [
+            "boto3>=1.34.0",
+            "google-cloud-sqladmin>=1.12.0",
+            "cloud-sql-python-connector>=1.12.0",
+            "google-auth>=2.23.0",
+            "azure-identity>=1.15.0",
+            "azure-mgmt-sql>=3.0.1",
+        ],
     },
     entry_points={
         "console_scripts": [

@@ -11,7 +11,11 @@ Optional extras: Oracle, SQL Server, ClickHouse, InfluxDB.
 
 ## Do I need cloud credentials to start?
 
-No. Local SQLite works with zero external credentials.
+No. Local SQLite works with zero external credentials. AWS RDS / GCP Cloud SQL / Azure SQL discovery and IAM/Entra connect helpers are optional — configure `.env.cloud.local` (see `.env.cloud.local.example`) only when using **Discover Cloud…**.
+
+## How do I connect to RDS / Cloud SQL / Azure SQL?
+
+Use **Connections → Discover Cloud…** after setting provider credentials, or add a profile manually with the managed endpoint. Prefer IAM (RDS) or Entra access tokens (Azure SQL) via `extra.auth_mode`; Cloud SQL IAM DB auth needs the Auth Proxy or `cloud-sql-python-connector` (`pip install -e ".[gcp]"`). See [configuration.md](configuration.md).
 
 ## Where are passwords stored?
 

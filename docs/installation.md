@@ -52,6 +52,17 @@ pip install -e ".[oracle]"
 pip install -e ".[engines]"
 ```
 
+### Cloud-managed databases (optional)
+
+```bash
+pip install -e ".[aws]"     # boto3 (also core) — RDS discovery + IAM tokens
+pip install -e ".[gcp]"     # google-cloud-sqladmin + cloud-sql-python-connector
+pip install -e ".[azure]"   # azure-identity + azure-mgmt-sql
+pip install -e ".[cloud]"   # all of the above
+```
+
+Copy `.env.cloud.local.example` to `.env.cloud.local` (gitignored) for provider credentials. See [configuration.md](configuration.md).
+
 ### Oracle Instant Client (Thick mode only)
 
 Default `oracledb` **Thin** mode needs no Oracle Client libraries. Enable Thick mode only when required (Oracle 11g, NNE/checksumming, AC/TAC):
@@ -182,6 +193,10 @@ GitHub Releases may include platform executables built by `.github/workflows/rel
 ## Optional: Proton Drive cloud backups
 
 Proton Drive uploads use [rclone](https://rclone.org/install/)’s `protondrive` backend (official Proton third-party SDKs do not yet expose standalone auth). Install rclone on the host, then either create a remote with `rclone config` or copy `.env.protondrive.local.example` to `.env.protondrive.local` (gitignored) and set account credentials. See [configuration.md](configuration.md) and [usage.md](usage.md).
+
+## Optional: RDS / Cloud SQL / Azure SQL
+
+Install the cloud extras above, configure `.env.cloud.local`, then use **Connections → Discover Cloud…**. RDS IAM TLS needs the AWS RDS CA bundle (`DSM_AWS_RDS_SSL_CA`). Azure SQL Entra tokens need ODBC Driver 18 (`pip install -e ".[mssql,azure]"`).
 
 ## Install failures checklist
 

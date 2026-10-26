@@ -13,7 +13,7 @@
 
 - **Multi-Database Support** — PostgreSQL, MySQL/MariaDB, SQLite, MongoDB, Redis; optional Oracle, SQL Server, ClickHouse, InfluxDB
 - **Storage Analysis Dashboard** — Metrics, table/index sizing, growth-oriented views
-- **Secure Connection Management** — Fernet-encrypted credential storage
+- **Secure Connection Management** — Fernet-encrypted credential storage; optional **Discover Cloud** for AWS RDS / GCP Cloud SQL / Azure SQL (IAM / Entra helpers)
 - **Multi-user / RBAC** — Optional local accounts (`users.enc`), roles, and permission checks for shared workstations
 - **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
 - **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh
@@ -66,6 +66,7 @@ Optional engines:
 pip install -e ".[mssql,clickhouse,influxdb]"
 pip install -e ".[oracle]"    # oracledb Thin mode; Instant Client only for Thick mode
 pip install -e ".[engines]"   # all optional Python drivers
+pip install -e ".[cloud]"    # RDS / Cloud SQL / Azure SQL discovery SDKs
 ```
 
 Optional native performance module (prebuilt wheels on GitHub Releases — no Rust required):
@@ -121,7 +122,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Next focus: deeper cloud-managed database integrations (RDS, Cloud SQL, Azure SQL).
+See [ROADMAP.md](ROADMAP.md). Next focus: optional per-tab content polish on the modern desktop shell.
 
 ## Contributing
 

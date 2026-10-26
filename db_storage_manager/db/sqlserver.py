@@ -58,18 +58,46 @@ class SQLServerConnection(DatabaseConnection):
 
     async def connect(self) -> None:
         """Connect to SQL Server database"""
-        if self.config.connection_string:
+        if self.config.connection_string and not (
+            (self.config.extra or {}).get("auth_mode")
+            or (self.config.extra or {}).get("cloud_provider")
+        ):
             self.connection = pyodbc.connect(self.config.connection_string)
         else:
+            from ..cloud.connect_auth import resolve_password_and_ssl
+
+            password, ssl_kwargs = resolve_password_and_ssl(self.config)
             driver = _pick_sql_server_driver()
+            extra = self.config.extra or {}
+            encrypt = (
+                ssl_kwargs.get("encrypt")
+                or extra.get("encrypt")
+                or "yes"
+            )
+            trust = (
+                ssl_kwargs.get("trust_server_certificate")
+                or extra.get("trust_server_certificate")
+                or "no"
+            )
             conn_str = (
                 f"DRIVER={{{driver}}};"
                 f"SERVER={self.config.host or 'localhost'},{self.config.port or 1433};"
                 f"DATABASE={self.config.database};"
-                f"UID={self.config.username};"
-                f"PWD={self.config.password}"
+                f"Encrypt={encrypt};"
+                f"TrustServerCertificate={trust};"
             )
-            self.connection = pyodbc.connect(conn_str)
+            attrs_before = ssl_kwargs.get("odbc_attrs_before")
+            if attrs_before:
+                # Entra access token — do not send UID/PWD
+                self.connection = pyodbc.connect(
+                    conn_str, attrs_before=attrs_before
+                )
+            else:
+                conn_str += (
+                    f"UID={self.config.username};"
+                    f"PWD={password if password is not None else self.config.password}"
+                )
+                self.connection = pyodbc.connect(conn_str)
         self.connected = True
 
     async def disconnect(self) -> None:

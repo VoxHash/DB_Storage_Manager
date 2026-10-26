@@ -36,7 +36,8 @@ DB Storage Manager is a cross-platform desktop application built with Python and
 - `i18n/` — language manager (About strings track release `1.0.5`)
 - `ssh/` — Paramiko tunnels (`SSHTunnel`, `TunnelManager`; Connections UI Open/Close Tunnel)
 - `monitoring/` — `DatabaseMonitor.poll_once()`, `AlertManager` dedupe/acknowledge, GUI status banner
-- `analysis/`, `cloud/`, `data/` — advanced features shipped in-tree
+- `analysis/`, `data/` — advanced features shipped in-tree
+- `cloud/` — AWS RDS / GCP Cloud SQL / Azure SQL discovery, IAM/Entra connect helpers, SecureStore/`env` credentials (`CloudManager`, provider modules); Connections UI **Discover Cloud…**
 - `plugins/` — public SDK (`sdk`, `manifest` API `1.0`), loader, local marketplace/registry (`marketplace.LocalPluginMarketplace`), built-ins (`migration`, `data_comparison`), desktop **Plugins** tab
 
 ## Data flow
@@ -69,7 +70,7 @@ Backup → export → compress/encrypt → adapter → storage
 - Python 3.10+, PyQt6 / PyQt6-Charts
 - Optional Rust extension for gzip/zstd, AES-GCM file encryption, checksums, and parallel helpers
 - Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional oracledb (Thin/Thick), pyodbc (+ ODBC Driver 18), clickhouse-driver, influxdb-client
-- cryptography (Fernet + AESGCM), zstandard (Python zstd fallback), paramiko, boto3, Google API client, schedule, pandas/numpy/matplotlib
+- cryptography (Fernet + AESGCM), zstandard (Python zstd fallback), paramiko, boto3, Google API client, optional azure-identity / azure-mgmt-sql / google-cloud-sqladmin, schedule, pandas/numpy/matplotlib
 
 ## Packaging and CI
 

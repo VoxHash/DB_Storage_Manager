@@ -26,22 +26,27 @@ class MySQLConnection(DatabaseConnection):
 
     async def connect(self) -> None:
         """Connect to MySQL database"""
-        if self.config.connection_string:
-            self.connection = pymysql.connect(
-                host=self.config.host or "localhost",
-                port=self.config.port or 3306,
-                database=self.config.database,
-                user=self.config.username,
-                password=self.config.password,
-            )
-        else:
-            self.connection = pymysql.connect(
-                host=self.config.host or "localhost",
-                port=self.config.port or 3306,
-                database=self.config.database,
-                user=self.config.username,
-                password=self.config.password,
-            )
+        from ..cloud.connect_auth import resolve_password_and_ssl
+
+        password, ssl_kwargs = resolve_password_and_ssl(self.config)
+        connect_kwargs = {
+            "host": self.config.host or "localhost",
+            "port": self.config.port or 3306,
+            "database": self.config.database,
+            "user": self.config.username,
+            "password": password if password is not None else self.config.password,
+        }
+        # RDS IAM auth requires the cleartext plugin (AWS docs)
+        extra = self.config.extra or {}
+        if (extra.get("auth_mode") or "").lower() == "iam":
+            connect_kwargs["auth_plugin_map"] = {"mysql_clear_password": None}
+        ssl_ca = ssl_kwargs.get("ssl_ca") or ssl_kwargs.get("sslrootcert")
+        if ssl_ca:
+            connect_kwargs["ssl"] = {
+                "ca": ssl_ca,
+                "check_hostname": True,
+            }
+        self.connection = pymysql.connect(**connect_kwargs)
         self.connected = True
 
     async def disconnect(self) -> None:

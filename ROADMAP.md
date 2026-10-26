@@ -8,7 +8,6 @@ _(clear — promote from Next when starting the next deliverable)_
 
 ## Next
 
-- Deeper cloud-managed database integrations (RDS, Cloud SQL, Azure SQL) beyond current SDK stubs
 - Optional per-tab content polish (dashboard cards, connection list density) on top of the shipped modern desktop shell
 
 ## Later
@@ -41,6 +40,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ## Shipped recently
 
+- **Cloud-managed databases (RDS / Cloud SQL / Azure SQL)**: real discovery via boto3 / googleapiclient|google-cloud-sqladmin / azure-mgmt-sql; IAM auth tokens (RDS) and Entra ODBC tokens (Azure SQL); SSL guidance; `CloudManager` + SecureStore `cloud_managed` / `.env.cloud.local`; Connections **Discover Cloud…**; setup extras `aws`/`gcp`/`azure`/`cloud`; clear errors when SDKs/creds missing; mocked boundary tests in `tests/test_cloud_managed.py` (post-1.0.5)
 - **Proton Drive cloud backup**: `ProtonDriveBackupAdapter` uploads/lists/verifies/deletes via rclone `protondrive` remote; DSMENC1 encryption preferred before upload; credentials from SecureStore `proton_drive` / `.env.protondrive.local` / env (never committed); clear `ProtonDriveNotConfiguredError` when rclone or account is missing; Backups tab destination + **Refresh Proton Drive**; mocked rclone boundary tests in `tests/test_proton_drive_backup.py` (post-1.0.5)
 - Modern desktop shell: library-style left nav, Atmospheric dark theme tokens, cohesive PyQt6 stylesheet, polished RBAC sign-in card; offscreen smoke including post-sign-in click-through of all nav sections + theme rotation in `tests/test_gui_shell.py` (post-1.0.5)
 - Multi-user / RBAC for shared workstations: PBKDF2 password hashes in encrypted `users.enc`, roles (`admin` / `user` / `viewer` / `guest`) with real permission checks (not always-allow), SecureStore persistence, desktop login when accounts exist, Settings **Users & RBAC** admin UI, `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap`, API Basic auth + Bearer system-admin when RBAC active, enforcement on connections / backups / settings / plugins / companion endpoints; tests in `tests/test_rbac.py` (post-1.0.5)

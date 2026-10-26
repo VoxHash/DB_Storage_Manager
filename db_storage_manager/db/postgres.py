@@ -30,13 +30,21 @@ class PostgreSQLConnection(DatabaseConnection):
         if self.config.connection_string:
             self.connection = psycopg2.connect(self.config.connection_string)
         else:
-            self.connection = psycopg2.connect(
-                host=self.config.host or "localhost",
-                port=self.config.port or 5432,
-                database=self.config.database,
-                user=self.config.username,
-                password=self.config.password,
-            )
+            from ..cloud.connect_auth import resolve_password_and_ssl
+
+            password, ssl_kwargs = resolve_password_and_ssl(self.config)
+            connect_kwargs = {
+                "host": self.config.host or "localhost",
+                "port": self.config.port or 5432,
+                "database": self.config.database,
+                "user": self.config.username,
+                "password": password,
+            }
+            if ssl_kwargs.get("sslmode"):
+                connect_kwargs["sslmode"] = ssl_kwargs["sslmode"]
+            if ssl_kwargs.get("sslrootcert"):
+                connect_kwargs["sslrootcert"] = ssl_kwargs["sslrootcert"]
+            self.connection = psycopg2.connect(**connect_kwargs)
         self.connected = True
 
     async def disconnect(self) -> None:

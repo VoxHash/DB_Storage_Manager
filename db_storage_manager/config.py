@@ -91,6 +91,22 @@ DEFAULT_PROTON_DRIVE = {
     # .env.protondrive.local or SecureStore settings["proton_drive"]
 }
 
+# Cloud-managed databases (RDS / Cloud SQL / Azure SQL) — non-secret defaults only
+DEFAULT_CLOUD_MANAGED = {
+    "aws": {
+        "region": "us-east-1",
+        # access_key_id / secret_access_key / profile / ssl_ca_path via
+        # .env.cloud.local or SecureStore cloud_managed.aws
+    },
+    "gcp": {
+        # project_id / credentials_path via env or SecureStore
+    },
+    "azure": {
+        # subscription_id / tenant_id / client_id via env or SecureStore;
+        # client_secret via env only preferred
+    },
+}
+
 # Default settings
 DEFAULT_SETTINGS = {
     "theme": "dark",  # light, dark, dracula
@@ -105,6 +121,7 @@ DEFAULT_SETTINGS = {
     "plugins": copy.deepcopy(DEFAULT_PLUGINS_PREFS),
     "rbac": copy.deepcopy(DEFAULT_RBAC_PREFS),
     "proton_drive": copy.deepcopy(DEFAULT_PROTON_DRIVE),
+    "cloud_managed": copy.deepcopy(DEFAULT_CLOUD_MANAGED),
 }
 
 # Database connection defaults

@@ -44,6 +44,210 @@ from ..ssh import (
 from .utils import apply_glassmorphism
 
 
+class CloudDiscoverDialog(QDialog):
+    """Discover AWS RDS / GCP Cloud SQL / Azure SQL instances and import profiles."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.i18n = get_i18n_manager()
+        t = self.i18n.translate
+        self.setWindowTitle(
+            t("connections.discover_cloud_title", "Discover Cloud Databases")
+        )
+        self.setModal(True)
+        self.setMinimumSize(720, 420)
+        self._rows: List[Dict[str, Any]] = []
+        self._imported: List[Dict[str, Any]] = []
+        self._init_ui()
+        apply_glassmorphism(self)
+        self._refresh_status()
+
+    def _init_ui(self) -> None:
+        t = self.i18n.translate
+        layout = QVBoxLayout(self)
+
+        self.status_label = QLabel("")
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        btn_row = QHBoxLayout()
+        self.refresh_btn = QPushButton(
+            t("connections.discover_refresh", "Refresh Discovery")
+        )
+        self.refresh_btn.clicked.connect(self._run_discovery)
+        btn_row.addWidget(self.refresh_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(
+            [
+                t("connections.cloud_provider", "Provider"),
+                t("connections.name").rstrip(":"),
+                t("connections.type").rstrip(":"),
+                t("connections.host").rstrip(":"),
+                t("connections.port").rstrip(":"),
+                t("connections.database").rstrip(":"),
+            ]
+        )
+        self.table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+        layout.addWidget(self.table)
+
+        auth_row = QHBoxLayout()
+        auth_row.addWidget(
+            QLabel(t("connections.cloud_auth_mode", "Import auth mode:"))
+        )
+        self.auth_combo = QComboBox()
+        self.auth_combo.addItem(
+            t("connections.cloud_auth_password", "Password (fill later)"), "password"
+        )
+        self.auth_combo.addItem(
+            t("connections.cloud_auth_iam", "IAM / Entra token"), "iam"
+        )
+        auth_row.addWidget(self.auth_combo)
+        auth_row.addStretch()
+        layout.addLayout(auth_row)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText(
+            t("connections.import_selected", "Import Selected")
+        )
+        buttons.accepted.connect(self._import_selected)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _refresh_status(self) -> None:
+        from ..cloud import configuration_status
+
+        t = self.i18n.translate
+        status = configuration_status()
+        parts = []
+        for key, label in (
+            ("aws", "AWS RDS"),
+            ("gcp", "GCP Cloud SQL"),
+            ("azure", "Azure SQL"),
+        ):
+            ready = status.get(key, {}).get("ready")
+            parts.append(
+                f"{label}: "
+                + (
+                    t("connections.cloud_ready", "ready")
+                    if ready
+                    else t("connections.cloud_not_configured", "not configured")
+                )
+            )
+        self.status_label.setText(" | ".join(parts))
+
+    def _run_discovery(self) -> None:
+        from ..cloud import CloudManager, CloudNotConfiguredError
+
+        t = self.i18n.translate
+        self._refresh_status()
+        try:
+            manager = CloudManager.from_secure_store()
+            rows = manager.discover_databases()
+        except CloudNotConfiguredError as exc:
+            QMessageBox.warning(self, t("common.error"), str(exc))
+            return
+        except Exception as exc:
+            QMessageBox.critical(self, t("common.error"), str(exc))
+            return
+
+        self._rows = [r for r in rows if not r.get("error")]
+        errors = [r for r in rows if r.get("error")]
+        self.table.setRowCount(len(self._rows))
+        for i, row in enumerate(self._rows):
+            self.table.setItem(i, 0, QTableWidgetItem(str(row.get("provider") or "")))
+            self.table.setItem(
+                i, 1, QTableWidgetItem(str(row.get("id") or row.get("server") or ""))
+            )
+            self.table.setItem(
+                i, 2, QTableWidgetItem(str(row.get("db_type") or row.get("engine") or ""))
+            )
+            self.table.setItem(
+                i, 3, QTableWidgetItem(str(row.get("endpoint") or row.get("host") or ""))
+            )
+            self.table.setItem(i, 4, QTableWidgetItem(str(row.get("port") or "")))
+            self.table.setItem(
+                i, 5, QTableWidgetItem(str(row.get("database") or ""))
+            )
+        if errors:
+            err_txt = "; ".join(
+                f"{e.get('provider')}: {e.get('error')}" for e in errors
+            )
+            self.status_label.setText(
+                self.status_label.text() + "\n" + err_txt
+            )
+        if not self._rows and not errors:
+            self.status_label.setText(
+                t(
+                    "connections.cloud_none_found",
+                    "No managed databases found for configured providers.",
+                )
+            )
+
+    def _import_selected(self) -> None:
+        t = self.i18n.translate
+        indexes = self.table.selectionModel().selectedRows()
+        if not indexes:
+            QMessageBox.warning(
+                self,
+                t("common.error"),
+                t("connections.cloud_select_first", "Select one or more instances."),
+            )
+            return
+
+        from ..cloud.aws import AWSRDSProvider
+        from ..cloud.azure import AzureDatabaseProvider
+        from ..cloud.gcp import GCPCloudSQLProvider
+        from ..cloud.manager import CloudManager
+
+        auth_mode = self.auth_combo.currentData() or "password"
+        # Map UI "iam" to entra_token for Azure
+        manager = CloudManager.from_secure_store()
+        manager.ensure_providers()
+
+        imported: List[Dict[str, Any]] = []
+        for idx in indexes:
+            row = self._rows[idx.row()]
+            provider = (row.get("provider") or "").lower()
+            try:
+                if provider == "aws":
+                    prov = manager.aws_provider or AWSRDSProvider()
+                    mode = "iam" if auth_mode == "iam" else "password"
+                    imported.append(prov.to_connection_profile(row, auth_mode=mode))
+                elif provider == "gcp":
+                    prov = manager.gcp_provider or GCPCloudSQLProvider()
+                    mode = "password"  # IAM needs Auth Proxy — import as password
+                    if auth_mode == "iam":
+                        mode = "iam"  # profile records intent; connect will guide
+                    imported.append(prov.to_connection_profile(row, auth_mode=mode))
+                elif provider == "azure":
+                    prov = manager.azure_provider or AzureDatabaseProvider()
+                    mode = "entra_token" if auth_mode == "iam" else "password"
+                    imported.append(prov.to_connection_profile(row, auth_mode=mode))
+            except Exception as exc:
+                QMessageBox.warning(
+                    self,
+                    t("common.error"),
+                    f"{row.get('id')}: {exc}",
+                )
+        if not imported:
+            return
+        self._imported = imported
+        self.accept()
+
+    def imported_connections(self) -> List[Dict[str, Any]]:
+        return list(self._imported)
+
+
 def _connection_config_kwargs(connection: Dict[str, Any]) -> Dict[str, Any]:
     """Filter a connection dict to ConnectionConfig fields."""
     allowed = {
@@ -272,7 +476,7 @@ class ConnectionDialog(QDialog):
         ssh_config = self._ssh_config_from_form()
         if not ssh_config["enabled"]:
             ssh_config = None
-        return {
+        data = {
             "id": self.connection.get("id") if self.connection else str(uuid.uuid4()),
             "name": self.name_edit.text().strip(),
             "type": self.type_combo.currentText(),
@@ -283,6 +487,10 @@ class ConnectionDialog(QDialog):
             "password": self.password_edit.text(),
             "ssh_config": ssh_config,
         }
+        # Preserve cloud-managed extras (IAM / Entra / SSL) when editing
+        if self.connection and self.connection.get("extra"):
+            data["extra"] = dict(self.connection["extra"])
+        return data
 
 
 class ConnectionsWidget(QWidget):
@@ -306,7 +514,9 @@ class ConnectionsWidget(QWidget):
     def apply_rbac(self) -> None:
         """Gate mutation buttons by RBAC permissions."""
         auth = get_auth_manager()
-        self.add_button.setEnabled(auth.has_permission("connections:write"))
+        can_write = auth.has_permission("connections:write")
+        self.add_button.setEnabled(can_write)
+        self.discover_button.setEnabled(can_write)
         # edit/delete/test still depend on selection; re-evaluate
         self._on_selection_changed()
 
@@ -327,6 +537,12 @@ class ConnectionsWidget(QWidget):
         self.add_button = QPushButton(t("connections.add_connection"))
         self.add_button.clicked.connect(self._add_connection)
         button_layout.addWidget(self.add_button)
+
+        self.discover_button = QPushButton(
+            t("connections.discover_cloud", "Discover Cloud…")
+        )
+        self.discover_button.clicked.connect(self._discover_cloud)
+        button_layout.addWidget(self.discover_button)
 
         self.edit_button = QPushButton(t("connections.edit"))
         self.edit_button.clicked.connect(self._edit_connection)
@@ -465,6 +681,20 @@ class ConnectionsWidget(QWidget):
             self.connections.append(connection)
             self._update_table()
             self.connection_added.emit(connection)
+
+    def _discover_cloud(self):
+        """Discover managed cloud databases and import connection profiles."""
+        try:
+            get_auth_manager().require("connections:write")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
+        dialog = CloudDiscoverDialog(parent=self)
+        if dialog.exec():
+            for connection in dialog.imported_connections():
+                self.connections.append(connection)
+                self.connection_added.emit(connection)
+            self._update_table()
 
     def _edit_connection(self):
         """Edit selected connection"""

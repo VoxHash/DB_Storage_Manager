@@ -109,6 +109,17 @@ class SecureStore:
                 proton = copy.deepcopy(defaults.get("proton_drive") or {})
                 proton.update(loaded["proton_drive"])
                 merged["proton_drive"] = proton
+            if "cloud_managed" in loaded and isinstance(
+                loaded.get("cloud_managed"), dict
+            ):
+                cloud = copy.deepcopy(defaults.get("cloud_managed") or {})
+                for provider in ("aws", "gcp", "azure"):
+                    incoming = loaded["cloud_managed"].get(provider)
+                    if isinstance(incoming, dict):
+                        base = dict(cloud.get(provider) or {})
+                        base.update(incoming)
+                        cloud[provider] = base
+                merged["cloud_managed"] = cloud
             return merged
         except Exception:
             return defaults

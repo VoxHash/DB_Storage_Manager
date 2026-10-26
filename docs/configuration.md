@@ -59,7 +59,11 @@ No required secrets for core operation. Useful optional variables:
 | `ORACLE_CLIENT_LIB_DIR` | Optional path to Oracle Instant Client libraries (enables `oracledb` Thick mode) |
 | `DSM_E2E_CONNECTIONS_FILE` | Absolute path to a local JSON fixture of real DB profiles for optional live probes (`tests/test_real_connections.py`) |
 | `DSM_E2E_CONNECT_TIMEOUT` | Seconds for each live `test_connection()` probe (default `8`) |
-| AWS / Google credentials | Only for S3 or Google Drive backup adapters |
+| AWS / Google credentials | S3 / Google Drive backup adapters, and optional RDS / Cloud SQL discovery |
+| `DSM_AWS_REGION` / `DSM_AWS_ACCESS_KEY_ID` / `DSM_AWS_SECRET_ACCESS_KEY` / `DSM_AWS_PROFILE` | AWS RDS discovery + IAM auth tokens (or use the default AWS credential chain) |
+| `DSM_AWS_RDS_SSL_CA` | Path to the RDS CA bundle for `sslmode=verify-full` / IAM TLS |
+| `DSM_GCP_PROJECT_ID` / `DSM_GCP_CREDENTIALS` | GCP Cloud SQL discovery (`GOOGLE_CLOUD_PROJECT` / `GOOGLE_APPLICATION_CREDENTIALS` also accepted) |
+| `DSM_AZURE_SUBSCRIPTION_ID` / `DSM_AZURE_TENANT_ID` / `DSM_AZURE_CLIENT_ID` / `DSM_AZURE_CLIENT_SECRET` | Azure SQL discovery + Entra tokens (or `DefaultAzureCredential` / `az login`) |
 | `DSM_PROTONDRIVE_USERNAME` / `DSM_PROTONDRIVE_PASSWORD` | Proton Drive account for rclone-backed cloud backups (or use an existing rclone `protondrive` remote) |
 | `DSM_PROTONDRIVE_REMOTE` | rclone remote name (default `protondrive`) |
 | `DSM_PROTONDRIVE_PATH` | Folder on Proton Drive (default `db-storage-manager-backups`) |
@@ -68,7 +72,15 @@ No required secrets for core operation. Useful optional variables:
 | `RCLONE_PROTONDRIVE_*` | Alternate env names accepted by rclone itself |
 | LDAP / MFA related settings | Only when auth features are enabled |
 
-Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
+Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
+
+### Cloud-managed databases (RDS / Cloud SQL / Azure SQL)
+
+1. Optional extras: `pip install -e ".[aws]"`, `".[gcp]"`, `".[azure]"`, or `".[cloud]"` (boto3 is already a core dependency; Azure/GCP Admin SDKs are optional).
+2. Copy `.env.cloud.local.example` → `.env.cloud.local` (gitignored) or set the `DSM_*` / cloud vendor env vars above. Non-secret defaults can also live under SecureStore settings key `cloud_managed`.
+3. In **Connections**, use **Discover Cloud…** → **Refresh Discovery** → select instances → **Import Selected** (password later, or IAM / Entra token mode).
+4. Imported profiles store `extra.cloud_provider` / `extra.auth_mode` / SSL hints. RDS IAM uses `generate_db_auth_token` at connect time; Azure Entra uses ODBC access tokens; Cloud SQL IAM DB auth needs the Auth Proxy or `cloud-sql-python-connector`.
+5. Live cloud API calls are skipped in CI unless you set credentials locally (`DSM_LIVE_CLOUD=1` for the optional live pytest).
 
 ### Proton Drive backups
 

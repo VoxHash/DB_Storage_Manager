@@ -64,4 +64,7 @@ mypy>=1.7.0
 # SQL Server:    pip install pyodbc  (+ Microsoft ODBC Driver 18 / unixODBC)
 # ClickHouse:    pip install clickhouse-driver
 # InfluxDB:      pip install influxdb-client
-# GCP Cloud SQL: pip install google-cloud-sqladmin
+# Cloud-managed DBs (prefer setup extras):
+#   pip install -e ".[aws]" / ".[gcp]" / ".[azure]" / ".[cloud]"
+# GCP: google-cloud-sqladmin + cloud-sql-python-connector
+# Azure packages listed above; boto3 is already required for S3/RDS
