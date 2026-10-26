@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
+- GCP cloud extra uses PyPI package `google-cloud-sql` (imports `google.cloud.sqladmin_v1`); docs/tests/error strings updated from the obsolete `google-cloud-sqladmin` name
 
 ### Added
+- **Platform guides**: [docs/desktop.md](docs/desktop.md) (production PyQt6 client), [docs/android-grapheneos.md](docs/android-grapheneos.md) and [docs/quest.md](docs/quest.md) (honest interim browser→API paths; no native APK/Quest app yet), [docs/cross-platform.md](docs/cross-platform.md) (shared SecureStore / RBAC / `DSM_API_TOKEN` / bind+TLS opsec); linked from docs index, README, and ROADMAP
+- **Cloud credential helper** `scripts/setup-cloud-env.sh`: creates gitignored `.env.cloud.local` (mode 600) wired to vendor default credential chains without inventing static keys; prints host credential presence and discovery readiness without secret values
 - **Cloud-managed database integrations** (`db_storage_manager.cloud`): deepened AWS RDS, GCP Cloud SQL, and Azure SQL beyond stubs — paginated discovery, connection-profile import, SSL guidance, RDS IAM `generate_db_auth_token`, Azure Entra access tokens for ODBC, clear `CloudSDKMissingError` / `CloudNotConfiguredError` when SDKs or credentials are missing
 - Credentials from SecureStore `cloud_managed`, `.env.cloud.local`, or env (`DSM_AWS_*` / `DSM_GCP_*` / `DSM_AZURE_*`); never committed — `.env.cloud.local.example` shipped
 - Connections UI **Discover Cloud…** dialog (status, refresh, multi-select import with password or IAM/Entra auth mode); PostgreSQL / MySQL / SQL Server drivers apply cloud auth/SSL from `ConnectionConfig.extra`

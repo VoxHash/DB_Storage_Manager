@@ -72,7 +72,8 @@ setup(
         # Cloud-managed databases (discovery / IAM / Entra). boto3 is already core.
         "aws": ["boto3>=1.34.0"],
         "gcp": [
-            "google-cloud-sqladmin>=1.12.0",
+            # PyPI package is google-cloud-sql (imports as google.cloud.sqladmin_v1)
+            "google-cloud-sql>=0.1.1",
             "cloud-sql-python-connector>=1.12.0",
             "google-auth>=2.23.0",
         ],
@@ -82,7 +83,7 @@ setup(
         ],
         "cloud": [
             "boto3>=1.34.0",
-            "google-cloud-sqladmin>=1.12.0",
+            "google-cloud-sql>=0.1.1",
             "cloud-sql-python-connector>=1.12.0",
             "google-auth>=2.23.0",
             "azure-identity>=1.15.0",

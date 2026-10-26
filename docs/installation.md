@@ -56,7 +56,7 @@ pip install -e ".[engines]"
 
 ```bash
 pip install -e ".[aws]"     # boto3 (also core) — RDS discovery + IAM tokens
-pip install -e ".[gcp]"     # google-cloud-sqladmin + cloud-sql-python-connector
+pip install -e ".[gcp]"     # google-cloud-sql + cloud-sql-python-connector
 pip install -e ".[azure]"   # azure-identity + azure-mgmt-sql
 pip install -e ".[cloud]"   # all of the above
 ```

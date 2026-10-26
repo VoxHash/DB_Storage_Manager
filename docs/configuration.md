@@ -76,11 +76,12 @@ Database passwords belong in the encrypted connection store, not in `.env` files
 
 ### Cloud-managed databases (RDS / Cloud SQL / Azure SQL)
 
-1. Optional extras: `pip install -e ".[aws]"`, `".[gcp]"`, `".[azure]"`, or `".[cloud]"` (boto3 is already a core dependency; Azure/GCP Admin SDKs are optional).
-2. Copy `.env.cloud.local.example` → `.env.cloud.local` (gitignored) or set the `DSM_*` / cloud vendor env vars above. Non-secret defaults can also live under SecureStore settings key `cloud_managed`.
+1. Optional extras: `pip install -e ".[aws]"`, `".[gcp]"`, `".[azure]"`, or `".[cloud]"` (boto3 is already a core dependency; Azure/GCP Admin SDKs are optional — GCP uses PyPI `google-cloud-sql`).
+2. Prefer `./scripts/setup-cloud-env.sh` (writes gitignored `.env.cloud.local`, mode `600`, default credential chains — no invented static keys) or copy `.env.cloud.local.example`. Authenticate with `aws configure`, `gcloud auth application-default login`, and/or `az login`. Non-secret defaults can also live under SecureStore settings key `cloud_managed`.
 3. In **Connections**, use **Discover Cloud…** → **Refresh Discovery** → select instances → **Import Selected** (password later, or IAM / Entra token mode).
 4. Imported profiles store `extra.cloud_provider` / `extra.auth_mode` / SSL hints. RDS IAM uses `generate_db_auth_token` at connect time; Azure Entra uses ODBC access tokens; Cloud SQL IAM DB auth needs the Auth Proxy or `cloud-sql-python-connector`.
 5. Live cloud API calls are skipped in CI unless you set credentials locally (`DSM_LIVE_CLOUD=1` for the optional live pytest).
+6. Desktop / companion opsec: [desktop.md](desktop.md), [cross-platform.md](cross-platform.md).
 
 ### Proton Drive backups
 

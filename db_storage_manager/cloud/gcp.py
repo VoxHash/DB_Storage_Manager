@@ -1,9 +1,10 @@
 """
 Google Cloud SQL integration — discovery + connection helpers.
 
-Discovery prefers ``google-cloud-sqladmin`` when installed, otherwise falls back
-to ``googleapiclient`` (already a core dependency). Optional
-``cloud-sql-python-connector`` is documented for IAM/TLS connections.
+Discovery prefers ``google-cloud-sql`` (``google.cloud.sqladmin_v1``) when
+installed, otherwise falls back to ``googleapiclient`` (already a core
+dependency). Optional ``cloud-sql-python-connector`` is documented for
+IAM/TLS connections.
 """
 
 from __future__ import annotations
@@ -52,9 +53,9 @@ def _build_sqladmin_client(credentials_path: Optional[str]) -> Tuple[Any, str]:
         from google.auth import default as google_auth_default
     except ImportError as exc:
         raise CloudSDKMissingError(
-            "Cloud SQL discovery requires google-cloud-sqladmin or "
+            "Cloud SQL discovery requires google-cloud-sql or "
             "google-api-python-client. Install with: "
-            'pip install -e ".[gcp]"  (or pip install google-cloud-sqladmin)'
+            'pip install -e ".[gcp]"  (or pip install google-cloud-sql)'
         ) from exc
 
     if credentials is None:

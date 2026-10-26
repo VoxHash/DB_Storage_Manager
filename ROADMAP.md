@@ -9,6 +9,8 @@ _(clear — promote from Next when starting the next deliverable)_
 ## Next
 
 - Optional per-tab content polish (dashboard cards, connection list density) on top of the shipped modern desktop shell
+- Native Android / GrapheneOS companion APK (sideload / F-Droid first) once credential-export and privacy review land — interim path documented in [docs/android-grapheneos.md](docs/android-grapheneos.md)
+- Meta Quest WebXR / Unity glance client after UX research — interim path documented in [docs/quest.md](docs/quest.md)
 
 ## Later
 
@@ -16,10 +18,11 @@ _(open — promote from Future platforms only when prerequisites land)_
 
 ## Future platforms (exploratory)
 
-These are **not** near-term deliverables. Desktop (PyQt6) remains the product; mobile/XR would be companion surfaces that reuse connection profiles and read-only monitoring where feasible.
+These are **not** near-term deliverables. Desktop (PyQt6) remains the product; mobile/XR would be companion surfaces that reuse connection profiles and read-only monitoring where feasible. **Install/use guides** for interim browser→API paths and intended native installs live under `docs/` (linked below). Opsec for shared SecureStore / RBAC / `DSM_API_TOKEN` / bind+TLS caveats: [docs/cross-platform.md](docs/cross-platform.md).
 
 ### Android / GrapheneOS companion
 
+- **Guide**: [docs/android-grapheneos.md](docs/android-grapheneos.md) (honest: no APK yet; interim = hardened browser → `db-storage-manager-api`)
 - **Goal**: privacy-respecting companion for GrapheneOS / stock Android — view encrypted connection inventory metadata, trigger scheduled backup status checks, and receive local alerts without shipping a full query console on-device
 - **Prerequisites**: stable desktop API or export format for connection metadata; hardened credential model that never mirrors Fernet master keys to mobile storage by default
 - **Approach (tentative)**: Kotlin + Jetpack; optional F-Droid / sideload builds first; GrapheneOS network permission hardening documented; no Google Play Services hard dependency
@@ -27,6 +30,7 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 ### Meta Quest 3 (OpenXR) companion
 
+- **Guide**: [docs/quest.md](docs/quest.md) (honest: no Quest Store / sideload app yet; interim = Quest Browser → companion API)
 - **Goal**: spatial “ops glance” panel for lab/workstation operators — dashboard metrics and backup health in VR, not a primary DBA workstation
 - **Prerequisites**: Web or lightweight companion backend from the shipped Web UI / REST companion; clear UX research that VR adds value over a phone glance view
 - **Approach (tentative)**: Unity or WebXR client talking to a local companion service; Quest Store packaging only after privacy review
@@ -36,11 +40,13 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 - Replacing the product name or Python package (`db_storage_manager` / `db-storage-manager`) — name is descriptive and already aligned with PyPI-style packaging
 - Full mobile rewrite of the PyQt6 desktop UI
-- Shipping Quest / Android apps before the Web/REST companion foundation exists
+- Shipping Quest / Android **native** apps before privacy/credential review (Web/REST companion foundation **already exists** — use it as the interim path)
 
 ## Shipped recently
 
-- **Cloud-managed databases (RDS / Cloud SQL / Azure SQL)**: real discovery via boto3 / googleapiclient|google-cloud-sqladmin / azure-mgmt-sql; IAM auth tokens (RDS) and Entra ODBC tokens (Azure SQL); SSL guidance; `CloudManager` + SecureStore `cloud_managed` / `.env.cloud.local`; Connections **Discover Cloud…**; setup extras `aws`/`gcp`/`azure`/`cloud`; clear errors when SDKs/creds missing; mocked boundary tests in `tests/test_cloud_managed.py` (post-1.0.5)
+- **Platform guides + opsec**: desktop production client ([docs/desktop.md](docs/desktop.md)); Android/GrapheneOS and Quest interim browser→API guides; cross-platform companion trust model ([docs/cross-platform.md](docs/cross-platform.md)); linked from docs index / README / this roadmap (post-1.0.5)
+- **Cloud credential local setup**: gitignored `.env.cloud.local` via `scripts/setup-cloud-env.sh` (mode 600, default credential chains — no invented static keys); GCP extra package name corrected to PyPI `google-cloud-sql`; `pip install -e ".[cloud]"` install path verified (post-1.0.5)
+- **Cloud-managed databases (RDS / Cloud SQL / Azure SQL)**: real discovery via boto3 / googleapiclient|google-cloud-sql / azure-mgmt-sql; IAM auth tokens (RDS) and Entra ODBC tokens (Azure SQL); SSL guidance; `CloudManager` + SecureStore `cloud_managed` / `.env.cloud.local`; Connections **Discover Cloud…**; setup extras `aws`/`gcp`/`azure`/`cloud`; clear errors when SDKs/creds missing; mocked boundary tests in `tests/test_cloud_managed.py` (post-1.0.5)
 - **Proton Drive cloud backup**: `ProtonDriveBackupAdapter` uploads/lists/verifies/deletes via rclone `protondrive` remote; DSMENC1 encryption preferred before upload; credentials from SecureStore `proton_drive` / `.env.protondrive.local` / env (never committed); clear `ProtonDriveNotConfiguredError` when rclone or account is missing; Backups tab destination + **Refresh Proton Drive**; mocked rclone boundary tests in `tests/test_proton_drive_backup.py` (post-1.0.5)
 - Modern desktop shell: library-style left nav, Atmospheric dark theme tokens, cohesive PyQt6 stylesheet, polished RBAC sign-in card; offscreen smoke including post-sign-in click-through of all nav sections + theme rotation in `tests/test_gui_shell.py` (post-1.0.5)
 - Multi-user / RBAC for shared workstations: PBKDF2 password hashes in encrypted `users.enc`, roles (`admin` / `user` / `viewer` / `guest`) with real permission checks (not always-allow), SecureStore persistence, desktop login when accounts exist, Settings **Users & RBAC** admin UI, `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap`, API Basic auth + Bearer system-admin when RBAC active, enforcement on connections / backups / settings / plugins / companion endpoints; tests in `tests/test_rbac.py` (post-1.0.5)

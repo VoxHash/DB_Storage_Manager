@@ -113,6 +113,10 @@ Reference: [docs/configuration.md](docs/configuration.md)
 ## Documentation
 
 - [docs/index.md](docs/index.md) — documentation home
+- [Desktop install & use](docs/desktop.md) — production PyQt6 client (Linux / macOS / Windows)
+- [Android / GrapheneOS](docs/android-grapheneos.md) — future companion; interim browser → API
+- [Meta Quest](docs/quest.md) — future companion; interim browser → API
+- [Cross-platform companions](docs/cross-platform.md) — shared SecureStore / RBAC / API opsec
 - [Getting Started](docs/getting-started.md)
 - [Architecture](docs/architecture.md)
 - [API](docs/api.md)
@@ -122,7 +126,7 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Next focus: optional per-tab content polish on the modern desktop shell.
+See [ROADMAP.md](ROADMAP.md). Desktop remains primary; platform guides and cloud default-chain setup are tracked under Shipped / Next.
 
 ## Contributing
 

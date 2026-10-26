@@ -70,7 +70,7 @@ Backup → export → compress/encrypt → adapter → storage
 - Python 3.10+, PyQt6 / PyQt6-Charts
 - Optional Rust extension for gzip/zstd, AES-GCM file encryption, checksums, and parallel helpers
 - Drivers: psycopg2-binary, pymysql, aiosqlite, pymongo, redis; optional oracledb (Thin/Thick), pyodbc (+ ODBC Driver 18), clickhouse-driver, influxdb-client
-- cryptography (Fernet + AESGCM), zstandard (Python zstd fallback), paramiko, boto3, Google API client, optional azure-identity / azure-mgmt-sql / google-cloud-sqladmin, schedule, pandas/numpy/matplotlib
+- cryptography (Fernet + AESGCM), zstandard (Python zstd fallback), paramiko, boto3, Google API client, optional azure-identity / azure-mgmt-sql / google-cloud-sql, schedule, pandas/numpy/matplotlib
 
 ## Packaging and CI
 

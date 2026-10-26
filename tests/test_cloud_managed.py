@@ -47,7 +47,7 @@ def test_setup_extras_declare_cloud_packages():
     assert '"gcp":' in text
     assert '"azure":' in text
     assert '"cloud":' in text
-    assert "google-cloud-sqladmin" in text
+    assert "google-cloud-sql" in text
     assert "azure-mgmt-sql" in text
     assert "azure-identity" in text
 

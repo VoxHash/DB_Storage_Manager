@@ -8,6 +8,7 @@ Professional desktop application for visualizing and managing database storage, 
 |---|---|
 | [Getting Started](getting-started.md) | Prerequisites, first launch, and first workflows |
 | [Quick Start](quick-start.md) | Minimal path from clone to running app |
+| [Desktop (Linux / macOS / Windows)](desktop.md) | Production PyQt6 client: `.venv`, shims, RBAC, cloud, Proton Drive, opsec |
 | [Installation](installation.md) | Platform install, optional engines, troubleshooting installs |
 | [Configuration](configuration.md) | Settings, paths, and environment expectations |
 | [Usage](usage.md) | Connections, analysis, query console, backups |
@@ -16,6 +17,14 @@ Professional desktop application for visualizing and managing database storage, 
 | [Architecture](architecture.md) | Module layout, security model, async design |
 | [Troubleshooting](troubleshooting.md) | Common failures and fixes |
 | [FAQ](faq.md) | Short answers to frequent questions |
+
+## Companions and future platforms
+
+| Document | Description |
+|---|---|
+| [Android / GrapheneOS](android-grapheneos.md) | No native APK yet; interim hardened browser → REST/Web companion + opsec |
+| [Meta Quest (Quest 3 class)](quest.md) | No Quest Store app yet; interim Quest Browser → companion + opsec |
+| [Cross-platform companions](cross-platform.md) | Desktop + API + future phone/XR trust model, RBAC, bind/TLS, shared backups |
 
 ## Examples
 

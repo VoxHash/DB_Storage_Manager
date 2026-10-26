@@ -66,5 +66,5 @@ mypy>=1.7.0
 # InfluxDB:      pip install influxdb-client
 # Cloud-managed DBs (prefer setup extras):
 #   pip install -e ".[aws]" / ".[gcp]" / ".[azure]" / ".[cloud]"
-# GCP: google-cloud-sqladmin + cloud-sql-python-connector
+# GCP: google-cloud-sql + cloud-sql-python-connector
 # Azure packages listed above; boto3 is already required for S3/RDS
