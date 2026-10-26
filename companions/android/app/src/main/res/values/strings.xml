@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DSM Companion</string>
+    <string name="base_url_hint">http://127.0.0.1:8765</string>
+    <string name="token_hint">Bearer pairing token (from db-storage-manager-pair)</string>
+    <string name="save_pair">Save pairing</string>
+    <string name="refresh_health">Health</string>
+    <string name="refresh_connections">Connections</string>
+    <string name="refresh_backups">Backups</string>
+    <string name="clear_token">Clear token</string>
+    <string name="opsec_note">Token stays in EncryptedSharedPreferences. Never paste .master-key or connection passwords. Prefer SSH forward to loopback.</string>
+</resources>

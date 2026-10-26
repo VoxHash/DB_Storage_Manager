@@ -8,7 +8,7 @@ This guide is required because the product already ships a **local REST / Web co
 |---|---|---|
 | Desktop PyQt6 (`db-storage-manager`) | **Production** | Full DBA workflow: connections, query, backups, monitoring, plugins, cloud discovery |
 | REST + Web companion (`db-storage-manager-api`) | **Shipped** | Same-host glance UI + sanitized API over SecureStore / local backups |
-| Android / GrapheneOS | **Future** | Planned companion; interim = hardened browser → API ([android-grapheneos.md](android-grapheneos.md)) |
+| Android / GrapheneOS | **Foundation** | Sideload Kotlin APK + pairing/export ([android-grapheneos.md](android-grapheneos.md), [privacy-companion.md](privacy-companion.md)); F-Droid later |
 | Meta Quest 3 class | **Future** | Planned spatial glance; interim = Quest Browser → API ([quest.md](quest.md)) |
 
 ## Shared data model
@@ -20,10 +20,11 @@ This guide is required because the product already ships a **local REST / Web co
 ## Auth across devices
 
 1. **Bearer `DSM_API_TOKEN`** — system-admin style access for automation and interim browser clients. Store only in gitignored `.env.api.local` (mode `600`). Generate with `./scripts/setup-api-token.sh`.
-2. **HTTP Basic** — when RBAC is active (`users.enc`), use a local username/password with the least role that fits (viewer vs user vs admin). Unauthenticated API calls (except health/static) return **401**; missing permissions return **403**.
-3. **Desktop sign-in** — PyQt6 login dialog when RBAC accounts exist; independent of the Bearer token.
+2. **SecureStore pairing token** — `db-storage-manager-pair` shows a Bearer once and stores only its SHA-256 digest under `settings.companion`. The API accepts either env or pairing Bearer. See [privacy-companion.md](privacy-companion.md).
+3. **HTTP Basic** — when RBAC is active (`users.enc`), use a local username/password with the least role that fits (viewer vs user vs admin). Unauthenticated API calls (except health/static) return **401**; missing permissions return **403**.
+4. **Desktop sign-in** — PyQt6 login dialog when RBAC accounts exist; independent of the Bearer token.
 
-Do not reuse cloud IAM keys or Proton Drive passwords as API tokens.
+Do not reuse cloud IAM keys or Proton Drive passwords as API tokens. Never sync `.master-key` to phones.
 
 ## Networking and TLS
 
@@ -47,13 +48,13 @@ Do not reuse cloud IAM keys or Proton Drive passwords as API tokens.
         ↑
         │ SSH / VPN tunnel (preferred)
         │
-[GrapheneOS browser] / [Quest Browser]   ← glance only
+[GrapheneOS DSM Companion APK] / [browser] / [Quest Browser]   ← glance only
 ```
 
 ## What this guide deliberately does not promise
 
-- Native APK or Quest Store packages (not shipped)
-- Encrypted multi-device sync of connection stores
+- F-Droid / Play listing or Quest Store packages (Android sideload foundation only)
+- Encrypted multi-device sync of connection stores / Fernet keys
 - Full query console on phone or in VR
 
-Track native companions under [ROADMAP.md](../ROADMAP.md) Future platforms. Desktop install: [desktop.md](desktop.md).
+Track remaining companions under [ROADMAP.md](../ROADMAP.md). Desktop install: [desktop.md](desktop.md).

@@ -103,6 +103,10 @@ class SecureStore:
                 rbac = copy.deepcopy(defaults.get("rbac") or {})
                 rbac.update(loaded["rbac"])
                 merged["rbac"] = rbac
+            if "companion" in loaded and isinstance(loaded.get("companion"), dict):
+                companion = copy.deepcopy(defaults.get("companion") or {})
+                companion.update(loaded["companion"])
+                merged["companion"] = companion
             if "proton_drive" in loaded and isinstance(
                 loaded.get("proton_drive"), dict
             ):

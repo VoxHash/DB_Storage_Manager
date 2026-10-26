@@ -8,8 +8,8 @@ _(clear — promote from Next when starting the next deliverable)_
 
 ## Next
 
-- Native Android / GrapheneOS companion APK (sideload / F-Droid first) once credential-export and privacy review land — interim path documented in [docs/android-grapheneos.md](docs/android-grapheneos.md)
 - Meta Quest WebXR / Unity glance client after UX research — interim path documented in [docs/quest.md](docs/quest.md)
+- Android companion polish: F-Droid metadata / signed release APK (sideload debug foundation already shipped)
 
 ## Later
 
@@ -17,14 +17,13 @@ _(open — promote from Future platforms only when prerequisites land)_
 
 ## Future platforms (exploratory)
 
-These are **not** near-term deliverables. Desktop (PyQt6) remains the product; mobile/XR would be companion surfaces that reuse connection profiles and read-only monitoring where feasible. **Install/use guides** for interim browser→API paths and intended native installs live under `docs/` (linked below). Opsec for shared SecureStore / RBAC / `DSM_API_TOKEN` / bind+TLS caveats: [docs/cross-platform.md](docs/cross-platform.md).
+These are **not** near-term deliverables unless promoted above. Desktop (PyQt6) remains the product; mobile/XR are companion surfaces that reuse connection profiles and read-only monitoring where feasible. **Install/use guides** live under `docs/` (linked below). Opsec: [docs/cross-platform.md](docs/cross-platform.md), [docs/privacy-companion.md](docs/privacy-companion.md).
 
 ### Android / GrapheneOS companion
 
-- **Guide**: [docs/android-grapheneos.md](docs/android-grapheneos.md) (honest: no APK yet; interim = hardened browser → `db-storage-manager-api`)
-- **Goal**: privacy-respecting companion for GrapheneOS / stock Android — view encrypted connection inventory metadata, trigger scheduled backup status checks, and receive local alerts without shipping a full query console on-device
-- **Prerequisites**: stable desktop API or export format for connection metadata; hardened credential model that never mirrors Fernet master keys to mobile storage by default
-- **Approach (tentative)**: Kotlin + Jetpack; optional F-Droid / sideload builds first; GrapheneOS network permission hardening documented; no Google Play Services hard dependency
+- **Guide**: [docs/android-grapheneos.md](docs/android-grapheneos.md)
+- **Shipped (foundation)**: privacy / credential-export review; SecureStore pairing Bearer (SHA-256 only); sanitized `dsm-companion-export`; Kotlin sideload debug APK under `companions/android/` talking to health/connections/backups — no Play Services, no F-Droid listing yet
+- **Remaining**: F-Droid / signed release metadata; optional TLS termination; richer alerts UI
 - **Out of scope initially**: running arbitrary SQL, full backup restore, or embedding database engines on-device
 
 ### Meta Quest 3 (OpenXR) companion
@@ -39,10 +38,11 @@ These are **not** near-term deliverables. Desktop (PyQt6) remains the product; m
 
 - Replacing the product name or Python package (`db_storage_manager` / `db-storage-manager`) — name is descriptive and already aligned with PyPI-style packaging
 - Full mobile rewrite of the PyQt6 desktop UI
-- Shipping Quest / Android **native** apps before privacy/credential review (Web/REST companion foundation **already exists** — use it as the interim path)
+- Shipping Quest **native** apps before UX research (Web/REST companion foundation **already exists** — use it as the interim path)
 
 ## Shipped recently
 
+- **Android / GrapheneOS companion foundation**: privacy review ([docs/privacy-companion.md](docs/privacy-companion.md)); `db-storage-manager-pair` / `db-storage-manager-export`; API accepts SecureStore pairing Bearer; Kotlin sideload APK in `companions/android/` for health/connections/backups; tests in `tests/test_companion_export_pairing.py` (post-1.0.5)
 - **Per-tab content polish** on the modern desktop shell: page titles/subtitles, dashboard metric cards (caption + value), denser connection/inventory tables, shared page margins/spacing, Primary CTA object names; glassmorphism scoped to panel roots so nested cards are not double-boxed; offscreen smoke in `tests/test_tab_content_polish.py` (post-1.0.5)
 - **Platform guides + opsec**: desktop production client ([docs/desktop.md](docs/desktop.md)); Android/GrapheneOS and Quest interim browser→API guides; cross-platform companion trust model ([docs/cross-platform.md](docs/cross-platform.md)); linked from docs index / README / this roadmap (post-1.0.5)
 - **Cloud credential local setup**: gitignored `.env.cloud.local` via `scripts/setup-cloud-env.sh` (mode 600, default credential chains — no invented static keys); GCP extra package name corrected to PyPI `google-cloud-sql`; `pip install -e ".[cloud]"` install path verified (post-1.0.5)

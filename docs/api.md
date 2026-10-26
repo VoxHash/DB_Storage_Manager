@@ -73,7 +73,16 @@ python -m db_storage_manager.api --host 127.0.0.1 --port 8765
 | POST | `/api/v1/backups/{id}/dry-run` | Checksum + payload dry-run (no live DB write) |
 | GET | `/` | Minimal Web UI |
 
-Set `DSM_API_TOKEN` to require Bearer auth on all routes except health. See [cli.md](cli.md).
+Set `DSM_API_TOKEN` and/or create a SecureStore pairing token (`db-storage-manager-pair`) to require Bearer auth on all routes except health. See [cli.md](cli.md) and [privacy-companion.md](privacy-companion.md).
+
+### Companion export (Python)
+
+```python
+from db_storage_manager.export import export_companion_bundle
+
+bundle = export_companion_bundle()  # passwords redacted
+# export_companion_bundle(include_secrets=True, consent=True)  # desktop only
+```
 
 ## Native performance helpers
 

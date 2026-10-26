@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Android / GrapheneOS companion foundation**: Kotlin sideload debug APK under `companions/android/` (no Play Services) calling local REST `health` / `connections` / `backups` with Bearer auth; token in EncryptedSharedPreferences
+- **Companion privacy / credential-export review** ([docs/privacy-companion.md](docs/privacy-companion.md)): Fernet master keys never mirrored to mobile; sanitized `dsm-companion-export` format; plaintext secrets require `--include-secrets --i-consent`
+- **SecureStore pairing token**: `db-storage-manager-pair` / `python -m db_storage_manager.security.pairing` stores SHA-256 only; REST companion accepts env `DSM_API_TOKEN` or pairing Bearer
+- **Export CLI**: `db-storage-manager-export` / `python -m db_storage_manager.export.companion` writes mode-600 JSON inventory
+- Tests for pairing, redacted export, and API pairing Bearer (`tests/test_companion_export_pairing.py`); Android build/sideload docs updated
+
 ### Changed
 - Theme switches re-apply glass panel stylesheets so Atmospheric / Light / Dracula updates MetricCard / PageTitle ink on every polished tab (no stale Atmospheric colors after Settings theme change); Plugins tab root is `#glassmorphism` like the other six sections
 - Desktop **per-tab content polish** on the modern shell: shared page headers, dashboard metric cards, denser inventory tables, consistent margins/spacing across Dashboard / Connections / Query / Backups / Monitoring / Plugins / Settings — RBAC, plugins, monitoring, backups, query, and cloud discover behavior unchanged

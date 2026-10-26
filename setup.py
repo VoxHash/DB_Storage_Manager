@@ -95,6 +95,8 @@ setup(
             "db-storage-manager=db_storage_manager.main:main",
             "db-storage-manager-api=db_storage_manager.api.server:main",
             "db-storage-manager-bootstrap=db_storage_manager.security.bootstrap:main",
+            "db-storage-manager-pair=db_storage_manager.security.pairing:main",
+            "db-storage-manager-export=db_storage_manager.export.companion:main",
         ],
     },
     classifiers=[

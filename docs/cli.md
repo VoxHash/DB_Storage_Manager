@@ -52,7 +52,20 @@ Defaults: `http://127.0.0.1:8765/` (Web UI) and `/api/v1/*`.
 | `--token` / `DSM_API_TOKEN` | If set, require `Authorization: Bearer …` (except `/api/v1/health`); with RBAC active, Bearer maps to system admin |
 | `--backup-dir` | Override local backup directory |
 
-When RBAC accounts exist, unauthenticated API calls (except health/static) return **401**. Prefer HTTP Basic with a local user, or Bearer `DSM_API_TOKEN`. Missing permissions return **403**.
+A SecureStore **pairing** digest (from `db-storage-manager-pair`) is also accepted as Bearer when present — see [privacy-companion.md](privacy-companion.md).
+
+When RBAC accounts exist, unauthenticated API calls (except health/static) return **401**. Prefer HTTP Basic with a local user, or Bearer `DSM_API_TOKEN` / pairing token. Missing permissions return **403**.
+
+### Companion pairing and export
+
+```bash
+db-storage-manager-pair                 # show Bearer once; store SHA-256 in SecureStore
+db-storage-manager-pair --status
+db-storage-manager-pair --revoke
+db-storage-manager-export -o /tmp/dsm-export.json   # secrets redacted
+# plaintext secrets (desktop air-gap only — never for phones):
+# db-storage-manager-export --include-secrets --i-consent -o /tmp/dsm-secrets.json
+```
 
 ### Local token file (recommended)
 

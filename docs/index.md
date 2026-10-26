@@ -22,9 +22,10 @@ Professional desktop application for visualizing and managing database storage, 
 
 | Document | Description |
 |---|---|
-| [Android / GrapheneOS](android-grapheneos.md) | No native APK yet; interim hardened browser → REST/Web companion + opsec |
+| [Android / GrapheneOS](android-grapheneos.md) | Sideload Kotlin companion APK + pairing; browser interim still valid |
+| [Companion privacy / credentials](privacy-companion.md) | Export defaults, pairing digest, what never goes on-device |
 | [Meta Quest (Quest 3 class)](quest.md) | No Quest Store app yet; interim Quest Browser → companion + opsec |
-| [Cross-platform companions](cross-platform.md) | Desktop + API + future phone/XR trust model, RBAC, bind/TLS, shared backups |
+| [Cross-platform companions](cross-platform.md) | Desktop + API + phone/XR trust model, RBAC, bind/TLS, shared backups |
 
 ## Examples
 

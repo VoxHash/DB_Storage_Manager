@@ -81,6 +81,14 @@ DEFAULT_RBAC_PREFS = {
     "enabled": False,  # set True when users.enc has accounts (shared workstation)
 }
 
+# Companion pairing (SHA-256 of Bearer only — never store plaintext token or master key)
+DEFAULT_COMPANION = {
+    "pairing_token_hash": None,
+    "pairing_created_at": None,
+    "pairing_label": "",
+    "revoked_at": None,
+}
+
 # Proton Drive cloud backup (credentials via env / SecureStore — never commit secrets)
 DEFAULT_PROTON_DRIVE = {
     "remote": "protondrive",
@@ -120,6 +128,7 @@ DEFAULT_SETTINGS = {
     "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),
     "plugins": copy.deepcopy(DEFAULT_PLUGINS_PREFS),
     "rbac": copy.deepcopy(DEFAULT_RBAC_PREFS),
+    "companion": copy.deepcopy(DEFAULT_COMPANION),
     "proton_drive": copy.deepcopy(DEFAULT_PROTON_DRIVE),
     "cloud_managed": copy.deepcopy(DEFAULT_CLOUD_MANAGED),
 }

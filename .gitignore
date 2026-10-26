@@ -108,3 +108,14 @@ dist-native/
 # Local E2E / sibling DB credentials (never commit)
 .env.e2e.local
 tests/fixtures/connections.local.json
+
+# Android companion build outputs (APKs never committed)
+companions/android/.gradle/
+companions/android/.kotlin/
+companions/android/build/
+companions/android/app/build/
+companions/android/local.properties
+companions/android/*.apk
+companions/android/**/*.apk
+*.jks
+*.keystore

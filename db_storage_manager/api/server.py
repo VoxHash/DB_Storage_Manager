@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlparse
 
 from ..config import BACKUP_DIR
 from ..security.auth import PermissionDenied, get_auth_manager
+from ..security.pairing import resolve_api_bearer_ok
 from . import service
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -64,7 +65,7 @@ class CompanionHandler(BaseHTTPRequestHandler):
                 "ok": False,
                 "error": "Unauthorized",
                 "hint": hint
-                or "Bearer DSM_API_TOKEN or Basic username:password (RBAC)",
+                or "Bearer DSM_API_TOKEN / pairing token, or Basic username:password (RBAC)",
             },
             401,
         )
@@ -93,22 +94,27 @@ class CompanionHandler(BaseHTTPRequestHandler):
         """
         Establish API principal.
 
-        - Open mode (no RBAC users): optional Bearer DSM_API_TOKEN only.
-        - RBAC active: accept Bearer token as system admin, or HTTP Basic
-          as a local user. Unauthenticated requests are rejected.
+        - Open mode (no RBAC users): optional Bearer (env DSM_API_TOKEN and/or
+          SecureStore pairing digest) only.
+        - RBAC active: accept Bearer as system admin, or HTTP Basic as a local
+          user. Unauthenticated requests are rejected.
         """
         auth = get_auth_manager()
         auth.logout()
         header = self.headers.get("Authorization", "")
         expected = self.companion.api_token
+        pairing_configured = self.companion.pairing_configured
 
         if header.startswith("Bearer "):
             token = header[7:].strip()
-            if expected and token == expected:
+            ok, _source = resolve_api_bearer_ok(
+                token, env_token=expected or ""
+            )
+            if ok:
                 if auth.is_rbac_active():
                     auth.set_system_admin(True)
                 return True
-            if not auth.is_rbac_active() and not expected:
+            if not auth.is_rbac_active() and not expected and not pairing_configured:
                 return True
             return False
 
@@ -124,8 +130,8 @@ class CompanionHandler(BaseHTTPRequestHandler):
         if auth.is_rbac_active():
             # RBAC on: must authenticate
             return False
-        # Open mode: token optional
-        if expected:
+        # Open mode: token optional unless env or pairing digest is configured
+        if expected or pairing_configured:
             return False
         return True
 
@@ -353,6 +359,13 @@ class CompanionServer(ThreadingHTTPServer):
         self.api_token = api_token if api_token is not None else _env_token()
         self.backup_dir = Path(backup_dir) if backup_dir else BACKUP_DIR
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            from ..security.pairing import get_companion_prefs
+
+            prefs = get_companion_prefs()
+            self.pairing_configured = bool(prefs.get("pairing_token_hash"))
+        except Exception:
+            self.pairing_configured = False
         super().__init__((host, port), CompanionHandler)
 
     @property
@@ -384,7 +397,15 @@ def run_server(
     server = create_server(
         host, port, api_token=api_token, backup_dir=backup_dir
     )
-    auth = "Bearer token required" if server.api_token else "open (no DSM_API_TOKEN)"
+    if server.api_token or server.pairing_configured:
+        parts = []
+        if server.api_token:
+            parts.append("DSM_API_TOKEN")
+        if server.pairing_configured:
+            parts.append("SecureStore pairing")
+        auth = "Bearer required (" + " + ".join(parts) + ")"
+    else:
+        auth = "open (no DSM_API_TOKEN / pairing)"
     print(
         f"{service.health_payload()['app']} companion listening on {server.base_url} ({auth})",
         flush=True,

@@ -114,7 +114,8 @@ Reference: [docs/configuration.md](docs/configuration.md)
 
 - [docs/index.md](docs/index.md) — documentation home
 - [Desktop install & use](docs/desktop.md) — production PyQt6 client (Linux / macOS / Windows)
-- [Android / GrapheneOS](docs/android-grapheneos.md) — future companion; interim browser → API
+- [Android / GrapheneOS](docs/android-grapheneos.md) — sideload Kotlin companion + pairing; browser interim still valid
+- [Companion privacy](docs/privacy-companion.md) — credential export + pairing model
 - [Meta Quest](docs/quest.md) — future companion; interim browser → API
 - [Cross-platform companions](docs/cross-platform.md) — shared SecureStore / RBAC / API opsec
 - [Getting Started](docs/getting-started.md)
