@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Theme switches re-apply glass panel stylesheets so Atmospheric / Light / Dracula updates MetricCard / PageTitle ink on every polished tab (no stale Atmospheric colors after Settings theme change); Plugins tab root is `#glassmorphism` like the other six sections
 - Desktop **per-tab content polish** on the modern shell: shared page headers, dashboard metric cards, denser inventory tables, consistent margins/spacing across Dashboard / Connections / Query / Backups / Monitoring / Plugins / Settings — RBAC, plugins, monitoring, backups, query, and cloud discover behavior unchanged
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
 - GCP cloud extra uses PyPI package `google-cloud-sql` (imports `google.cloud.sqladmin_v1`); docs/tests/error strings updated from the obsolete `google-cloud-sqladmin` name
 - Glassmorphism panel stylesheet targets `QWidget#glassmorphism` only (no longer boxes every nested child)
 
 ### Added
+- Live theme visual pass: WCAG-style token contrast, Atmospheric / Light / Dracula × seven tabs with `QWidget.grab` property assertions, optional on-screen post-login smoke when `DISPLAY` is set (`tests/test_tab_content_polish.py`, `tests/test_gui_shell.py`); PNG grabs under gitignored `artifacts/`
 - GUI chrome helpers in `db_storage_manager.gui.utils`: `make_page_header`, `make_metric_card`, `configure_dense_table`, `apply_page_layout`; stylesheet tokens for `PageTitle` / `PageSubtitle` / `MetricCard` / `DenseTable`
 - Dashboard summary metrics render as elevated cards (caption + value); Connections list uses denser rows with live profile count in the page subtitle
 - Offscreen Qt smoke for tab content polish (`tests/test_tab_content_polish.py`)

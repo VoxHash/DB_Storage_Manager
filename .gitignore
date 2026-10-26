@@ -90,6 +90,9 @@ temp/
 *.backup
 *.bak
 
+# Local GUI theme / screenshot artifacts (may show usernames; never commit)
+artifacts/
+
 # SpecStory local history (do not commit chat dumps)
 .specstory/
 

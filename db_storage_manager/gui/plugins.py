@@ -43,6 +43,7 @@ class PluginsWidget(QWidget):
         self.marketplace.sync_builtins()
         self.marketplace.load_into_manager(only_enabled=False)
         self._rows: list[dict] = []
+        self.setObjectName("glassmorphism")
         self.init_ui()
         self.refresh()
         self.apply_rbac()

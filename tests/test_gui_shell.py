@@ -220,11 +220,117 @@ def test_post_login_click_through_shell_offscreen(isolated_secure_store, monkeyp
         sheet = window.styleSheet()
         assert "NavSidebar" in sheet
         assert THEMES[theme_key]["colors"]["primary"] in sheet
+        # Glass panels refresh with the active theme (no stale Atmospheric ink).
+        assert (
+            THEMES[theme_key]["colors"]["surface_elevated"]
+            in window.dashboard.styleSheet()
+        )
         # Nav still coherent after theme apply
         target = (window.tab_widget.currentIndex() + 1) % _NAV_SECTION_COUNT
         window.sidebar._buttons[target].click()
         app.processEvents()
         assert window.tab_widget.currentIndex() == target
         assert username in window.sidebar.footer.text()
+
+    window.close()
+
+
+def test_onscreen_theme_visual_smoke_post_login(isolated_secure_store, monkeypatch):
+    """When DISPLAY is set: short post-login grab for Atmospheric / Light / Dracula.
+
+    Run in a fresh process without QT_QPA_PLATFORM=offscreen, e.g.::
+
+        pytest tests/test_gui_shell.py::test_onscreen_theme_visual_smoke_post_login -q
+    """
+    display = os.environ.get("DISPLAY", "").strip()
+    if not display:
+        pytest.skip("no DISPLAY — on-screen theme smoke not available")
+    if os.environ.get("QT_QPA_PLATFORM", "").strip() == "offscreen":
+        pytest.skip("QT_QPA_PLATFORM=offscreen — skipping on-screen smoke")
+
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMessageBox
+
+    if QApplication.instance() is not None:
+        # Platform plugin is fixed at first QApplication; sibling offscreen tests
+        # in the same process make a true on-screen grab unreliable.
+        pytest.skip("QApplication already running — use a dedicated pytest process")
+
+    username, password = _load_rbac_local_credentials()
+    store, data_dir = isolated_secure_store
+    reset_auth_manager()
+
+    import db_storage_manager.themes.manager as theme_mod
+    from db_storage_manager.security import auth as auth_mod
+
+    monkeypatch.setattr(theme_mod, "THEME_FILE", data_dir / "theme.json")
+    theme_mod._theme_manager = None
+    auth_mod._auth_manager = AuthenticationManager(store=store)
+
+    app = QApplication([])
+    monkeypatch.setattr(
+        QMessageBox, "warning", lambda *a, **k: QMessageBox.StandardButton.Ok
+    )
+
+    bootstrap_admin(username, password, store=store)
+    get_auth_manager().reload()
+
+    from db_storage_manager.gui.login import LoginDialog
+    from db_storage_manager.gui.main_window import MainWindow
+    from db_storage_manager.themes.manager import get_theme_manager
+
+    dlg = LoginDialog()
+    dlg.show()
+    app.processEvents()
+    dlg.username_edit.setText(username)
+    dlg.password_edit.setText(password)
+    dlg._try_login()
+    app.processEvents()
+    assert dlg.result() == int(QDialog.DialogCode.Accepted)
+    assert get_auth_manager().current_user is not None
+    dlg.close()
+
+    artifact_root = Path(
+        os.environ.get(
+            "DSM_THEME_ARTIFACT_DIR",
+            str(_REPO_ROOT / "artifacts" / "theme_visual"),
+        )
+    )
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    get_theme_manager().set_theme("dark")
+    window = MainWindow()
+    window.resize(1280, 800)
+    window.show()
+    app.processEvents()
+
+    for theme_key in _THEME_KEYS:
+        get_theme_manager().set_theme(theme_key)
+        window._on_theme_changed(theme_key)
+        app.processEvents()
+        colors = THEMES[theme_key]["colors"]
+        assert colors["primary"] in window.styleSheet()
+        assert colors["surface_elevated"] in window.dashboard.styleSheet()
+
+        # Sample polished surfaces: dashboard cards + dense connections + headers
+        for index in (0, 1, 6):
+            window.sidebar._buttons[index].click()
+            app.processEvents()
+            page = window.tab_widget.widget(index)
+            title = page.findChild(QLabel, "PageTitle")
+            assert title is not None and title.isVisible()
+            grab = window.grab()
+            assert not grab.isNull() and grab.width() >= 800
+            out = artifact_root / f"onscreen_{theme_key}_tab{index}.png"
+            assert grab.save(str(out))
+
+        if theme_key == "dark":
+            assert window.dashboard._metric_cards["total_size"].objectName() == (
+                "MetricCard"
+            )
+        if theme_key == "light":
+            window.sidebar._buttons[1].click()
+            app.processEvents()
+            assert window.connections_widget.table.objectName() == "DenseTable"
 
     window.close()

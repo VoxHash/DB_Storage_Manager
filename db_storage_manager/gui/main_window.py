@@ -25,7 +25,7 @@ from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
-from .utils import apply_theme_to_app
+from .utils import apply_glassmorphism, apply_theme_to_app
 
 
 class MainWindow(QMainWindow):
@@ -238,8 +238,12 @@ class MainWindow(QMainWindow):
             self._syncing_nav = False
 
     def _apply_theme(self):
-        """Apply theme to application"""
+        """Apply theme to application and refresh glass panel stylesheets."""
         apply_theme_to_app(self)
+        # Tab-local glass stylesheets embed token colors; re-apply so Atmospheric /
+        # Light / Dracula switches do not leave stale MetricCard / PageTitle ink.
+        for panel in self.findChildren(QWidget, "glassmorphism"):
+            apply_glassmorphism(panel)
 
     def _on_theme_changed(self, theme_key):
         """Handle theme change"""
