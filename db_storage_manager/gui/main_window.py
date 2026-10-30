@@ -5,8 +5,10 @@ Main application window — modern desktop shell with library-style navigation.
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
+    QLayout,
     QMainWindow,
     QMessageBox,
+    QSizePolicy,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -27,6 +29,12 @@ from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
 from .utils import apply_glassmorphism, apply_theme_to_app
 
+# Small floor so chrome (220px sidebar + page margins) stays usable; no max lock.
+_MAIN_WINDOW_MIN_WIDTH = 800
+_MAIN_WINDOW_MIN_HEIGHT = 500
+_MAIN_WINDOW_DEFAULT_WIDTH = 1200
+_MAIN_WINDOW_DEFAULT_HEIGHT = 800
+
 
 class MainWindow(QMainWindow):
     """Main application window"""
@@ -40,29 +48,45 @@ class MainWindow(QMainWindow):
         self._syncing_nav = False
 
         self.setWindowTitle(self.i18n.translate("app.title"))
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(_MAIN_WINDOW_MIN_WIDTH, _MAIN_WINDOW_MIN_HEIGHT)
+        self.resize(_MAIN_WINDOW_DEFAULT_WIDTH, _MAIN_WINDOW_DEFAULT_HEIGHT)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
 
         central_widget = QWidget()
         central_widget.setObjectName("ContentShell")
+        central_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.setCentralWidget(central_widget)
 
         shell = QHBoxLayout(central_widget)
         shell.setContentsMargins(0, 0, 0, 0)
         shell.setSpacing(0)
+        # Do not let layout size-hints re-lock the top-level window.
+        shell.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
 
         self.sidebar = NavSidebar()
-        shell.addWidget(self.sidebar)
+        shell.addWidget(self.sidebar, 0)
 
         content = QFrame()
         content.setObjectName("ContentShell")
+        content.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
+        content_layout.setSizeConstraint(QLayout.SizeConstraint.SetNoConstraint)
 
         self.tab_widget = QTabWidget()
         self.tab_widget.setDocumentMode(True)
         self.tab_widget.tabBar().setVisible(False)
-        content_layout.addWidget(self.tab_widget)
+        self.tab_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        content_layout.addWidget(self.tab_widget, 1)
         shell.addWidget(content, 1)
 
         self.dashboard = DashboardWidget(self.connections)

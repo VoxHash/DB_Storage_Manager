@@ -617,7 +617,7 @@ class ConnectionsWidget(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
         configure_dense_table(self.table)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
     def _selected_row(self) -> int:
         indexes = self.table.selectionModel().selectedRows()

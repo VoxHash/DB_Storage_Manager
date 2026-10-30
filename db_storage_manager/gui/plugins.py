@@ -99,7 +99,7 @@ class PluginsWidget(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         configure_dense_table(self.table)
-        layout.addWidget(self.table)
+        layout.addWidget(self.table, 1)
 
         actions = QHBoxLayout()
         self.refresh_btn = QPushButton(t("plugins.refresh", default="Refresh"))

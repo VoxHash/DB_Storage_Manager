@@ -105,7 +105,7 @@ class BackupsWidget(QWidget):
         )
 
         tabs = QTabWidget()
-        layout.addWidget(tabs)
+        layout.addWidget(tabs, 1)
 
         create_widget = QWidget()
         create_layout = QVBoxLayout(create_widget)
@@ -205,7 +205,7 @@ class BackupsWidget(QWidget):
         self.backups_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.backups_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         configure_dense_table(self.backups_table)
-        restore_layout.addWidget(self.backups_table)
+        restore_layout.addWidget(self.backups_table, 1)
         tabs.addTab(restore_widget, t("backups.restore_backup"))
 
         scheduled_widget = QWidget()

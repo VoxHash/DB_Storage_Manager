@@ -206,7 +206,7 @@ class MonitoringWidget(QWidget):
             QTableWidget.SelectionBehavior.SelectRows
         )
         configure_dense_table(self.metrics_table)
-        metrics_layout.addWidget(self.metrics_table)
+        metrics_layout.addWidget(self.metrics_table, 1)
         tabs.addTab(metrics_widget, t("monitoring.metrics"))
 
         alerts_widget = QWidget()
@@ -260,7 +260,7 @@ class MonitoringWidget(QWidget):
         self.alerts_table.setSelectionMode(QTableWidget.SelectionMode.ExtendedSelection)
         self.alerts_table.itemSelectionChanged.connect(self._on_alert_selection_changed)
         configure_dense_table(self.alerts_table)
-        alerts_layout.addWidget(self.alerts_table)
+        alerts_layout.addWidget(self.alerts_table, 1)
         tabs.addTab(alerts_widget, t("monitoring.alerts"))
 
         performance_widget = QWidget()
@@ -395,7 +395,7 @@ class MonitoringWidget(QWidget):
             channels_widget, t("monitoring.channels", default="Channels")
         )
 
-        layout.addWidget(tabs)
+        layout.addWidget(tabs, 1)
 
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self._poll_now)

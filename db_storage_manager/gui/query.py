@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QSplitter,
     QAbstractItemView,
+    QSizePolicy,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -151,7 +152,10 @@ class QueryWidget(QWidget):
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 3)
         splitter.setStretchFactor(2, 2)
-        layout.addWidget(splitter)
+        splitter.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        layout.addWidget(splitter, 1)
 
     def _selected_connection(self):
         index = self.connection_combo.currentIndex()

@@ -180,7 +180,7 @@ class DashboardWidget(QWidget):
         )
         self.tables_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         configure_dense_table(self.tables_table)
-        layout.addWidget(self.tables_table)
+        layout.addWidget(self.tables_table, 1)
 
         customize = QGroupBox(t("dashboard.customize_title"))
         customize.setObjectName("dashboardCustomize")

@@ -109,6 +109,67 @@ def test_main_window_shell_offscreen(isolated_secure_store, monkeypatch):
     window.close()
 
 
+def test_main_window_free_resize_offscreen(isolated_secure_store, monkeypatch):
+    """Main window grows and shrinks freely; only a small minimum floor remains."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    store, data_dir = isolated_secure_store
+    reset_auth_manager()
+
+    import db_storage_manager.themes.manager as theme_mod
+
+    monkeypatch.setattr(theme_mod, "THEME_FILE", data_dir / "theme.json")
+    theme_mod._theme_manager = None
+
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtWidgets import QApplication, QWIDGETSIZE_MAX
+
+    app = QApplication.instance() or QApplication([])
+
+    from db_storage_manager.gui.main_window import (
+        MainWindow,
+        _MAIN_WINDOW_MIN_HEIGHT,
+        _MAIN_WINDOW_MIN_WIDTH,
+    )
+    from db_storage_manager.themes.manager import get_theme_manager
+
+    get_theme_manager().set_theme("dark")
+
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+
+    assert window.minimumWidth() == _MAIN_WINDOW_MIN_WIDTH
+    assert window.minimumHeight() == _MAIN_WINDOW_MIN_HEIGHT
+    assert _MAIN_WINDOW_MIN_WIDTH <= 800
+    assert _MAIN_WINDOW_MIN_HEIGHT <= 500
+    # No maximum lock — Qt default QWIDGETSIZE_MAX means unrestricted growth
+    assert window.maximumWidth() >= QWIDGETSIZE_MAX
+    assert window.maximumHeight() >= QWIDGETSIZE_MAX
+
+    small_w, small_h = _MAIN_WINDOW_MIN_WIDTH, _MAIN_WINDOW_MIN_HEIGHT
+    window.resize(small_w, small_h)
+    app.processEvents()
+    assert window.width() == small_w
+    assert window.height() == small_h
+    assert window.sidebar.width() == 220
+    assert window.tab_widget.width() > 0
+    assert window.tab_widget.height() > 0
+
+    large_w, large_h = 1920, 1200
+    window.resize(large_w, large_h)
+    app.processEvents()
+    assert window.width() == large_w
+    assert window.height() == large_h
+    assert window.tab_widget.width() >= large_w - window.sidebar.width() - 40
+    assert window.centralWidget().width() == large_w
+
+    # Login dialog mins must not leak onto the main window after construction
+    assert window.minimumWidth() == _MAIN_WINDOW_MIN_WIDTH
+    assert window.minimumHeight() == _MAIN_WINDOW_MIN_HEIGHT
+
+    window.close()
+
+
 def test_login_dialog_shell_offscreen(isolated_secure_store, monkeypatch):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     store, _ = isolated_secure_store

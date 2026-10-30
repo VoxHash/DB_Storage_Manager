@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests for pairing, redacted export, and API pairing Bearer (`tests/test_companion_export_pairing.py`); Android build/sideload docs updated
 
 ### Changed
+- Desktop main window is freely resizable (grow and shrink): replaced the hard `1200×800` minimum with a small floor of **800×500** (sidebar + usable content), no maximum size; shell/tab layouts use Expanding policies and stretch so tables, splitters, and page content reflow; login dialog size unchanged and does not constrain the main window after sign-in
 - Theme switches re-apply glass panel stylesheets so Atmospheric / Light / Dracula updates MetricCard / PageTitle ink on every polished tab (no stale Atmospheric colors after Settings theme change); Plugins tab root is `#glassmorphism` like the other six sections
 - Desktop **per-tab content polish** on the modern shell: shared page headers, dashboard metric cards, denser inventory tables, consistent margins/spacing across Dashboard / Connections / Query / Backups / Monitoring / Plugins / Settings — RBAC, plugins, monitoring, backups, query, and cloud discover behavior unchanged
 - Desktop **modern shell**: library-style left navigation (hidden top tab bar), refined Atmospheric / Light / Dracula design tokens, cohesive stylesheet for menus, tables, inputs, primary CTAs, and polished sign-in card — RBAC, plugins, monitoring, backups, connections, and query console behavior unchanged
