@@ -1,0 +1,2 @@
+recursive-include db_storage_manager/resources *
+include packaging/linux/db-storage-manager.desktop

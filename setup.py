@@ -24,6 +24,14 @@ setup(
     url="https://github.com/VoxHash/DB_Storage_Manager",
     license="MIT",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
+    include_package_data=True,
+    package_data={
+        "db_storage_manager": [
+            "resources/icons/*.png",
+            "resources/icons/*.svg",
+            "resources/icons/*.ico",
+        ],
+    },
     python_requires=">=3.10",
     install_requires=[
         "PyQt6>=6.6.0",

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=DB Storage Manager
+GenericName=Database Storage Manager
+Comment=Manage database storage, backups, and connections
+Exec=db-storage-manager
+Icon=db-storage-manager
+Terminal=false
+Categories=Development;Database;Utility;
+Keywords=database;backup;storage;postgres;mysql;
+StartupNotify=true
+StartupWMClass=db-storage-manager

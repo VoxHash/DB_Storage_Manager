@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import get_auth_manager
+from ..resources import apply_app_icon
 from .utils import apply_theme_to_app
 
 
@@ -27,6 +28,7 @@ class LoginDialog(QDialog):
         self.i18n = get_i18n_manager()
         t = self.i18n.translate
         self.setWindowTitle(t("auth.login_title", default="Sign in"))
+        apply_app_icon(self)
         self.setModal(True)
         self.setMinimumWidth(420)
         self.setMinimumHeight(280)

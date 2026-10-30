@@ -6,7 +6,9 @@ a = Analysis(
     ['db_storage_manager/main.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[
+        ('db_storage_manager/resources/icons', 'db_storage_manager/resources/icons'),
+    ],
     hiddenimports=[
         'PyQt6.QtCore',
         'PyQt6.QtGui',
@@ -20,6 +22,7 @@ a = Analysis(
         'db_storage_manager.monitoring',
         'db_storage_manager.i18n',
         'db_storage_manager.themes',
+        'db_storage_manager.resources',
     ],
     hookspath=[],
     hooksconfig={},
@@ -53,5 +56,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='db_storage_manager/resources/icons/db-storage-manager.ico',
 )

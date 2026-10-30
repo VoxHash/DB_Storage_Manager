@@ -37,6 +37,13 @@ Optional `~/.local/bin` shims that point only at this repo’s `.venv`:
 which -a db-storage-manager db-storage-manager-api
 ```
 
+On **Linux**, the same script installs the packaged app icon into
+`~/.local/share/icons/hicolor/` and a desktop entry
+(`packaging/linux/db-storage-manager.desktop` → `~/.local/share/applications/`)
+so the launcher and taskbar show **DB Storage Manager**. Window and dock icons
+also load from `db_storage_manager/resources/icons/` via `QApplication.setWindowIcon`
+(and each top-level window).
+
 ### Native wheels (optional)
 
 Prebuilt `db_storage_native` wheels ship on GitHub Releases (Linux x86_64, Windows x64, macOS arm64). Download the matching wheel, then:
@@ -135,8 +142,8 @@ Defaults bind **localhost only**. See [cli.md](cli.md) and [cross-platform.md](c
 
 ## Platform notes
 
-- **Linux**: Qt platform plugins via PyQt6 wheels; Arch/Garuda ODBC helper: `./scripts/setup-host-odbc-arch.sh`
-- **macOS**: same `.venv` flow; native wheel is arm64
-- **Windows**: activate with `.venv\Scripts\activate`; user data under `%APPDATA%\DB Storage Manager\`
+- **Linux**: Qt platform plugins via PyQt6 wheels; Arch/Garuda ODBC helper: `./scripts/setup-host-odbc-arch.sh`. App icon: `Icon=db-storage-manager` after `./scripts/install-local-shims.sh` (or copy PNGs/`packaging/linux/db-storage-manager.desktop` yourself).
+- **macOS**: same `.venv` flow; native wheel is arm64; dock icon follows `QApplication` / window icon from packaged PNGs.
+- **Windows**: activate with `.venv\Scripts\activate`; user data under `%APPDATA%\DB Storage Manager\`; PyInstaller builds use `db-storage-manager.ico`.
 
 Full platform install matrix: [installation.md](installation.md).

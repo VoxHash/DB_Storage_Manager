@@ -28,6 +28,7 @@ from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
 from .utils import apply_glassmorphism, apply_theme_to_app
+from ..resources import apply_app_icon
 
 # Small floor so chrome (220px sidebar + page margins) stays usable; no max lock.
 _MAIN_WINDOW_MIN_WIDTH = 800
@@ -48,6 +49,7 @@ class MainWindow(QMainWindow):
         self._syncing_nav = False
 
         self.setWindowTitle(self.i18n.translate("app.title"))
+        apply_app_icon(self)
         self.setMinimumSize(_MAIN_WINDOW_MIN_WIDTH, _MAIN_WINDOW_MIN_HEIGHT)
         self.resize(_MAIN_WINDOW_DEFAULT_WIDTH, _MAIN_WINDOW_DEFAULT_HEIGHT)
         self.setSizePolicy(

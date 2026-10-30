@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Application icon**: original SVG + PNG sizes (16–512) and Windows ICO under `db_storage_manager/resources/icons/`; `QApplication.setWindowIcon` plus MainWindow / LoginDialog; packaged via `setup.py` / `MANIFEST.in`; Linux `.desktop` (`packaging/linux/db-storage-manager.desktop`) and hicolor install via `scripts/install-local-shims.sh`; PyInstaller `icon=` + datas; offscreen load test (`tests/test_app_icon.py`)
 - **Android / GrapheneOS companion foundation**: Kotlin sideload debug APK under `companions/android/` (no Play Services) calling local REST `health` / `connections` / `backups` with Bearer auth; token in EncryptedSharedPreferences
 - **Companion privacy / credential-export review** ([docs/privacy-companion.md](docs/privacy-companion.md)): Fernet master keys never mirrored to mobile; sanitized `dsm-companion-export` format; plaintext secrets require `--include-secrets --i-consent`
 - **SecureStore pairing token**: `db-storage-manager-pair` / `python -m db_storage_manager.security.pairing` stores SHA-256 only; REST companion accepts env `DSM_API_TOKEN` or pairing Bearer

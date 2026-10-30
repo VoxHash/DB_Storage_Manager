@@ -5,10 +5,10 @@ Main entry point for DB Storage Manager
 import sys
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
 
 from .gui.main_window import MainWindow
 from .config import APP_NAME, APP_VERSION
+from .resources import apply_app_icon, load_app_icon
 
 
 def main():
@@ -22,6 +22,9 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
     app.setOrganizationName("VoxHash")
+
+    # Window / taskbar / dock icon from packaged resources
+    app.setWindowIcon(load_app_icon())
 
     # Set application style
     app.setStyle("Fusion")
@@ -45,11 +48,13 @@ def main():
     auth = get_auth_manager()
     if auth.is_rbac_active():
         login = LoginDialog()
+        apply_app_icon(login)
         if login.exec() != QDialog.DialogCode.Accepted:
             return 1
 
     # Create and show main window
     window = MainWindow()
+    apply_app_icon(window)
     window.show()
 
     # Run application
