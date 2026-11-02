@@ -21,6 +21,10 @@ Use **Connections → Discover Cloud…** after setting provider credentials, or
 
 Encrypted with Fernet in `connections.enc` under the user data directory. The master key is `.master-key`.
 
+## Why does the dock group DSM with Telegram (or closing one affects the other)?
+
+Both are Python/Qt GUIs. Without a unique FreeDesktop id, Wayland/KDE treats them as generic `python3` and stacks them under one icon. DSM uses `dev.voxhash.db-storage-manager` (`setDesktopFileName` + `StartupWMClass`). Re-run `./scripts/install-local-shims.sh`, fully quit both apps, and relaunch from the new `.desktop`. If Plasma still shows a stale group, restart the session. Stock launchers run separate processes — closing a ForexSmartBot/HandForge workspace *panel* does not kill DSM unless they share one process.
+
 ## Is there a REST API or web UI?
 
 Not in the current release. The product is a desktop application with a Python package API for programmatic access. A web interface is on the longer-term roadmap.

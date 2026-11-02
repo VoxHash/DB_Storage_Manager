@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
 from .gui.main_window import MainWindow
-from .config import APP_NAME, APP_VERSION
+from .config import APP_VERSION
 from .desktop_identity import apply_desktop_identity, configure_qt_identity
 from .resources import apply_app_icon, load_app_icon
 
@@ -20,9 +20,9 @@ def main():
     )
 
     # Unique Wayland app_id / WM_CLASS (must not share python3 with sibling apps)
-    configure_qt_identity(APP_NAME, APP_VERSION)
+    configure_qt_identity(APP_VERSION)
     app = QApplication(sys.argv)
-    apply_desktop_identity(app, APP_NAME, APP_VERSION)
+    apply_desktop_identity(app, APP_VERSION)
 
     # Window / taskbar / dock icon from packaged resources
     app.setWindowIcon(load_app_icon())

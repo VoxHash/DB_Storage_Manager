@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Linux window identity (vs Telegram Multi-Account Message Sender)**: migrate FreeDesktop / Wayland app id to reverse-DNS `dev.voxhash.db-storage-manager` (matching `StartupWMClass` and Qt `setDesktopFileName`) so KDE/Plasma no longer groups or closes this process with sibling Python GUIs that previously shared generic `python3`. Org domain stays `db-storage-manager.voxhash.dev`; user data remains `~/.config/db-storage-manager/`. `scripts/install-local-shims.sh` installs the new `.desktop` and removes the legacy `db-storage-manager.desktop`. Closing a Plasma/workspace panel still only closes windows that share that host process — DSM is a separate process when launched via its own entry point.
+
 ## [1.0.6] - 2026-11-02
 
 ### Fixed
-- **Linux window identity**: set unique FreeDesktop desktop-file id (`db-storage-manager`) via Qt `setDesktopFileName` so Wayland/KDE no longer treats the app as generic `python3` and groups or closes it with sibling VoxHash Python GUIs (e.g. Telegram Multi-Account Message Sender).
+- **Linux window identity**: set unique FreeDesktop desktop-file id via Qt `setDesktopFileName` so Wayland/KDE no longer treats the app as generic `python3` and groups or closes it with sibling VoxHash Python GUIs (e.g. Telegram Multi-Account Message Sender).
 
 ## [1.0.5]
 

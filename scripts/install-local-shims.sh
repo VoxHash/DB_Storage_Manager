@@ -39,12 +39,14 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   cp -f "${ICONS_SRC}/db-storage-manager.svg" \
     "${HICOLOR}/scalable/apps/db-storage-manager.svg"
 
-  DESKTOP_SRC="${ROOT}/packaging/linux/db-storage-manager.desktop"
-  DESKTOP_DST="${APPS_DIR}/db-storage-manager.desktop"
+  DESKTOP_SRC="${ROOT}/packaging/linux/dev.voxhash.db-storage-manager.desktop"
+  DESKTOP_DST="${APPS_DIR}/dev.voxhash.db-storage-manager.desktop"
   # Point Exec at the shim so PATH order does not matter
   sed "s|^Exec=.*|Exec=${BIN_DIR}/db-storage-manager|" \
     "${DESKTOP_SRC}" > "${DESKTOP_DST}"
   chmod 644 "${DESKTOP_DST}"
+  # Drop legacy short-id launcher so Plasma does not keep two entries / wrong WM class
+  rm -f "${APPS_DIR}/db-storage-manager.desktop"
   echo "Installed ${DESKTOP_DST}"
   echo "Installed hicolor icons under ${HICOLOR}"
   if command -v update-desktop-database >/dev/null 2>&1; then

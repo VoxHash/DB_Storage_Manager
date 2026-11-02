@@ -39,10 +39,27 @@ which -a db-storage-manager db-storage-manager-api
 
 On **Linux**, the same script installs the packaged app icon into
 `~/.local/share/icons/hicolor/` and a desktop entry
-(`packaging/linux/db-storage-manager.desktop` → `~/.local/share/applications/`)
-so the launcher and taskbar show **DB Storage Manager**. Window and dock icons
-also load from `db_storage_manager/resources/icons/` via `QApplication.setWindowIcon`
-(and each top-level window).
+(`packaging/linux/dev.voxhash.db-storage-manager.desktop` →
+`~/.local/share/applications/dev.voxhash.db-storage-manager.desktop`)
+so the launcher and taskbar show **DB Storage Manager** under a unique Wayland
+app id / `StartupWMClass` (`dev.voxhash.db-storage-manager`). Window and dock
+icons also load from `db_storage_manager/resources/icons/` via
+`QApplication.setWindowIcon` (and each top-level window).
+
+#### Window manager / sibling apps
+
+Qt sets `organizationName=VoxHash`, `organizationDomain=db-storage-manager.voxhash.dev`,
+`applicationName=DB Storage Manager`, and `desktopFileName=dev.voxhash.db-storage-manager`
+**before** `QApplication` starts. That keeps DSM isolated from Telegram Multi-Account
+Message Sender (`dev.voxhash.telegram-multi-account-sender`), ForexSmartBot, and
+HandForge. After upgrading identity, re-run `./scripts/install-local-shims.sh`, quit
+any running DSM/Telegram windows, and (if the dock still groups them) log out/in or
+restart Plasmashell so cached app ids refresh.
+
+DSM is always its **own process** when started via `db-storage-manager` or the
+``.desktop`` launcher. Closing a ForexSmartBot / HandForge / Plasma *workspace panel*
+does not terminate DSM unless those UIs are somehow wrapping the same OS process
+(they do not with the stock launchers).
 
 ### Native wheels (optional)
 
