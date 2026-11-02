@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Sequence
 import pytest
 
 from db_storage_manager.backups.base import BackupOptions
+from db_storage_manager.backups.local import sanitize_backup_basename
 from db_storage_manager.backups.manager import BackupManager
 from db_storage_manager.backups.protondrive import (
     ProtonDriveBackupAdapter,
@@ -23,8 +24,16 @@ from db_storage_manager.backups.protondrive import (
     rclone_remote_configured,
     save_proton_drive_credentials,
 )
+from db_storage_manager.db.base import ConnectionConfig
 from db_storage_manager.native import ENCRYPTION_SCHEME, sha256_file
 from db_storage_manager.security.store import SecureStore
+
+# Mirrors GUI failure: pooler / SSH labels with em dash, spaces, parentheses, slash.
+_UNSAFE_CONNECTION_NAME = (
+    "redacted-pooler — Database Url "
+    "(aws-0-us-east-1.pooler.supabase.com/postgres)"
+)
+_UNSAFE_SSH_MYSQL_NAME = "vps/prod — SSH tunnel (mysql)"
 
 
 class FakeRcloneRunner:
@@ -417,3 +426,173 @@ def test_manager_registers_protondrive_adapter():
     assert isinstance(adapter, ProtonDriveBackupAdapter)
     again = manager.get_adapter("protondrive")
     assert again is adapter
+
+
+def test_create_backup_sanitizes_unsafe_connection_name(
+    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression: Proton+encrypt must not Errno 2 when connectionName has /."""
+    monkeypatch.setenv("DSM_PROTONDRIVE_USERNAME", "user@proton.me")
+    monkeypatch.setenv("DSM_PROTONDRIVE_PASSWORD", "secret")
+    runner = FakeRcloneRunner(remotes=["protondrive"])
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "secret",
+        },
+        runner=runner,
+    )
+
+    options = BackupOptions(
+        connectionId="c-supabase",
+        connectionName=_UNSAFE_CONNECTION_NAME,
+        databaseType="postgres",
+        backupPath=str(source_dump),
+        compression="none",
+        encryption=True,
+        encryptionKey="proton-unsafe-name-key",
+        adapterType="protondrive",
+    )
+    info = asyncio.run(adapter.create_backup(options))
+
+    assert info.status == "completed"
+    assert "/" not in info.name
+    assert "\\" not in info.name
+    assert "—" not in info.name
+    assert " " not in info.name
+    assert Path(info.name).name == info.name
+    assert info.name.endswith(".backup.enc")
+    assert info.metadata["encryption"] is True
+    assert info.metadata["encryptionScheme"] == ENCRYPTION_SCHEME
+    safe_stem = sanitize_backup_basename(_UNSAFE_CONNECTION_NAME)
+    assert info.name.startswith(safe_stem)
+    # Original display name preserved in uploaded meta sidecar (not the filename)
+    listed = asyncio.run(adapter.list_backups())
+    assert listed[0].metadata.get("connectionName") == _UNSAFE_CONNECTION_NAME
+    # rclone copyto target leaf must be a single path segment
+    copy_calls = [c for c in runner.calls if c and c[0] == "copyto"]
+    assert copy_calls
+    for call in copy_calls:
+        remote_leaf = call[2].rsplit("/", 1)[-1]
+        assert "/" not in remote_leaf
+        assert "—" not in remote_leaf
+
+
+def test_create_backup_sanitizes_ssh_mysql_connection_name(
+    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression: SSH/MySQL labels with / must not nest under /tmp/dsm-proton-*."""
+    monkeypatch.setenv("DSM_PROTONDRIVE_USERNAME", "user@proton.me")
+    monkeypatch.setenv("DSM_PROTONDRIVE_PASSWORD", "secret")
+    runner = FakeRcloneRunner(remotes=["protondrive"])
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "secret",
+        },
+        runner=runner,
+    )
+
+    options = BackupOptions(
+        connectionId="c-mysql",
+        connectionName=_UNSAFE_SSH_MYSQL_NAME,
+        databaseType="mysql",
+        backupPath=str(source_dump),
+        compression="none",
+        encryption=True,
+        encryptionKey="ssh-mysql-proton-key",
+        adapterType="protondrive",
+    )
+    info = asyncio.run(adapter.create_backup(options))
+    assert info.status == "completed"
+    assert "/" not in info.name
+    assert info.name.endswith(".backup.enc")
+    listed = asyncio.run(adapter.list_backups())
+    assert listed[0].metadata.get("connectionName") == _UNSAFE_SSH_MYSQL_NAME
+
+
+def test_manager_proton_encrypt_unsafe_connection_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """End-to-end: BackupManager dump → Proton adapter with unsafe name (mocked rclone)."""
+    payload = b"-- postgres dump\nSELECT 1;\n"
+
+    class _StringPathDumpConnection:
+        def __init__(self, data: bytes):
+            self._data = data
+
+        async def create_backup(self, path: str):
+            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            Path(path).write_bytes(self._data)
+            return path
+
+        async def restore_backup(self, path: str):
+            return None
+
+    monkeypatch.setenv("DSM_PROTONDRIVE_USERNAME", "user@proton.me")
+    monkeypatch.setenv("DSM_PROTONDRIVE_PASSWORD", "secret")
+    runner = FakeRcloneRunner(remotes=["protondrive"])
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "secret",
+        },
+        runner=runner,
+    )
+    manager = BackupManager()
+    conn = _StringPathDumpConnection(payload)
+
+    async def _acquire(_config):
+        return conn
+
+    async def _release(_connection):
+        return None
+
+    monkeypatch.setattr(
+        "db_storage_manager.backups.manager.DatabaseConnectionFactory.acquire",
+        _acquire,
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.manager.DatabaseConnectionFactory.release",
+        _release,
+    )
+
+    cfg = ConnectionConfig(
+        id="c1",
+        name=_UNSAFE_CONNECTION_NAME,
+        type="postgres",
+        host="127.0.0.1",
+        port=5432,
+        database="postgres",
+        username="u",
+        password="p",
+    )
+    info = asyncio.run(
+        manager.create_backup(
+            adapter,
+            cfg,
+            {
+                "compression": "none",
+                "encryption": True,
+                "encryptionKey": "manager-proton-unsafe-key",
+                "adapterType": "protondrive",
+            },
+        )
+    )
+    assert info.status == "completed"
+    assert "/" not in info.name
+    assert info.name.endswith(".backup.enc")
+    assert info.metadata.get("encryption") is True
+    assert any(k.endswith(info.name) for k in runner.objects)

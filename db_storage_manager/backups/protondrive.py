@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Sequence
 
 from .base import BackupAdapter, BackupInfo, BackupOptions
+from .local import sanitize_backup_basename
 from ..native import (
     ENCRYPTION_SCHEME,
     encrypt_file,
@@ -503,6 +504,12 @@ class ProtonDriveBackupAdapter(BackupAdapter):
             )
         return result
 
+    @staticmethod
+    def _ensure_parent(path: Path) -> Path:
+        """Create parent directories before open/write/copy/encrypt."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     def _prepare_payload(self, options: BackupOptions) -> tuple[Path, Dict[str, Any], List[Path]]:
         """Compress/encrypt source dump; return (payload, metadata, temps)."""
         source_path = Path(options.backupPath)
@@ -514,27 +521,30 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         temps: List[Path] = []
         backup_id = str(uuid.uuid4())
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        original_filename = f"{options.connectionName}_{timestamp}.backup"
+        # Sanitize: connection labels with / or spaces must stay one path segment
+        safe_name = sanitize_backup_basename(options.connectionName)
+        original_filename = f"{safe_name}_{timestamp}.backup"
         final_filename = original_filename
         work_dir = Path(tempfile.mkdtemp(prefix="dsm-proton-"))
+        work_dir.mkdir(parents=True, exist_ok=True)
         temps.append(work_dir)
 
         compression = (options.compression or "none").lower()
         current = source_path
 
         if compression == "gzip":
-            out = work_dir / f"{original_filename}.gz"
+            out = self._ensure_parent(work_dir / f"{original_filename}.gz")
             gzip_compress_file(source_path, out)
             current = out
             final_filename = f"{original_filename}.gz"
         elif compression == "zstd":
-            out = work_dir / f"{original_filename}.zst"
+            out = self._ensure_parent(work_dir / f"{original_filename}.zst")
             zstd_compress_file(source_path, out)
             current = out
             final_filename = f"{original_filename}.zst"
         else:
             compression = "none"
-            out = work_dir / original_filename
+            out = self._ensure_parent(work_dir / original_filename)
             shutil.copy2(source_path, out)
             current = out
 
@@ -556,7 +566,7 @@ class ProtonDriveBackupAdapter(BackupAdapter):
                 raise ValueError(
                     "encryption=True requires encryptionKey (passphrase) for Proton Drive upload"
                 )
-            enc_path = work_dir / f"{final_filename}.enc"
+            enc_path = self._ensure_parent(work_dir / f"{final_filename}.enc")
             encrypt_file(current, enc_path, options.encryptionKey)
             current = enc_path
             final_filename = f"{final_filename}.enc"

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Proton Drive Create Backup Errno 2 on unsafe connection names**: Proton `_prepare_payload` built `/tmp/dsm-proton-<rand>/<connection>_TIMESTAMP.backup` from the raw label, so names with `/` (Postgres pooler `…/postgres`, SSH/MySQL `vps/prod…`) nested under the temp dir and failed before DSMENC1 encrypt / rclone upload. Reuse `sanitize_backup_basename` + `mkdir(parents=True, exist_ok=True)` like Local; remote object names stay a single path segment
 - **Proton Drive “not configured” with local env / desktop PATH**: load gitignored `.env.protondrive.local` (and package-root / `~/.config/db-storage-manager/` copies) like cloud dotenv; resolve rclone via `~/.local/bin/rclone` and other common paths when desktop launchers omit user bin from `PATH`; treat SecureStore `proton_drive` username+password or an rclone remote as ready so the Backups orange banner clears
 - **Settings wipe of Proton / cloud prefs**: saving theme/language no longer drops `proton_drive`, `cloud_managed`, or `companion` from SecureStore
 - **Local Create Backup Errno 2 on long Supabase names**: backup filenames derived from connection labels with spaces, em dashes (`—`), parentheses, or `/` (e.g. `…supabase.com/postgres`) were treated as nested paths, so copy/encrypt failed with `No such file or directory`. Sanitize to a single filesystem-safe segment (hash suffix for uniqueness), and `mkdir(parents=True, exist_ok=True)` before dump/encrypt/meta writes
