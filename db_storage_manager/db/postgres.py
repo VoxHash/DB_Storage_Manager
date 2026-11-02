@@ -334,7 +334,7 @@ class PostgreSQLConnection(DatabaseConnection):
             raise RuntimeError(f"pg_dump failed: {stderr.decode()}")
 
         size = backup_file.stat().st_size
-        return str(backup_file)
+        return {"path": str(backup_file), "size": size}
 
     async def restore_backup(self, backup_path: str) -> None:
         """Restore PostgreSQL backup using pg_restore"""

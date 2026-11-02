@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Local backup TypeError (SSH/MySQL + encryption)**: `BackupManager` treated dump results as dicts (`result["path"]`) while MySQL/Postgres returned a bare path string, causing `Backup failed: string indices must be integers, not 'str'`. Normalize str/Path/dict dump results; MySQL/Postgres now return `{"path", "size"}`; open SSH tunnels before dump/restore like Dashboard/Query
 - **Backups UI Proton status gating**: Proton Drive “not configured” / missing-rclone banners no longer show on Create when Adapter is Local, or on Restore while listing local backups; status appears only when Adapter is Proton Drive or after **Refresh Proton Drive** (Local create/restore/verify no longer depend on rclone)
 - **Dashboard Analyze (Postgres/Supabase)**: storage analysis now discovers relations only via `pg_catalog.pg_class` OIDs (sizes + `reltuples` estimates) — no per-table `COUNT(*)` and no hardcoded relation names (fixes `relation "public.clientvault" does not exist`)
 - **Dashboard / Monitoring / Query SSH**: open or reuse `TunnelManager` local forward before driver connect (same pattern as Connections test / import probe); shared process-wide tunnel manager via `get_shared_tunnel_manager()` + `ensure_tunnel_for_connection`

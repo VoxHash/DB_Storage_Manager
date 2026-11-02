@@ -323,7 +323,8 @@ class MySQLConnection(DatabaseConnection):
 
         # Write output to file
         backup_file.write_bytes(stdout)
-        return str(backup_file)
+        size = backup_file.stat().st_size
+        return {"path": str(backup_file), "size": size}
 
     async def restore_backup(self, backup_path: str) -> None:
         """Restore MySQL backup"""

@@ -2,7 +2,7 @@
 Backup manager for coordinating backup operations
 """
 
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Union
 from pathlib import Path
 import tempfile
 
@@ -10,6 +10,30 @@ from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..native import sha256_file, sha256_files_parallel
+
+
+def backup_path_from_result(backup_result: Union[str, Path, Dict[str, Any]]) -> str:
+    """Normalize ``DatabaseConnection.create_backup`` return values to a file path.
+
+    Drivers historically returned either a bare path string (MySQL, Postgres,
+    SQL Server, …) or a dict with a ``path`` key (SQLite, Mongo, Redis). The
+    manager must accept both; indexing a string with ``["path"]`` raises
+    ``TypeError: string indices must be integers, not 'str'``.
+    """
+    if isinstance(backup_result, (str, Path)):
+        path = str(backup_result)
+        if not path:
+            raise ValueError("create_backup returned an empty path")
+        return path
+    if isinstance(backup_result, dict):
+        path = backup_result.get("path")
+        if path is None or path == "":
+            raise ValueError("create_backup result missing 'path'")
+        return str(path)
+    raise TypeError(
+        "create_backup must return a path str or dict with 'path', "
+        f"got {type(backup_result).__name__}"
+    )
 
 
 class BackupManager:
@@ -57,6 +81,18 @@ class BackupManager:
 
         return None
 
+    def _effective_connection_config(
+        self, connection_config: ConnectionConfig
+    ) -> ConnectionConfig:
+        """Rewrite host/port through a local SSH forward when ssh_config is enabled."""
+        ssh = connection_config.ssh_config or {}
+        if not ssh.get("enabled"):
+            return connection_config
+        from ..db.session import ensure_tunnel_for_connection
+
+        kwargs = ensure_tunnel_for_connection(dict(connection_config.__dict__))
+        return ConnectionConfig(**kwargs)
+
     async def create_backup(
         self,
         adapter: BackupAdapter,
@@ -64,7 +100,8 @@ class BackupManager:
         options: Optional[Dict[str, Any]] = None,
     ) -> BackupInfo:
         """Create a backup for a database connection"""
-        db_connection = await DatabaseConnectionFactory.acquire(connection_config)
+        effective = self._effective_connection_config(connection_config)
+        db_connection = await DatabaseConnectionFactory.acquire(effective)
 
         try:
             # Create temporary backup file
@@ -76,13 +113,14 @@ class BackupManager:
 
             # Create backup using database connection
             backup_result = await db_connection.create_backup(str(temp_backup))
+            dump_path = backup_path_from_result(backup_result)
 
             # Prepare backup options
             backup_options = BackupOptions(
                 connectionId=connection_config.id,
                 connectionName=connection_config.name,
                 databaseType=connection_config.type,
-                backupPath=backup_result["path"],
+                backupPath=dump_path,
                 compression=options.get("compression") if options else None,
                 encryption=options.get("encryption", False) if options else False,
                 encryptionKey=options.get("encryptionKey") if options else None,
@@ -116,7 +154,8 @@ class BackupManager:
         )
 
         try:
-            db_connection = await DatabaseConnectionFactory.acquire(connection_config)
+            effective = self._effective_connection_config(connection_config)
+            db_connection = await DatabaseConnectionFactory.acquire(effective)
 
             try:
                 # Restore backup
