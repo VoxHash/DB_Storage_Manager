@@ -39,6 +39,7 @@ from ..analysis import (
 from ..config import DEFAULT_ALERT_CHANNELS, DEFAULT_ALERT_THRESHOLDS
 from ..db.base import ConnectionConfig
 from ..db.factory import DatabaseConnectionFactory
+from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
 from ..security.store import SecureStore
@@ -56,20 +57,6 @@ _THRESHOLD_META: List[Tuple[str, str, float, float, float]] = [
     ("cache_hit_ratio", "cache_hit_ratio", 0, 100, 0.5),
     ("disk_usage", "disk_usage", 1, 100, 0.5),
 ]
-
-_CONNECTION_FIELDS = {
-    "id",
-    "name",
-    "type",
-    "host",
-    "port",
-    "database",
-    "username",
-    "password",
-    "connection_string",
-    "ssh_config",
-    "extra",
-}
 
 _METRIC_LABELS = {
     "activeConnections": "Active connections",
@@ -101,10 +88,6 @@ _STATUS_COLORS = {
 }
 
 
-def _connection_config_kwargs(connection: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: v for k, v in connection.items() if k in _CONNECTION_FIELDS}
-
-
 def _format_metric_value(key: str, value: Any) -> str:
     if key == "cacheHitRatio" and isinstance(value, (int, float)):
         return f"{value:.2f}%"
@@ -130,6 +113,7 @@ class MonitoringWidget(QWidget):
         self.current_connection = None
         self.monitor: Optional[DatabaseMonitor] = None
         self._db = None
+        self._monitoring_tunnel_id: Optional[str] = None
         self.performance_analyzer = None
         self.index_optimizer = None
         self.growth_predictor = None
@@ -563,7 +547,16 @@ class MonitoringWidget(QWidget):
             return
 
         try:
-            config = ConnectionConfig(**_connection_config_kwargs(self.current_connection))
+            # Open/reuse SSH tunnel before driver connect (same as Connections test)
+            kwargs = ensure_tunnel_for_connection(self.current_connection)
+            ssh = self.current_connection.get("ssh_config") or {}
+            if ssh.get("enabled"):
+                self._monitoring_tunnel_id = str(
+                    self.current_connection.get("id")
+                    or self.current_connection.get("name")
+                    or "session"
+                )
+            config = ConnectionConfig(**kwargs)
             db = asyncio.run(DatabaseConnectionFactory.acquire(config))
 
             self._db = db
@@ -620,6 +613,9 @@ class MonitoringWidget(QWidget):
         self.index_optimizer = None
         self.growth_predictor = None
         self.capacity_planner = None
+        # Leave shared tunnels open for Dashboard / Connections reuse;
+        # only clear the local tracking id.
+        self._monitoring_tunnel_id = None
 
     def _poll_now(self):
         """Run one real poll cycle and refresh the tables."""

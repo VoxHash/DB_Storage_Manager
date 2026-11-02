@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Dashboard Analyze (Postgres/Supabase)**: storage analysis now discovers relations only via `pg_catalog.pg_class` OIDs (sizes + `reltuples` estimates) — no per-table `COUNT(*)` and no hardcoded relation names (fixes `relation "public.clientvault" does not exist`)
+- **Dashboard / Monitoring / Query SSH**: open or reuse `TunnelManager` local forward before driver connect (same pattern as Connections test / import probe); shared process-wide tunnel manager via `get_shared_tunnel_manager()` + `ensure_tunnel_for_connection`
+- **MySQL/MariaDB Analyze**: table sizes from `information_schema.TABLES` (`DATA_LENGTH` / `INDEX_LENGTH`); index listing from `STATISTICS` without invalid `index_length` (fixes `1054 Unknown column 'index_length'`)
+- **Monitoring health**: ping with `SELECT 1` without disconnecting the live session; critical alerts include check failure summaries instead of a generic unhealthy string; latency thresholds tolerate SSH/remote RTT (healthy under 500ms) so normal tunnel lag is not a false critical
+
 ### Changed
 - **License**: project relicensed from MIT to **GPL-3.0-only** for coherence with PyQt6’s GPL-or-commercial dual license when distributing the free PyQt6 wheels; LICENSE, README badge/section, `setup.py` classifiers, native crate metadata, and FAQ updated accordingly
 

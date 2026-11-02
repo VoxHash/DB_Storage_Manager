@@ -33,11 +33,12 @@ import uuid
 
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
+from ..db.session import connection_config_kwargs, ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..ssh import (
     SSHTunnelError,
-    TunnelManager,
+    get_shared_tunnel_manager,
     normalize_ssh_config,
     validate_ssh_config,
 )
@@ -255,20 +256,7 @@ class CloudDiscoverDialog(QDialog):
 
 def _connection_config_kwargs(connection: Dict[str, Any]) -> Dict[str, Any]:
     """Filter a connection dict to ConnectionConfig fields."""
-    allowed = {
-        "id",
-        "name",
-        "type",
-        "host",
-        "port",
-        "database",
-        "username",
-        "password",
-        "connection_string",
-        "ssh_config",
-        "extra",
-    }
-    return {k: v for k, v in connection.items() if k in allowed}
+    return connection_config_kwargs(connection)
 
 
 class ConnectionDialog(QDialog):
@@ -508,7 +496,7 @@ class ConnectionsWidget(QWidget):
     def __init__(self, connections: Optional[List[Dict[str, Any]]] = None):
         super().__init__()
         self.connections: List[Dict[str, Any]] = list(connections or [])
-        self.tunnel_manager = TunnelManager()
+        self.tunnel_manager = get_shared_tunnel_manager()
         self.i18n = get_i18n_manager()
         self.setObjectName("glassmorphism")
         self.init_ui()
@@ -957,23 +945,9 @@ class ConnectionsWidget(QWidget):
 
     def _ensure_tunnel_for_test(self, connection: Dict[str, Any]) -> Dict[str, Any]:
         """Return connection kwargs pointed at the local tunnel endpoint when SSH is on."""
-        ssh_config = connection.get("ssh_config") or {}
-        if not ssh_config.get("enabled"):
-            return _connection_config_kwargs(connection)
-
-        tunnel = self.tunnel_manager.get_tunnel(connection["id"])
-        if tunnel is None or not tunnel.is_active():
-            tunnel = self.tunnel_manager.create_tunnel_sync(
-                connection["id"],
-                ssh_config=ssh_config,
-            )
-        endpoint = tunnel.get_local_endpoint()
-        kwargs = _connection_config_kwargs(connection)
-        kwargs["host"] = endpoint["host"]
-        kwargs["port"] = endpoint["port"]
-        # Already forwarded; do not pass ssh_config into the driver layer
-        kwargs["ssh_config"] = None
-        return kwargs
+        return ensure_tunnel_for_connection(
+            connection, tunnel_manager=self.tunnel_manager
+        )
 
     def _test_connection(self):
         """Test selected connection"""

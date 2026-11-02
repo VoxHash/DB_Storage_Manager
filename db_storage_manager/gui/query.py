@@ -26,6 +26,7 @@ from PyQt6.QtGui import QColor
 from ..analysis.query_suggestions import suggest_for_query
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
+from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from .utils import (
     apply_glassmorphism,
@@ -176,7 +177,7 @@ class QueryWidget(QWidget):
         safe_mode = self.safe_mode_check.isChecked()
 
         try:
-            config = ConnectionConfig(**connection)
+            config = ConnectionConfig(**ensure_tunnel_for_connection(connection))
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -232,7 +233,9 @@ class QueryWidget(QWidget):
                 db = None
                 db_type = None
                 if connection:
-                    config = ConnectionConfig(**connection)
+                    config = ConnectionConfig(
+                        **ensure_tunnel_for_connection(connection)
+                    )
                     db_type = config.type
                     db = await DatabaseConnectionFactory.acquire(config)
                 try:

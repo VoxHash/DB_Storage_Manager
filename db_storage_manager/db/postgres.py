@@ -55,60 +55,72 @@ class PostgreSQLConnection(DatabaseConnection):
         self.connected = False
 
     async def analyze_storage(self) -> StorageAnalysis:
-        """Analyze PostgreSQL storage"""
+        """Analyze PostgreSQL storage via pg_catalog discovery only.
+
+        Never issues per-table ``COUNT(*)`` or hardcoded relation names — sizes
+        and row estimates come from ``pg_class`` OIDs that currently exist.
+        """
         if not self.connection:
             await self.connect()
 
         cursor = self.connection.cursor(cursor_factory=RealDictCursor)
 
-        # Get table sizes
+        # Ordinary / partitioned / materialized relations only (no views)
         cursor.execute(
             """
-            SELECT 
-                schemaname || '.' || tablename as name,
-                pg_total_relation_size(schemaname || '.' || tablename) as size,
-                pg_relation_size(schemaname || '.' || tablename) as table_size,
-                (SELECT COUNT(*) FROM information_schema.tables 
-                 WHERE table_schema = t.schemaname AND table_name = t.tablename) as row_count
-            FROM pg_tables t
-            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-            ORDER BY size DESC
-        """
+            SELECT
+                n.nspname AS schema_name,
+                c.relname AS table_name,
+                pg_total_relation_size(c.oid) AS total_size,
+                pg_relation_size(c.oid) AS table_size,
+                GREATEST(COALESCE(c.reltuples, 0), 0)::bigint AS row_estimate
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relkind IN ('r', 'p', 'm')
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+              AND n.nspname NOT LIKE 'pg_temp_%'
+              AND n.nspname NOT LIKE 'pg_toast_temp_%'
+            ORDER BY total_size DESC NULLS LAST
+            """
         )
 
         tables = []
         total_size = 0
         for row in cursor.fetchall():
-            # Get actual row count
-            cursor.execute(
-                f'SELECT COUNT(*) FROM "{row["name"].split(".")[0]}"."{row["name"].split(".")[1]}"'
-            )
-            row_count = cursor.fetchone()[0]
-
-            table_size = row["table_size"] or 0
-            index_size = (row["size"] or 0) - table_size
+            schema_name = row["schema_name"]
+            table_name = row["table_name"]
+            table_size = int(row["table_size"] or 0)
+            relation_total = int(row["total_size"] or 0)
+            index_size = max(relation_total - table_size, 0)
+            row_count = int(row["row_estimate"] or 0)
 
             tables.append(
                 {
-                    "name": row["name"],
+                    "name": f"{schema_name}.{table_name}",
                     "size": table_size,
                     "rowCount": row_count,
                     "indexSize": index_size,
                     "bloat": 0.0,
                 }
             )
-            total_size += row["size"] or 0
+            total_size += relation_total
 
-        # Get indexes
         cursor.execute(
             """
-            SELECT 
-                schemaname || '.' || indexname as name,
-                tablename as table_name,
-                pg_relation_size(indexrelid) as size
-            FROM pg_indexes
-            WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
-        """
+            SELECT
+                n.nspname || '.' || c.relname AS name,
+                t.relname AS table_name,
+                pg_relation_size(c.oid) AS size
+            FROM pg_catalog.pg_class c
+            JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_catalog.pg_index i ON i.indexrelid = c.oid
+            JOIN pg_catalog.pg_class t ON t.oid = i.indrelid
+            WHERE c.relkind = 'i'
+              AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+              AND n.nspname NOT LIKE 'pg_temp_%'
+              AND n.nspname NOT LIKE 'pg_toast_temp_%'
+            ORDER BY size DESC NULLS LAST
+            """
         )
 
         indexes = []
@@ -117,7 +129,7 @@ class PostgreSQLConnection(DatabaseConnection):
                 {
                     "name": row["name"],
                     "tableName": row["table_name"],
-                    "size": row["size"] or 0,
+                    "size": int(row["size"] or 0),
                     "bloat": 0.0,
                 }
             )

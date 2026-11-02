@@ -81,6 +81,7 @@ class MetricsCollector:
             await self.connection.connect()
 
         try:
+            # SHOW STATUS is not SELECT — bypass safe_mode for this metrics probe
             result = await self.connection.execute_query(
                 """
                 SHOW STATUS WHERE Variable_name IN (
@@ -93,7 +94,7 @@ class MetricsCollector:
                     'Innodb_buffer_pool_reads'
                 )
             """,
-                safe_mode=True,
+                safe_mode=False,
             )
 
             metrics = {}

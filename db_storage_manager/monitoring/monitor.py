@@ -53,14 +53,18 @@ class DatabaseMonitor:
         health = await self.health_checker.check_health()
         status = health.get("status")
         if status == "unhealthy" and self._last_health_alert_status != "unhealthy":
+            detail = health.get("summary") or "Database health check returned unhealthy status"
             self.alert_manager.emit_alert(
                 Alert(
                     "Database Health Check Failed",
-                    "Database health check returned unhealthy status",
+                    detail,
                     AlertSeverity.CRITICAL,
                     "health_monitor",
                 )
             )
+        elif status in ("healthy", "degraded") and self._last_health_alert_status == "unhealthy":
+            # Allow a fresh critical if health drops again after recovery
+            pass
         self._last_health_alert_status = status
 
         return self.get_dashboard_data()
@@ -99,10 +103,14 @@ class DatabaseMonitor:
                         status == "unhealthy"
                         and self._last_health_alert_status != "unhealthy"
                     ):
+                        detail = (
+                            health.get("summary")
+                            or "Database health check returned unhealthy status"
+                        )
                         self.alert_manager.emit_alert(
                             Alert(
                                 "Database Health Check Failed",
-                                "Database health check returned unhealthy status",
+                                detail,
                                 AlertSeverity.CRITICAL,
                                 "health_monitor",
                             )

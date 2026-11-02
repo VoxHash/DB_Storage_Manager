@@ -35,6 +35,7 @@ from ..dashboard_prefs import (
 )
 from ..db.base import ConnectionConfig
 from ..db.factory import DatabaseConnectionFactory
+from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..security.store import SecureStore
 from .utils import (
@@ -84,7 +85,9 @@ class AnalysisWorker(QThread):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            config = ConnectionConfig(**self.connection_config)
+            # Open SSH tunnel before driver connect (same as Connections test)
+            kwargs = ensure_tunnel_for_connection(self.connection_config)
+            config = ConnectionConfig(**kwargs)
 
             async def analyze():
                 db = await DatabaseConnectionFactory.acquire(config)

@@ -459,3 +459,23 @@ class TunnelManager:
             tunnel_id: tunnel.status()
             for tunnel_id, tunnel in self.tunnels.items()
         }
+
+
+_shared_manager_lock = threading.Lock()
+_shared_tunnel_manager: Optional[TunnelManager] = None
+
+
+def get_shared_tunnel_manager() -> TunnelManager:
+    """Process-wide TunnelManager so Dashboard / Monitoring / Connections share tunnels."""
+    global _shared_tunnel_manager
+    with _shared_manager_lock:
+        if _shared_tunnel_manager is None:
+            _shared_tunnel_manager = TunnelManager()
+        return _shared_tunnel_manager
+
+
+def reset_shared_tunnel_manager_for_tests() -> None:
+    """Drop the singleton without disconnecting (tests only)."""
+    global _shared_tunnel_manager
+    with _shared_manager_lock:
+        _shared_tunnel_manager = None

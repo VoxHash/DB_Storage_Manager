@@ -7,8 +7,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..db.base import ConnectionConfig
 from ..db.factory import DatabaseConnectionFactory
+from ..db.session import (
+    connection_config_kwargs,
+    ensure_tunnel_for_connection,
+    tunnel_id_for_connection,
+)
 from ..security.store import SecureStore
-from ..ssh import SSHTunnelError, TunnelManager, validate_ssh_config
+from ..ssh import SSHTunnelError, TunnelManager
 from .redact import redact_text, summarize_profile
 
 
@@ -84,20 +89,7 @@ def save_imported_connections(
 
 
 def _connection_config_kwargs(connection: Dict[str, Any]) -> Dict[str, Any]:
-    allowed = {
-        "id",
-        "name",
-        "type",
-        "host",
-        "port",
-        "database",
-        "username",
-        "password",
-        "connection_string",
-        "ssh_config",
-        "extra",
-    }
-    return {k: v for k, v in connection.items() if k in allowed}
+    return connection_config_kwargs(connection)
 
 
 async def probe_connection(
@@ -114,20 +106,15 @@ async def probe_connection(
     summary = summarize_profile(connection)
     owns_manager = tunnel_manager is None
     manager = tunnel_manager or TunnelManager()
-    connection_id = str(connection.get("id") or "probe")
+    connection_id = tunnel_id_for_connection(connection)
     try:
-        kwargs = _connection_config_kwargs(connection)
-        ssh_config = connection.get("ssh_config") or {}
-        if ssh_config.get("enabled"):
-            validate_ssh_config(ssh_config)
-            tunnel = await manager.create_tunnel(
-                connection_id, ssh_config=ssh_config
-            )
-            endpoint = tunnel.get_local_endpoint()
-            kwargs["host"] = endpoint["host"]
-            kwargs["port"] = endpoint["port"]
-            kwargs["ssh_config"] = None
-            summary["tunnel_local_port"] = endpoint["port"]
+        kwargs = ensure_tunnel_for_connection(
+            connection, tunnel_manager=manager
+        )
+        if (connection.get("ssh_config") or {}).get("enabled"):
+            tunnel = manager.get_tunnel(connection_id)
+            if tunnel is not None:
+                summary["tunnel_local_port"] = tunnel.get_local_endpoint()["port"]
 
         # Apply sslmode from extra for postgres
         extra = connection.get("extra") or {}

@@ -17,6 +17,18 @@ class HealthStatus(Enum):
     UNKNOWN = "unknown"
 
 
+_PING_QUERIES = {
+    "postgresql": "SELECT 1",
+    "postgres": "SELECT 1",
+    "mysql": "SELECT 1",
+    "mariadb": "SELECT 1",
+    "sqlite": "SELECT 1",
+    "sqlserver": "SELECT 1",
+    "mssql": "SELECT 1",
+    "oracle": "SELECT 1 FROM DUAL",
+}
+
+
 class HealthChecker:
     """Check database health"""
 
@@ -24,8 +36,16 @@ class HealthChecker:
         self.connection = connection
         self.health_history: List[Dict[str, Any]] = []
 
+    def _ping_sql(self) -> str:
+        db_type = (self.connection.config.type or "").lower()
+        return _PING_QUERIES.get(db_type, "SELECT 1")
+
+    async def _ensure_connected(self) -> None:
+        if not getattr(self.connection, "connected", False):
+            await self.connection.connect()
+
     async def check_health(self) -> Dict[str, Any]:
-        """Perform comprehensive health check"""
+        """Perform comprehensive health check without tearing down the session."""
         checks = {
             "connectivity": await self._check_connectivity(),
             "response_time": await self._check_response_time(),
@@ -41,6 +61,7 @@ class HealthChecker:
             "status": overall_status.value,
             "checks": checks,
             "databaseType": self.connection.config.type,
+            "summary": self._summarize_failures(checks, overall_status),
         }
 
         self.health_history.append(health_report)
@@ -51,22 +72,33 @@ class HealthChecker:
 
         return health_report
 
+    @staticmethod
+    def _summarize_failures(
+        checks: Dict[str, Dict[str, Any]], overall: HealthStatus
+    ) -> str:
+        if overall == HealthStatus.HEALTHY:
+            return "All health checks passed"
+        parts = []
+        for name, check in checks.items():
+            if check.get("status") in ("unhealthy", "degraded"):
+                parts.append(f"{name}: {check.get('message') or check.get('status')}")
+        return "; ".join(parts) if parts else overall.value
+
     async def _check_connectivity(self) -> Dict[str, Any]:
-        """Check database connectivity"""
+        """Check database connectivity without disconnecting the live session."""
         try:
-            is_connected = await self.connection.test_connection()
+            await self._ensure_connected()
+            await self.connection.execute_query(self._ping_sql(), safe_mode=True)
             return {
-                "status": "healthy" if is_connected else "unhealthy",
-                "connected": is_connected,
-                "message": (
-                    "Connection successful" if is_connected else "Connection failed"
-                ),
+                "status": "healthy",
+                "connected": True,
+                "message": "Connection successful",
             }
         except Exception as e:
             return {
                 "status": "unhealthy",
                 "connected": False,
-                "message": f"Connection error: {str(e)}",
+                "message": f"Connection error: {type(e).__name__}: {e}",
             }
 
     async def _check_response_time(self) -> Dict[str, Any]:
@@ -74,13 +106,16 @@ class HealthChecker:
         import time
 
         try:
+            await self._ensure_connected()
             start_time = time.time()
-            await self.connection.test_connection()
+            await self.connection.execute_query(self._ping_sql(), safe_mode=True)
             response_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
-            if response_time < 100:
+            # Remote / SSH-tunneled DBs commonly sit in the 100–500ms range;
+            # only treat multi-second stalls as unhealthy.
+            if response_time < 500:
                 status = "healthy"
-            elif response_time < 500:
+            elif response_time < 2000:
                 status = "degraded"
             else:
                 status = "unhealthy"
@@ -94,37 +129,24 @@ class HealthChecker:
             return {
                 "status": "unhealthy",
                 "responseTime": None,
-                "message": f"Response time check failed: {str(e)}",
+                "message": f"Response time check failed: {type(e).__name__}: {e}",
             }
 
     async def _check_query_performance(self) -> Dict[str, Any]:
         """Check query performance"""
-        db_type = self.connection.config.type.lower()
-
-        # Simple test query based on database type
-        test_queries = {
-            "postgresql": "SELECT 1",
-            "postgres": "SELECT 1",
-            "mysql": "SELECT 1",
-            "mariadb": "SELECT 1",
-            "sqlite": "SELECT 1",
-            "sqlserver": "SELECT 1",
-            "mssql": "SELECT 1",
-            "oracle": "SELECT 1 FROM DUAL",
-        }
-
-        test_query = test_queries.get(db_type, "SELECT 1")
+        test_query = self._ping_sql()
 
         try:
             import time
 
+            await self._ensure_connected()
             start_time = time.time()
-            result = await self.connection.execute_query(test_query, safe_mode=True)
+            await self.connection.execute_query(test_query, safe_mode=True)
             execution_time = (time.time() - start_time) * 1000
 
-            if execution_time < 50:
+            if execution_time < 500:
                 status = "healthy"
-            elif execution_time < 200:
+            elif execution_time < 2000:
                 status = "degraded"
             else:
                 status = "unhealthy"
@@ -138,7 +160,7 @@ class HealthChecker:
             return {
                 "status": "unhealthy",
                 "executionTime": None,
-                "message": f"Query performance check failed: {str(e)}",
+                "message": f"Query performance check failed: {type(e).__name__}: {e}",
             }
 
     async def _check_connection_pool(self) -> Dict[str, Any]:

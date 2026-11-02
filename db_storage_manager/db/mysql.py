@@ -57,69 +57,89 @@ class MySQLConnection(DatabaseConnection):
         self.connected = False
 
     async def analyze_storage(self) -> StorageAnalysis:
-        """Analyze MySQL storage"""
+        """Analyze MySQL/MariaDB storage via information_schema.
+
+        Table sizes use ``TABLES.DATA_LENGTH`` / ``INDEX_LENGTH``. Index listing
+        uses ``STATISTICS`` only (that view has no ``index_length`` column).
+        """
         if not self.connection:
             await self.connect()
 
         cursor = self.connection.cursor(DictCursor)
 
-        # Get table sizes
+        # BASE TABLE only — skip views. Uppercase info_schema identifiers are
+        # portable across MySQL and MariaDB; aliases normalize DictCursor keys.
         cursor.execute(
             """
-            SELECT 
-                table_schema,
-                table_name,
-                data_length + index_length as total_size,
-                data_length as table_size,
-                index_length as index_size,
-                table_rows as row_count
-            FROM information_schema.tables
-            WHERE table_schema = %s
+            SELECT
+                TABLE_SCHEMA AS table_schema,
+                TABLE_NAME AS table_name,
+                COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0) AS total_size,
+                COALESCE(DATA_LENGTH, 0) AS table_size,
+                COALESCE(INDEX_LENGTH, 0) AS index_size,
+                COALESCE(TABLE_ROWS, 0) AS row_count
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = %s
+              AND TABLE_TYPE = 'BASE TABLE'
             ORDER BY total_size DESC
-        """,
+            """,
             (self.config.database,),
         )
 
         tables = []
         total_size = 0
+        table_index_sizes: Dict[str, int] = {}
         for row in cursor.fetchall():
-            table_name = f"{row['table_schema']}.{row['table_name']}"
+            schema = row["table_schema"]
+            name = row["table_name"]
             table_size = int(row["table_size"] or 0)
             index_size = int(row["index_size"] or 0)
             row_count = int(row["row_count"] or 0)
+            relation_total = int(row["total_size"] or 0)
+            table_index_sizes[str(name)] = index_size
 
             tables.append(
                 {
-                    "name": table_name,
+                    "name": f"{schema}.{name}",
                     "size": table_size,
                     "rowCount": row_count,
                     "indexSize": index_size,
                     "bloat": 0.0,
                 }
             )
-            total_size += int(row["total_size"] or 0)
+            total_size += relation_total
 
-        # Get indexes
+        # STATISTICS has no INDEX_LENGTH — list indexes and attribute the
+        # table-level INDEX_LENGTH to PRIMARY (or first index) for display.
         cursor.execute(
             """
-            SELECT 
-                index_name,
-                table_name,
-                SUM(index_length) as size
-            FROM information_schema.statistics
-            WHERE table_schema = %s
-            GROUP BY index_name, table_name
-        """,
+            SELECT
+                INDEX_NAME AS index_name,
+                TABLE_NAME AS table_name,
+                MIN(SEQ_IN_INDEX) AS seq_in_index
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = %s
+            GROUP BY INDEX_NAME, TABLE_NAME
+            ORDER BY TABLE_NAME, seq_in_index, INDEX_NAME
+            """,
             (self.config.database,),
         )
 
         indexes = []
+        claimed_tables: set = set()
         for row in cursor.fetchall():
+            table_name = row["table_name"]
+            index_name = row["index_name"]
+            if table_name not in claimed_tables:
+                size = int(table_index_sizes.get(str(table_name), 0))
+                claimed_tables.add(table_name)
+            else:
+                size = 0
             indexes.append(
                 {
-                    "name": row["index_name"],
-                    "tableName": row["table_name"],
-                    "size": int(row["size"] or 0),
+                    "name": index_name,
+                    "tableName": table_name,
+                    "size": size,
                     "bloat": 0.0,
                 }
             )
