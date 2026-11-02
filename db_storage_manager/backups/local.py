@@ -2,8 +2,10 @@
 Local file system backup adapter
 """
 
+import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -24,6 +26,31 @@ from ..native import (
     zstd_decompress_file,
 )
 
+# Path separators and other characters that must not appear in a single path segment.
+_UNSAFE_BASENAME = re.compile(r"[^\w.\-]+", re.UNICODE)
+
+
+def sanitize_backup_basename(name: str, *, max_len: int = 120) -> str:
+    """Make a connection-derived name safe as a single filesystem path segment.
+
+    Replaces spaces, em dashes, parentheses, slashes, and other unsafe characters
+    with underscores, then appends a short hash of the original string so distinct
+    connection names stay unique after collapsing.
+    """
+    raw = (name or "").strip() or "backup"
+    cleaned = (
+        raw.replace("/", "_")
+        .replace("\\", "_")
+        .replace("—", "-")
+        .replace("–", "-")
+    )
+    cleaned = _UNSAFE_BASENAME.sub("_", cleaned)
+    cleaned = re.sub(r"_+", "_", cleaned).strip("._") or "backup"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip("._") or "backup"
+    return f"{cleaned}_{digest}"
+
 
 def meta_path_for(backup_path: Path) -> Path:
     """Sidecar JSON path that stores SHA-256 and backup metadata."""
@@ -37,8 +64,14 @@ class LocalBackupAdapter(BackupAdapter):
         self.base_path = base_path or BACKUP_DIR
         self.base_path.mkdir(parents=True, exist_ok=True)
 
+    def _ensure_parent(self, path: Path) -> Path:
+        """Create parent directories before open/write/copy."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     def _write_meta(self, backup_path: Path, metadata: Dict[str, Any]) -> None:
         sidecar = meta_path_for(backup_path)
+        self._ensure_parent(sidecar)
         payload = dict(metadata)
         payload["name"] = backup_path.name
         payload["path"] = str(backup_path)
@@ -72,9 +105,11 @@ class LocalBackupAdapter(BackupAdapter):
 
     async def create_backup(self, options: BackupOptions) -> BackupInfo:
         """Create a local backup"""
+        self.base_path.mkdir(parents=True, exist_ok=True)
         backup_id = str(uuid.uuid4())
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        original_filename = f"{options.connectionName}_{timestamp}.backup"
+        safe_name = sanitize_backup_basename(options.connectionName)
+        original_filename = f"{safe_name}_{timestamp}.backup"
         final_filename = original_filename
 
         source_path = Path(options.backupPath)
@@ -88,20 +123,24 @@ class LocalBackupAdapter(BackupAdapter):
 
         compression = (options.compression or "none").lower()
         if compression == "gzip":
-            compressed_path = self.base_path / f"{original_filename}.gz"
+            compressed_path = self._ensure_parent(
+                self.base_path / f"{original_filename}.gz"
+            )
             gzip_compress_file(source_path, compressed_path)
             processed_path = compressed_path
             final_filename = f"{original_filename}.gz"
             intermediate = compressed_path
         elif compression == "zstd":
-            compressed_path = self.base_path / f"{original_filename}.zst"
+            compressed_path = self._ensure_parent(
+                self.base_path / f"{original_filename}.zst"
+            )
             zstd_compress_file(source_path, compressed_path)
             processed_path = compressed_path
             final_filename = f"{original_filename}.zst"
             intermediate = compressed_path
         else:
             compression = "none"
-            final_path = self.base_path / final_filename
+            final_path = self._ensure_parent(self.base_path / final_filename)
             shutil.copy2(source_path, final_path)
             processed_path = final_path
 
@@ -111,7 +150,7 @@ class LocalBackupAdapter(BackupAdapter):
                 raise ValueError(
                     "encryption=True requires encryptionKey (passphrase)"
                 )
-            enc_path = self.base_path / f"{final_filename}.enc"
+            enc_path = self._ensure_parent(self.base_path / f"{final_filename}.enc")
             encrypt_file(processed_path, enc_path, options.encryptionKey)
             if intermediate is not None and intermediate.exists():
                 intermediate.unlink(missing_ok=True)

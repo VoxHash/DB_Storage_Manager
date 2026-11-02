@@ -104,12 +104,16 @@ class BackupManager:
         db_connection = await DatabaseConnectionFactory.acquire(effective)
 
         try:
-            # Create temporary backup file
+            # Create temporary backup file (sanitize name: no path separators)
+            from .local import sanitize_backup_basename
+
             temp_dir = Path(tempfile.gettempdir())
+            safe_stem = sanitize_backup_basename(connection_config.name)
             temp_backup = (
                 temp_dir
-                / f"{connection_config.name}_{__import__('time').time()}.tmpbackup"
+                / f"{safe_stem}_{__import__('time').time()}.tmpbackup"
             )
+            temp_backup.parent.mkdir(parents=True, exist_ok=True)
 
             # Create backup using database connection
             backup_result = await db_connection.create_backup(str(temp_backup))

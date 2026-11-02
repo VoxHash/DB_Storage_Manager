@@ -13,10 +13,18 @@ from pathlib import Path
 
 import pytest
 
-from db_storage_manager.backups.local import LocalBackupAdapter
+from db_storage_manager.backups.local import LocalBackupAdapter, sanitize_backup_basename
 from db_storage_manager.backups.manager import BackupManager, backup_path_from_result
 from db_storage_manager.db.base import ConnectionConfig
 from db_storage_manager.native import ENCRYPTION_SCHEME, decrypt_file, sha256_file
+
+
+# Mirrors the GUI failure: long Supabase pooler label with em dash, spaces,
+# parentheses, and a slash in the host path segment.
+_UNSAFE_SUPABASE_NAME = (
+    "redacted-pooler — Database Url "
+    "(aws-0-us-east-1.pooler.supabase.com/postgres)"
+)
 
 
 def test_backup_path_from_result_accepts_str_and_dict(tmp_path: Path):
@@ -205,3 +213,76 @@ def test_manager_sqlite_local_encrypt_and_plain(tmp_path: Path):
     assert Path(enc.path).name.endswith(".enc")
     assert enc.metadata.get("encryption") is True
     assert Path(enc.path).read_bytes()[:8] == b"DSMENC1\0"
+
+
+def test_sanitize_backup_basename_strips_path_separators():
+    safe = sanitize_backup_basename(_UNSAFE_SUPABASE_NAME)
+    assert "/" not in safe
+    assert "\\" not in safe
+    assert "—" not in safe
+    assert "(" not in safe
+    assert " " not in safe
+    assert Path(safe).name == safe  # single path segment
+    # Distinct originals stay distinct after sanitization
+    other = sanitize_backup_basename(
+        "other — Database Url (aws-0-eu.pooler.supabase.com/postgres)"
+    )
+    assert safe != other
+
+
+def test_manager_local_encrypt_unsafe_supabase_connection_name(
+    tmp_path: Path, monkeypatch
+):
+    """Regression: Local+encrypt must not Errno 2 on long pooler labels with /."""
+    payload = b"-- postgres dump\nSELECT 1;\n"
+    conn = _StringPathDumpConnection(payload)
+    # Intentionally missing parent until adapter mkdir — mirrors fresh config dir
+    backups_root = tmp_path / "config" / "db-storage-manager" / "backups"
+    adapter = LocalBackupAdapter(base_path=backups_root)
+    manager = BackupManager()
+
+    async def _acquire(_config):
+        return conn
+
+    async def _release(_connection):
+        return None
+
+    monkeypatch.setattr(
+        "db_storage_manager.backups.manager.DatabaseConnectionFactory.acquire",
+        _acquire,
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.manager.DatabaseConnectionFactory.release",
+        _release,
+    )
+
+    passphrase = "supabase-pooler-enc-key"
+    info = asyncio.run(
+        manager.create_backup(
+            adapter,
+            _cfg(name=_UNSAFE_SUPABASE_NAME),
+            {
+                "compression": "none",
+                "encryption": True,
+                "encryptionKey": passphrase,
+                "adapterType": "local",
+            },
+        )
+    )
+
+    out = Path(info.path)
+    assert out.exists()
+    assert out.parent == backups_root
+    assert "/" not in out.name
+    assert "—" not in out.name
+    assert out.name.endswith(".backup.enc")
+    assert info.metadata.get("encryption") is True
+    assert info.metadata.get("encryptionScheme") == ENCRYPTION_SCHEME
+    assert out.read_bytes()[:8] == b"DSMENC1\0"
+    # Original display name preserved in sidecar metadata, not the filename
+    listed = asyncio.run(adapter.list_backups())
+    assert listed[0].metadata.get("connectionName") == _UNSAFE_SUPABASE_NAME
+
+    dec = tmp_path / "roundtrip.sql"
+    decrypt_file(info.path, dec, passphrase)
+    assert dec.read_bytes() == payload
