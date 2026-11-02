@@ -1,4 +1,4 @@
-"""MySQL dump CLI resolution: prefer mysqldump, fall back to mariadb-dump."""
+"""MySQL dump CLI resolution: prefer mariadb-dump, fall back to mysqldump."""
 
 from pathlib import Path
 
@@ -10,7 +10,7 @@ from db_storage_manager.db.mysql import (
 )
 
 
-def test_resolve_prefers_mysqldump(monkeypatch, tmp_path: Path):
+def test_resolve_prefers_mariadb_dump(monkeypatch, tmp_path: Path):
     dump = tmp_path / "mysqldump"
     dump.write_text("#!/bin/sh\n", encoding="utf-8")
     dump.chmod(0o755)
@@ -26,22 +26,22 @@ def test_resolve_prefers_mysqldump(monkeypatch, tmp_path: Path):
         return None
 
     monkeypatch.setattr("db_storage_manager.db.mysql.shutil.which", fake_which)
-    assert resolve_mysql_cli() == str(dump)
-    assert require_mysql_cli() == str(dump)
+    assert resolve_mysql_cli() == str(maria)
+    assert require_mysql_cli() == str(maria)
 
 
-def test_resolve_falls_back_to_mariadb_dump(monkeypatch, tmp_path: Path):
-    maria = tmp_path / "mariadb-dump"
-    maria.write_text("#!/bin/sh\n", encoding="utf-8")
-    maria.chmod(0o755)
+def test_resolve_falls_back_to_mysqldump(monkeypatch, tmp_path: Path):
+    dump = tmp_path / "mysqldump"
+    dump.write_text("#!/bin/sh\n", encoding="utf-8")
+    dump.chmod(0o755)
 
     def fake_which(name: str):
-        if name == "mariadb-dump":
-            return str(maria)
+        if name == "mysqldump":
+            return str(dump)
         return None
 
     monkeypatch.setattr("db_storage_manager.db.mysql.shutil.which", fake_which)
-    assert resolve_mysql_cli() == str(maria)
+    assert resolve_mysql_cli() == str(dump)
 
 
 def test_require_missing_mentions_install_hint(monkeypatch):

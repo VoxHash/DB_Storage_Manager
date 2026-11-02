@@ -17,12 +17,14 @@ from .base import (
     SchemaInfo,
 )
 
-_DUMP_CLIENT_CANDIDATES = ("mysqldump", "mariadb-dump")
-_CLIENT_CANDIDATES = ("mysql", "mariadb")
+# Prefer MariaDB names first: invoking the binary as "mysqldump" on MariaDB 11+
+# prints a deprecation warning and can fail the backup with a non-zero exit.
+_DUMP_CLIENT_CANDIDATES = ("mariadb-dump", "mysqldump")
+_CLIENT_CANDIDATES = ("mariadb", "mysql")
 _ARCH_CLIENTS_HINT = (
     "Install MariaDB/MySQL client tools "
     "(Arch/Garuda: sudo pacman -S --needed mariadb-clients) "
-    "and ensure the dump binary is on PATH."
+    "and ensure mariadb-dump or mysqldump is on PATH."
 )
 
 
