@@ -112,9 +112,9 @@ DSM_LIVE_CLOUD=1 pytest tests/test_cloud_managed.py -k live -v
 
 ## Proton Drive backups
 
-1. Install [rclone](https://rclone.org/install/) with the `protondrive` backend.
-2. `rclone config` **or** copy `.env.protondrive.local.example` → `.env.protondrive.local` (gitignored, mode `600`).
-3. Backups tab → destination **Proton Drive**; prefer encryption on.
+1. Install [rclone](https://rclone.org/install/) with the `protondrive` backend (desktop launchers resolve `~/.local/bin/rclone` when it is missing from `PATH`).
+2. Prefer **Settings → Configure Proton Drive…** (SecureStore encrypted). Alternatives: `./scripts/setup-protondrive-env.sh`, copy `.env.protondrive.local.example` → `.env.protondrive.local` (gitignored, mode `600`), or `rclone config`.
+3. Backups tab → Adapter **Proton Drive**; prefer encryption on. The status line turns green when rclone + credentials/remote are ready.
 
 ## REST / Web companion (same machine)
 

@@ -102,11 +102,15 @@ Optional pytest live probes: `DSM_E2E_IMPORT=1 pytest -v tests/test_import_conne
 
 ### Proton Drive backups
 
-1. Install [rclone](https://rclone.org/install/) with the `protondrive` backend.
+1. Install [rclone](https://rclone.org/install/) with the `protondrive` backend (user-local `~/.local/bin/rclone` is resolved even when desktop launchers omit that directory from `PATH`).
 2. Log into Proton Drive once in a browser so account keys exist (rclone requirement).
-3. Either run `rclone config` and create a `protondrive` remote, **or** copy `.env.protondrive.local.example` → `.env.protondrive.local` and set username/password (optional OTP secret).
-4. Non-secret defaults (`remote`, `path`, `prefer_encryption`) can also live under SecureStore settings key `proton_drive`.
+3. Configure credentials (pick one — never commit secrets):
+   - **In-app (preferred):** Settings → **Configure Proton Drive…** or Backups → Adapter **Proton Drive** → **Configure Proton Drive…** — username / password / optional OTP are stored encrypted in SecureStore (`proton_drive`).
+   - **Env file:** `./scripts/setup-protondrive-env.sh` (interactive TTY prompts, or copy `.env.protondrive.local.example` → `.env.protondrive.local` and edit). Mode `600`, gitignored. The app loads this file automatically.
+   - **rclone remote:** `rclone config` and create a remote named `DSM_PROTONDRIVE_REMOTE` (default `protondrive`).
+4. Non-secret defaults (`remote`, `path`, `prefer_encryption`) live under SecureStore settings key `proton_drive`.
 5. Prefer encryption on: payloads are DSMENC1-encrypted and checksummed locally before upload.
+6. Ready when rclone is found **and** SecureStore/env has username+password **or** the rclone remote exists — the Backups orange banner clears.
 
 ## Default ports
 

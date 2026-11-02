@@ -192,7 +192,7 @@ GitHub Releases may include platform executables built by `.github/workflows/rel
 
 ## Optional: Proton Drive cloud backups
 
-Proton Drive uploads use [rclone](https://rclone.org/install/)’s `protondrive` backend (official Proton third-party SDKs do not yet expose standalone auth). Install rclone on the host, then either create a remote with `rclone config` or copy `.env.protondrive.local.example` to `.env.protondrive.local` (gitignored) and set account credentials. See [configuration.md](configuration.md) and [usage.md](usage.md).
+Proton Drive uploads use [rclone](https://rclone.org/install/)’s `protondrive` backend (official Proton third-party SDKs do not yet expose standalone auth). Install rclone on the host, then configure credentials in-app (**Settings → Configure Proton Drive…**), via `./scripts/setup-protondrive-env.sh` / `.env.protondrive.local` (gitignored), or `rclone config`. See [configuration.md](configuration.md) and [usage.md](usage.md).
 
 ## Optional: RDS / Cloud SQL / Azure SQL
 

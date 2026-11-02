@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Proton Drive “not configured” with local env / desktop PATH**: load gitignored `.env.protondrive.local` (and package-root / `~/.config/db-storage-manager/` copies) like cloud dotenv; resolve rclone via `~/.local/bin/rclone` and other common paths when desktop launchers omit user bin from `PATH`; treat SecureStore `proton_drive` username+password or an rclone remote as ready so the Backups orange banner clears
+- **Settings wipe of Proton / cloud prefs**: saving theme/language no longer drops `proton_drive`, `cloud_managed`, or `companion` from SecureStore
 - **Local Create Backup Errno 2 on long Supabase names**: backup filenames derived from connection labels with spaces, em dashes (`—`), parentheses, or `/` (e.g. `…supabase.com/postgres`) were treated as nested paths, so copy/encrypt failed with `No such file or directory`. Sanitize to a single filesystem-safe segment (hash suffix for uniqueness), and `mkdir(parents=True, exist_ok=True)` before dump/encrypt/meta writes
 - **MySQL dump CLI missing**: `create_backup` / `restore_backup` resolve `mariadb-dump` then `mysqldump` (and `mariadb` then `mysql` for restore) so MariaDB 11+ deprecation-as-`mysqldump` does not fail backups; raise a clear `FileNotFoundError` with Arch/Garuda install hint (`sudo pacman -S --needed mariadb-clients`) when neither is on PATH
 - **Local backup TypeError (SSH/MySQL + encryption)**: `BackupManager` treated dump results as dicts (`result["path"]`) while MySQL/Postgres returned a bare path string, causing `Backup failed: string indices must be integers, not 'str'`. Normalize str/Path/dict dump results; MySQL/Postgres now return `{"path", "size"}`; open SSH tunnels before dump/restore like Dashboard/Query
@@ -21,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **License**: project relicensed from MIT to **GPL-3.0-only** for coherence with PyQt6’s GPL-or-commercial dual license when distributing the free PyQt6 wheels; LICENSE, README badge/section, `setup.py` classifiers, native crate metadata, and FAQ updated accordingly
 
 ### Added
+- **In-app Proton Drive configuration**: Settings and Backups **Configure Proton Drive…** dialog saves username / password / optional OTP into encrypted SecureStore (`proton_drive`); `save_proton_drive_credentials` helper; setup script `scripts/setup-protondrive-env.sh` (interactive TTY or documented non-interactive copy of `.env.protondrive.local.example`)
+- Unit tests for SecureStore credential detection, dotenv load, rclone path fallback, and rclone.conf section detection (`tests/test_proton_drive_backup.py`)
 - **Connection importers** (`db_storage_manager.importers`): parse platform `.env` (`DATABASE_URL` / `DIRECT_URL` / `DB_*` / `POSTGRES_*` / `MYSQL_*` / Supabase) and SSH key folders (`KEY` + optional `SSH.pub` / `VPS.txt` / `DB.txt`) into `ConnectionConfig` profiles; prefer key path references; OAuth platform guides document grant-permissions flows that need user tokens
 - Connections UI **Import from .env…** / **Import SSH key…**; REST `POST /api/v1/connections/import/env`, `POST /api/v1/connections/import/ssh`, `GET /api/v1/connections/import/platforms` (responses redacted)
 - SecureStore merge helper + probe (`test_connection` / SSH tunnel); e2e script `scripts/import_connections_e2e.py`; unit fixtures + optional live pytest (`DSM_E2E_IMPORT=1`); gitignore for import dumps

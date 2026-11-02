@@ -90,6 +90,20 @@ class SubprocessRcloneRunner:
         )
 
 
+_ENV_FILE_CANDIDATES = (
+    Path(".env.protondrive.local"),
+    Path.home() / ".config" / "db-storage-manager" / ".env.protondrive.local",
+)
+
+# Desktop launchers often omit ~/.local/bin from PATH — probe these after which().
+_RCLONE_FALLBACK_PATHS = (
+    Path.home() / ".local" / "bin" / "rclone",
+    Path("/usr/local/bin/rclone"),
+    Path("/usr/bin/rclone"),
+    Path("/opt/homebrew/bin/rclone"),
+)
+
+
 def _env_first(*names: str) -> Optional[str]:
     for name in names:
         value = os.environ.get(name)
@@ -98,16 +112,165 @@ def _env_first(*names: str) -> Optional[str]:
     return None
 
 
+def load_protondrive_dotenv(*, override: bool = False) -> Optional[Path]:
+    """Load ``.env.protondrive.local`` into the process environment if present.
+
+    Returns the path loaded, or ``None`` if no file / dotenv unavailable.
+    Never logs secret values.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return None
+
+    candidates = list(_ENV_FILE_CANDIDATES)
+    try:
+        pkg_root = Path(__file__).resolve().parents[2]
+        candidates.append(pkg_root / ".env.protondrive.local")
+    except Exception:
+        pass
+
+    seen: set[str] = set()
+    for path in candidates:
+        try:
+            resolved = str(path.resolve())
+        except OSError:
+            resolved = str(path)
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if path.is_file():
+            load_dotenv(path, override=override)
+            return path.resolve()
+    return None
+
+
+def resolve_rclone_binary(configured: Optional[str] = None) -> Optional[str]:
+    """Locate the rclone executable for GUI and CLI hosts.
+
+    Order: absolute/configured path if it exists → ``shutil.which`` → common
+    install locations including ``~/.local/bin/rclone`` (user-local installs
+    often missing from desktop ``PATH``).
+    """
+    candidates: List[str] = []
+    if configured and str(configured).strip():
+        candidates.append(str(configured).strip())
+    env_bin = _env_first("DSM_PROTONDRIVE_RCLONE", "RCLONE_BIN")
+    if env_bin and env_bin not in candidates:
+        candidates.append(env_bin)
+    if "rclone" not in candidates:
+        candidates.append("rclone")
+
+    for name in candidates:
+        path = Path(name).expanduser()
+        if path.is_file() and os.access(path, os.X_OK):
+            return str(path.resolve())
+        found = shutil.which(name)
+        if found:
+            return found
+
+    for fallback in _RCLONE_FALLBACK_PATHS:
+        if fallback.is_file() and os.access(fallback, os.X_OK):
+            return str(fallback.resolve())
+    return None
+
+
+def rclone_remote_configured(
+    remote_name: str = "protondrive",
+    *,
+    config_path: Optional[Path] = None,
+) -> bool:
+    """Return True when ``rclone.conf`` declares a remote of the given name.
+
+    Reads section headers only — never prints or returns secret values.
+    """
+    conf = config_path or (Path.home() / ".config" / "rclone" / "rclone.conf")
+    if not conf.is_file():
+        return False
+    try:
+        text = conf.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    target = f"[{remote_name}]"
+    return any(line.strip() == target for line in text.splitlines())
+
+
+def save_proton_drive_credentials(
+    *,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    otp_secret_key: Optional[str] = None,
+    mailbox_password: Optional[str] = None,
+    two_fa: Optional[str] = None,
+    remote: Optional[str] = None,
+    path: Optional[str] = None,
+    rclone_bin: Optional[str] = None,
+    prefer_encryption: Optional[bool] = None,
+    clear_secrets: bool = False,
+) -> Dict[str, Any]:
+    """Merge Proton Drive fields into SecureStore ``proton_drive`` (encrypted).
+
+    Empty strings leave existing secret values unchanged unless
+    ``clear_secrets`` is True. Returns the stored ``proton_drive`` dict with
+    secret values redacted for callers that log status.
+    """
+    from ..config import DEFAULT_PROTON_DRIVE
+    from ..security.store import SecureStore
+
+    store = SecureStore()
+    settings = store.get_settings()
+    current = dict(settings.get("proton_drive") or {})
+    for key, default in DEFAULT_PROTON_DRIVE.items():
+        current.setdefault(key, default)
+
+    if remote is not None and str(remote).strip():
+        current["remote"] = str(remote).strip()
+    if path is not None and str(path).strip():
+        current["path"] = str(path).strip().strip("/")
+    if rclone_bin is not None and str(rclone_bin).strip():
+        current["rclone_bin"] = str(rclone_bin).strip()
+    if prefer_encryption is not None:
+        current["prefer_encryption"] = bool(prefer_encryption)
+
+    def _apply_secret(key: str, value: Optional[str]) -> None:
+        if value is None:
+            return
+        stripped = str(value).strip()
+        if stripped:
+            current[key] = stripped
+        elif clear_secrets:
+            current.pop(key, None)
+
+    _apply_secret("username", username)
+    _apply_secret("password", password)
+    _apply_secret("otp_secret_key", otp_secret_key)
+    _apply_secret("mailbox_password", mailbox_password)
+    _apply_secret("2fa", two_fa)
+
+    settings["proton_drive"] = current
+    store.set_settings(settings)
+
+    redacted = {
+        k: ("***" if k in ("username", "password", "otp_secret_key", "mailbox_password", "2fa") and v else v)
+        for k, v in current.items()
+    }
+    return redacted
+
+
 def resolve_proton_drive_config(
     config: Optional[Dict[str, Any]] = None,
     *,
     settings: Optional[Dict[str, Any]] = None,
+    load_env_file: bool = True,
 ) -> Dict[str, Any]:
     """Merge adapter config, SecureStore settings, and environment.
 
     Precedence (highest first): explicit ``config`` → SecureStore
-    ``proton_drive`` settings → environment variables.
+    ``proton_drive`` settings → environment / ``.env.protondrive.local``.
     """
+    if load_env_file:
+        load_protondrive_dotenv()
+
     stored = {}
     if settings and isinstance(settings.get("proton_drive"), dict):
         stored = dict(settings["proton_drive"])
@@ -180,6 +343,11 @@ def resolve_proton_drive_config(
     else:
         merged["prefer_encryption"] = bool(prefer)
 
+    resolved_bin = resolve_rclone_binary(str(merged.get("rclone_bin") or "rclone"))
+    if resolved_bin:
+        merged["rclone_bin"] = resolved_bin
+        merged["rclone_resolved"] = resolved_bin
+
     return merged
 
 
@@ -187,13 +355,17 @@ def configuration_status(
     config: Optional[Dict[str, Any]] = None,
     *,
     runner: Optional[RcloneRunner] = None,
+    settings: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Describe whether Proton Drive backups can run on this machine."""
-    cfg = resolve_proton_drive_config(config)
+    """Describe whether Proton Drive backups can run on this machine.
+
+    Ready when rclone is found **and** either SecureStore/env has
+    username+password **or** an rclone remote of the configured name exists
+    (``listremotes`` or ``rclone.conf`` section).
+    """
+    cfg = resolve_proton_drive_config(config, settings=settings)
     binary = str(cfg.get("rclone_bin") or "rclone")
-    binary_path = shutil.which(binary) or (
-        binary if Path(binary).is_file() else None
-    )
+    binary_path = resolve_rclone_binary(binary)
     has_creds = bool(cfg.get("username") and cfg.get("password"))
     remotes: List[str] = []
     remote_listed = False
@@ -215,17 +387,23 @@ def configuration_status(
         except Exception as exc:  # noqa: BLE001 — surface status, not crash
             rclone_error = str(exc)
 
+    if not remote_listed and rclone_remote_configured(str(cfg["remote"])):
+        remote_listed = True
+
     configured = bool(binary_path) and (has_creds or remote_listed)
     messages: List[str] = []
     if not binary_path:
         messages.append(
             "rclone is not installed or not on PATH. Install rclone "
-            "(https://rclone.org/install/) with the protondrive backend."
+            "(https://rclone.org/install/) with the protondrive backend "
+            "(also checks ~/.local/bin/rclone for desktop launches)."
         )
     elif not has_creds and not remote_listed:
         messages.append(
-            "Proton Drive is not configured. Set DSM_PROTONDRIVE_USERNAME / "
-            "DSM_PROTONDRIVE_PASSWORD (see .env.protondrive.local.example), "
+            "Proton Drive is not configured. Save username/password in Settings "
+            "or Backups (SecureStore), set DSM_PROTONDRIVE_USERNAME / "
+            "DSM_PROTONDRIVE_PASSWORD (see .env.protondrive.local.example or "
+            "./scripts/setup-protondrive-env.sh), "
             f"or run `rclone config` and create a '{cfg['remote']}' protondrive remote."
         )
     if rclone_error and not configured:
@@ -262,7 +440,12 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         self.remote_folder = str(self.config.get("path") or "").strip().strip("/")
         self.prefer_encryption = bool(self.config.get("prefer_encryption", True))
         self.timeout = float(self.config.get("timeout_seconds") or 300)
-        binary = str(self.config.get("rclone_bin") or "rclone")
+        binary = str(
+            self.config.get("rclone_resolved")
+            or resolve_rclone_binary(str(self.config.get("rclone_bin") or "rclone"))
+            or self.config.get("rclone_bin")
+            or "rclone"
+        )
         self._runner: RcloneRunner = runner or SubprocessRcloneRunner(binary)
         self._binary = binary
 

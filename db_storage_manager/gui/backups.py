@@ -87,6 +87,11 @@ class BackupsWidget(QWidget):
         self.verify_all_button.setEnabled(can_read)
         self.dry_run_button.setEnabled(can_restore)
         self.create_button.setEnabled(can_create)
+        can_settings = auth.has_permission("settings:write")
+        if hasattr(self, "configure_proton_button"):
+            self.configure_proton_button.setEnabled(
+                can_settings or not auth.is_rbac_active()
+            )
 
     def init_ui(self):
         """Initialize UI"""
@@ -148,6 +153,11 @@ class BackupsWidget(QWidget):
         self.create_button.setObjectName("PrimaryButton")
         self.create_button.clicked.connect(self.create_backup)
         create_actions.addWidget(self.create_button)
+        self.configure_proton_button = QPushButton(
+            t("backups.configure_proton", default="Configure Proton Drive…")
+        )
+        self.configure_proton_button.clicked.connect(self._configure_proton_drive)
+        create_actions.addWidget(self.configure_proton_button)
         create_actions.addStretch()
         create_layout.addLayout(create_actions)
         create_layout.addStretch()
@@ -239,11 +249,23 @@ class BackupsWidget(QWidget):
     def _selected_adapter_type(self) -> str:
         return str(self.adapter_combo.currentData() or "local")
 
+    def _configure_proton_drive(self) -> None:
+        """Open SecureStore Proton Drive credential dialog and refresh status."""
+        from .proton_drive_config import open_proton_drive_config
+
+        if open_proton_drive_config(self):
+            self._refresh_proton_status()
+
     def _refresh_proton_status(self) -> None:
         """Show Proton Drive readiness only when that adapter is selected.
 
         Local create/restore must not surface rclone/Proton configuration errors.
         """
+        if hasattr(self, "configure_proton_button"):
+            self.configure_proton_button.setVisible(
+                self._selected_adapter_type() == "protondrive"
+            )
+
         if self._selected_adapter_type() != "protondrive":
             self.proton_status_label.clear()
             self.proton_status_label.setStyleSheet("")

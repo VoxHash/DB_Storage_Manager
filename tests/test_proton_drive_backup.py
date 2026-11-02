@@ -17,9 +17,14 @@ from db_storage_manager.backups.protondrive import (
     ProtonDriveNotConfiguredError,
     RcloneResult,
     configuration_status,
+    load_protondrive_dotenv,
     resolve_proton_drive_config,
+    resolve_rclone_binary,
+    rclone_remote_configured,
+    save_proton_drive_credentials,
 )
 from db_storage_manager.native import ENCRYPTION_SCHEME, sha256_file
+from db_storage_manager.security.store import SecureStore
 
 
 class FakeRcloneRunner:
@@ -107,16 +112,28 @@ def test_resolve_config_from_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DSM_PROTONDRIVE_USERNAME", "user@proton.me")
     monkeypatch.setenv("DSM_PROTONDRIVE_PASSWORD", "secret")
     monkeypatch.setenv("DSM_PROTONDRIVE_PATH", "lab-backups")
-    cfg = resolve_proton_drive_config({}, settings={"proton_drive": {}})
+    cfg = resolve_proton_drive_config(
+        {}, settings={"proton_drive": {}}, load_env_file=False
+    )
     assert cfg["username"] == "user@proton.me"
     assert cfg["password"] == "secret"
     assert cfg["path"] == "lab-backups"
     assert cfg["prefer_encryption"] is True
 
 
-def test_configuration_status_missing_rclone(monkeypatch: pytest.MonkeyPatch):
+def test_configuration_status_missing_rclone(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.delenv("DSM_PROTONDRIVE_USERNAME", raising=False)
     monkeypatch.delenv("DSM_PROTONDRIVE_PASSWORD", raising=False)
+    monkeypatch.delenv("DSM_PROTONDRIVE_RCLONE", raising=False)
+    monkeypatch.delenv("RCLONE_BIN", raising=False)
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive._RCLONE_FALLBACK_PATHS",
+        (tmp_path / "no-rclone",),
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.shutil.which",
+        lambda _name: None,
+    )
     status = configuration_status(
         {
             "rclone_bin": "rclone-not-installed-xyz",
@@ -125,24 +142,141 @@ def test_configuration_status_missing_rclone(monkeypatch: pytest.MonkeyPatch):
             "remote": "protondrive",
         },
         runner=FakeRcloneRunner(remotes=[]),
+        settings={"proton_drive": {}},
     )
     assert status["configured"] is False
     assert status["error"]
 
 
-def test_configuration_status_with_creds_and_fake_runner():
+def test_configuration_status_with_creds_and_fake_runner(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    fake_bin = tmp_path / "rclone"
+    fake_bin.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive._RCLONE_FALLBACK_PATHS",
+        (fake_bin,),
+    )
     runner = FakeRcloneRunner(remotes=["protondrive"])
     status = configuration_status(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": str(fake_bin),
             "username": "user@proton.me",
             "password": "secret",
             "remote": "protondrive",
         },
         runner=runner,
+        settings={"proton_drive": {}},
     )
     assert status["configured"] is True
     assert status["has_credentials"] is True
+
+
+def test_resolve_rclone_binary_fallback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    fake_bin = tmp_path / "rclone"
+    fake_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.shutil.which",
+        lambda _name: None,
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive._RCLONE_FALLBACK_PATHS",
+        (fake_bin,),
+    )
+    monkeypatch.delenv("DSM_PROTONDRIVE_RCLONE", raising=False)
+    monkeypatch.delenv("RCLONE_BIN", raising=False)
+    found = resolve_rclone_binary("rclone")
+    assert found == str(fake_bin.resolve())
+
+
+def test_configuration_status_from_securestore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    fake_bin = tmp_path / "rclone"
+    fake_bin.write_text("#!/bin/sh\n", encoding="utf-8")
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.shutil.which",
+        lambda _name: str(fake_bin),
+    )
+    monkeypatch.delenv("DSM_PROTONDRIVE_USERNAME", raising=False)
+    monkeypatch.delenv("DSM_PROTONDRIVE_PASSWORD", raising=False)
+
+    settings = {
+        "proton_drive": {
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "rclone_bin": str(fake_bin),
+            "prefer_encryption": True,
+            "username": "secure@proton.me",
+            "password": "secure-secret",
+        }
+    }
+    runner = FakeRcloneRunner(remotes=[])
+    status = configuration_status(
+        {},
+        runner=runner,
+        settings=settings,
+    )
+    assert status["configured"] is True
+    assert status["has_credentials"] is True
+    assert status["remote_in_rclone_config"] is False
+
+
+def test_save_proton_drive_credentials_roundtrip(isolated_secure_store):
+    store, _data_dir = isolated_secure_store
+    assert isinstance(store, SecureStore)
+
+    redacted = save_proton_drive_credentials(
+        username="ui@proton.me",
+        password="ui-password-value",
+        otp_secret_key="OTPSECRET",
+        prefer_encryption=True,
+    )
+    assert redacted.get("username") == "***"
+    assert redacted.get("password") == "***"
+    assert "ui-password-value" not in str(redacted)
+
+    stored = SecureStore().get_settings().get("proton_drive") or {}
+    cfg = resolve_proton_drive_config(
+        {},
+        settings={"proton_drive": stored},
+        load_env_file=False,
+    )
+    assert cfg["username"] == "ui@proton.me"
+    assert cfg["password"] == "ui-password-value"
+    assert cfg["otp_secret_key"] == "OTPSECRET"
+
+
+def test_load_protondrive_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    env_file = tmp_path / ".env.protondrive.local"
+    env_file.write_text(
+        "DSM_PROTONDRIVE_USERNAME=dotenv@proton.me\n"
+        "DSM_PROTONDRIVE_PASSWORD=dotenv-secret\n",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("DSM_PROTONDRIVE_USERNAME", raising=False)
+    monkeypatch.delenv("DSM_PROTONDRIVE_PASSWORD", raising=False)
+    loaded = load_protondrive_dotenv(override=True)
+    assert loaded is not None
+    assert os.environ.get("DSM_PROTONDRIVE_USERNAME") == "dotenv@proton.me"
+    cfg = resolve_proton_drive_config(
+        {}, settings={"proton_drive": {}}, load_env_file=False
+    )
+    assert cfg["username"] == "dotenv@proton.me"
+    assert cfg["password"] == "dotenv-secret"
+
+
+def test_rclone_remote_configured_parses_section_only(tmp_path: Path):
+    conf = tmp_path / "rclone.conf"
+    conf.write_text(
+        "[other]\ntype = s3\n\n[protondrive]\ntype = protondrive\n"
+        "username = should-not-be-read-by-assert\n",
+        encoding="utf-8",
+    )
+    assert rclone_remote_configured("protondrive", config_path=conf) is True
+    assert rclone_remote_configured("missing", config_path=conf) is False
 
 
 def test_create_list_verify_delete_with_encryption(
@@ -226,17 +360,38 @@ def test_prefer_encryption_requires_key(source_dump: Path):
 
 
 def test_clear_error_when_not_configured(
-    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+    source_dump: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
     monkeypatch.delenv("DSM_PROTONDRIVE_USERNAME", raising=False)
     monkeypatch.delenv("DSM_PROTONDRIVE_PASSWORD", raising=False)
+    monkeypatch.delenv("RCLONE_PROTONDRIVE_USERNAME", raising=False)
+    monkeypatch.delenv("RCLONE_PROTONDRIVE_PASSWORD", raising=False)
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.load_protondrive_dotenv",
+        lambda **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive._RCLONE_FALLBACK_PATHS",
+        (tmp_path / "missing-rclone",),
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.shutil.which",
+        lambda _name: None,
+    )
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.rclone_remote_configured",
+        lambda *_a, **_k: False,
+    )
     runner = FakeRcloneRunner(remotes=[])
     adapter = ProtonDriveBackupAdapter(
         {
             "rclone_bin": "definitely-missing-rclone-bin",
             "prefer_encryption": False,
+            "username": None,
+            "password": None,
         },
         runner=runner,
+        settings={"proton_drive": {}},
     )
     options = BackupOptions(
         connectionId="c1",

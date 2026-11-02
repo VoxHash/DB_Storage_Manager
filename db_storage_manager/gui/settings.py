@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
+from ..backups.protondrive import configuration_status as proton_drive_status
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
 from ..config import DEFAULT_SETTINGS
@@ -21,6 +22,7 @@ from ..i18n.manager import get_i18n_manager
 from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
+from .proton_drive_config import open_proton_drive_config
 from .users import UsersAdminWidget
 from .utils import apply_glassmorphism, apply_page_layout, make_page_header
 
@@ -110,6 +112,18 @@ class SettingsWidget(QWidget):
 
         layout.addLayout(form)
 
+        # Proton Drive credentials (SecureStore)
+        self.proton_section_label = QLabel()
+        self.proton_section_label.setObjectName("PageSubtitle")
+        layout.addWidget(self.proton_section_label)
+        self.proton_status_label = QLabel("")
+        self.proton_status_label.setWordWrap(True)
+        layout.addWidget(self.proton_status_label)
+        self.proton_configure_button = QPushButton()
+        self.proton_configure_button.clicked.connect(self._configure_proton_drive)
+        layout.addWidget(self.proton_configure_button)
+        self._refresh_proton_status()
+
         # Save button
         self.save_button = QPushButton()
         self.save_button.clicked.connect(self._save_settings)
@@ -135,6 +149,7 @@ class SettingsWidget(QWidget):
             self.auto_connect_check,
             self.notifications_check,
             self.telemetry_check,
+            self.proton_configure_button,
         ):
             widget.setEnabled(can_write or not auth.is_rbac_active())
         # Theme/language preview still allowed for viewers when RBAC on
@@ -142,6 +157,29 @@ class SettingsWidget(QWidget):
             self.theme_combo.setEnabled(True)
             self.language_combo.setEnabled(True)
         self.users_admin.refresh()
+
+    def _refresh_proton_status(self) -> None:
+        status = proton_drive_status()
+        t = self.i18n.translate
+        if status.get("configured"):
+            self.proton_status_label.setText(
+                t(
+                    "backups.proton_ready",
+                    remote=status.get("remote"),
+                    path=status.get("remote_path"),
+                )
+            )
+        else:
+            self.proton_status_label.setText(
+                t(
+                    "backups.proton_not_configured",
+                    error=status.get("error") or status.get("message") or "",
+                )
+            )
+
+    def _configure_proton_drive(self) -> None:
+        if open_proton_drive_config(self):
+            self._refresh_proton_status()
 
     def _update_texts(self):
         """Update all text labels with translations"""
@@ -152,7 +190,14 @@ class SettingsWidget(QWidget):
         self.auto_connect_label.setText(f"{t('settings.auto_connect')}:")
         self.notifications_label.setText(f"{t('settings.notifications')}:")
         self.telemetry_label.setText(f"{t('settings.telemetry')}:")
+        self.proton_section_label.setText(
+            t("settings.proton_drive", default="Proton Drive backups")
+        )
+        self.proton_configure_button.setText(
+            t("backups.configure_proton", default="Configure Proton Drive…")
+        )
         self.save_button.setText(t("settings.save"))
+        self._refresh_proton_status()
 
     def _on_theme_changed(self, index):
         """Handle theme change"""
@@ -205,6 +250,16 @@ class SettingsWidget(QWidget):
                 "plugins", DEFAULT_SETTINGS.get("plugins")
             ),
             "rbac": rbac,
+            # Preserve encrypted cloud / Proton / companion prefs edited elsewhere
+            "proton_drive": existing.get(
+                "proton_drive", DEFAULT_SETTINGS.get("proton_drive")
+            ),
+            "cloud_managed": existing.get(
+                "cloud_managed", DEFAULT_SETTINGS.get("cloud_managed")
+            ),
+            "companion": existing.get(
+                "companion", DEFAULT_SETTINGS.get("companion")
+            ),
         }
         self.secure_store.set_settings(self.settings)
         QMessageBox.information(
