@@ -37,6 +37,12 @@ Older docs and extras pointed at obsolete `cx_Oracle`, which always needed Oracl
 
 `python_requires>=3.10`. Validated on 3.10–3.12. Prefer 3.12 for local development if your system default is newer (for example 3.14).
 
+## What license is DB Storage Manager under?
+
+**GPL-3.0-only** — see [LICENSE](../LICENSE). PyQt6 is GPL-3.0 or commercial (not LGPL); shipping the desktop app with free PyQt6 requires a GPL-compatible license. Comparable tools: Beekeeper Studio CE and HeidiSQL use GPL; DBeaver CE / CloudBeaver CE use Apache-2.0 (Eclipse/Java stack, not PyQt); pgAdmin uses the PostgreSQL License; Sequel Ace is MIT (Cocoa, no PyQt); Adminer is Apache-2.0 or GPL-2; DbVisualizer Free is proprietary (not OSS).
+
+**Opsec note:** GPLv3 does **not** force you to publish private internal hardened deployments. Source obligations trigger on **conveyance** (distribution). We intentionally avoid AGPL so a private companion API deployment is not treated as a public network copyleft trigger. Distributing modified binaries to others still requires offering corresponding source under GPLv3.
+
 ## How do I report a security issue?
 
 Email contact@voxhash.dev — see [SECURITY.md](../SECURITY.md).

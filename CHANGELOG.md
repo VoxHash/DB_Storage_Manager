@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **License**: project relicensed from MIT to **GPL-3.0-only** for coherence with PyQt6’s GPL-or-commercial dual license when distributing the free PyQt6 wheels; LICENSE, README badge/section, `setup.py` classifiers, native crate metadata, and FAQ updated accordingly
+
 ### Added
 - **Application icon**: original SVG + PNG sizes (16–512) and Windows ICO under `db_storage_manager/resources/icons/`; `QApplication.setWindowIcon` plus MainWindow / LoginDialog; packaged via `setup.py` / `MANIFEST.in`; Linux `.desktop` (`packaging/linux/db-storage-manager.desktop`) and hicolor install via `scripts/install-local-shims.sh`; PyInstaller `icon=` + datas; offscreen load test (`tests/test_app_icon.py`)
 - **Android / GrapheneOS companion foundation**: Kotlin sideload debug APK under `companions/android/` (no Play Services) calling local REST `health` / `connections` / `backups` with Bearer auth; token in EncryptedSharedPreferences

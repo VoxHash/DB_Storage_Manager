@@ -22,7 +22,7 @@ setup(
     author="VoxHash",
     author_email="contact@voxhash.dev",
     url="https://github.com/VoxHash/DB_Storage_Manager",
-    license="MIT",
+    license="GPL-3.0-only",
     packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
     include_package_data=True,
     package_data={
@@ -111,7 +111,7 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "Intended Audience :: System Administrators",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",

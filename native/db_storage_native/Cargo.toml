@@ -3,7 +3,7 @@ name = "db_storage_native"
 version = "0.2.0"
 edition = "2021"
 description = "High-performance native helpers for DB Storage Manager (compression, checksums, encryption, parallel I/O)"
-license = "MIT"
+license = "GPL-3.0-only"
 authors = ["VoxHash <contact@voxhash.dev>"]
 
 [lib]

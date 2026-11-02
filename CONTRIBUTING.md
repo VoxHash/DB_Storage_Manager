@@ -6,6 +6,10 @@ Thanks for helping improve DB Storage Manager (VoxHash Technologies).
 
 Please read and follow our [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
+## License
+
+Contributions are accepted under the project’s [GNU GPLv3](LICENSE) (GPL-3.0-only). By opening a pull request you license your contribution under the same terms.
+
 ## Development Setup
 
 ```bash

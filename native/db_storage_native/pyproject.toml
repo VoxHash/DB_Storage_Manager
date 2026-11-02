@@ -7,7 +7,7 @@ name = "db-storage-native"
 version = "0.2.0"
 description = "Rust/PyO3 performance helpers for DB Storage Manager"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-only" }
 authors = [{ name = "VoxHash", email = "contact@voxhash.dev" }]
 classifiers = [
     "Programming Language :: Rust",
