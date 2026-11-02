@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
+import stat
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -23,6 +25,7 @@ from db_storage_manager.backups.protondrive import (
     resolve_rclone_binary,
     rclone_remote_configured,
     save_proton_drive_credentials,
+    write_ephemeral_protondrive_rclone_config,
 )
 from db_storage_manager.db.base import ConnectionConfig
 from db_storage_manager.native import ENCRYPTION_SCHEME, sha256_file
@@ -36,6 +39,22 @@ _UNSAFE_CONNECTION_NAME = (
 _UNSAFE_SSH_MYSQL_NAME = "vps/prod — SSH tunnel (mysql)"
 
 
+def _strip_rclone_global_flags(argv: List[str]) -> List[str]:
+    """Drop leading ``--config PATH`` pairs so command dispatch sees the verb."""
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--config" and i + 1 < len(argv):
+            i += 2
+            continue
+        break
+    return argv[i:]
+
+
+def _rclone_verb(argv: List[str]) -> Optional[str]:
+    cmd = _strip_rclone_global_flags(argv)
+    return cmd[0] if cmd else None
+
+
 class FakeRcloneRunner:
     """In-memory rclone double that stores uploaded objects."""
 
@@ -46,6 +65,8 @@ class FakeRcloneRunner:
         self.fail_listremotes = fail_listremotes
         self.objects: Dict[str, bytes] = {}
         self.calls: List[List[str]] = []
+        self.envs: List[Optional[Dict[str, str]]] = []
+        self.config_paths_seen: List[str] = []
 
     def run(
         self,
@@ -56,7 +77,19 @@ class FakeRcloneRunner:
     ) -> RcloneResult:
         argv = list(args)
         self.calls.append(argv)
-        cmd = argv[0] if argv else ""
+        self.envs.append(env)
+        # Capture --config path before stripping for dispatch
+        for idx, token in enumerate(argv):
+            if token == "--config" and idx + 1 < len(argv):
+                self.config_paths_seen.append(argv[idx + 1])
+        cmd_argv = _strip_rclone_global_flags(argv)
+        cmd = cmd_argv[0] if cmd_argv else ""
+
+        if cmd == "obscure":
+            # Deterministic stand-in for rclone obscure (not real crypto).
+            raw = cmd_argv[1] if len(cmd_argv) > 1 else ""
+            fake = base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
+            return RcloneResult(0, fake + "\n", "", argv)
 
         if cmd == "listremotes":
             if self.fail_listremotes:
@@ -67,8 +100,8 @@ class FakeRcloneRunner:
         if cmd in ("mkdir", "lsd"):
             return RcloneResult(0, "", "", argv)
 
-        if cmd == "copyto" and len(argv) >= 3:
-            src, dst = argv[1], argv[2]
+        if cmd == "copyto" and len(cmd_argv) >= 3:
+            src, dst = cmd_argv[1], cmd_argv[2]
             if os.path.isfile(src):
                 self.objects[dst] = Path(src).read_bytes()
                 return RcloneResult(0, "", "", argv)
@@ -78,7 +111,7 @@ class FakeRcloneRunner:
             return RcloneResult(1, "", f"object not found: {src}", argv)
 
         if cmd == "lsjson":
-            remote_prefix = argv[1] if len(argv) > 1 else ""
+            remote_prefix = cmd_argv[1] if len(cmd_argv) > 1 else ""
             entries = []
             for key, data in self.objects.items():
                 if remote_prefix and not key.startswith(remote_prefix):
@@ -97,13 +130,13 @@ class FakeRcloneRunner:
             return RcloneResult(0, json.dumps(entries), "", argv)
 
         if cmd == "cat":
-            remote = argv[1]
+            remote = cmd_argv[1]
             if remote not in self.objects:
                 return RcloneResult(1, "", "not found", argv)
             return RcloneResult(0, self.objects[remote].decode("utf-8"), "", argv)
 
         if cmd == "deletefile":
-            remote = argv[1]
+            remote = cmd_argv[1]
             self.objects.pop(remote, None)
             return RcloneResult(0, "", "", argv)
 
@@ -474,7 +507,11 @@ def test_create_backup_sanitizes_unsafe_connection_name(
     listed = asyncio.run(adapter.list_backups())
     assert listed[0].metadata.get("connectionName") == _UNSAFE_CONNECTION_NAME
     # rclone copyto target leaf must be a single path segment
-    copy_calls = [c for c in runner.calls if c and c[0] == "copyto"]
+    copy_calls = [
+        _strip_rclone_global_flags(c)
+        for c in runner.calls
+        if _rclone_verb(c) == "copyto"
+    ]
     assert copy_calls
     for call in copy_calls:
         remote_leaf = call[2].rsplit("/", 1)[-1]
@@ -596,3 +633,140 @@ def test_manager_proton_encrypt_unsafe_connection_name(
     assert info.name.endswith(".backup.enc")
     assert info.metadata.get("encryption") is True
     assert any(k.endswith(info.name) for k in runner.objects)
+
+
+def test_ephemeral_rclone_config_when_creds_present_and_conf_missing(
+    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Regression: env/SecureStore creds must drive rclone via temp --config.
+
+    Without a ``[protondrive]`` section, plain ``rclone mkdir protondrive:…``
+    fails with "didn't find section in config file". Adapter must obscure
+    secrets, write mode-600 temp conf, pass ``--config``, and clean up.
+    """
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.rclone_remote_configured",
+        lambda *_a, **_k: False,
+    )
+    runner = FakeRcloneRunner(remotes=[])
+    spaced_folder = "DB Storage Manager"
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": spaced_folder,
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "plain-secret",
+            "otp_secret_key": "JBSWY3DPEHPK3PXP",
+            "2fa": None,
+        },
+        runner=runner,
+    )
+
+    options = BackupOptions(
+        connectionId="c1",
+        connectionName="labdb",
+        databaseType="sqlite",
+        backupPath=str(source_dump),
+        compression="none",
+        encryption=True,
+        encryptionKey="ephemeral-conf-key",
+        adapterType="protondrive",
+    )
+    info = asyncio.run(adapter.create_backup(options))
+    assert info.status == "completed"
+
+    obscure_calls = [c for c in runner.calls if _rclone_verb(c) == "obscure"]
+    assert obscure_calls, "expected rclone obscure for password/otp"
+    # plaintext must not appear in non-obscure argv (temp conf holds obscured form)
+    mkdir_calls = [
+        _strip_rclone_global_flags(c)
+        for c in runner.calls
+        if _rclone_verb(c) == "mkdir"
+    ]
+    assert mkdir_calls
+    mkdir_target = mkdir_calls[0][1]
+    assert mkdir_target == f"protondrive:{spaced_folder}"
+    assert " " in mkdir_target  # single argv element preserves spaces
+
+    ops_with_config = [
+        c
+        for c in runner.calls
+        if _rclone_verb(c) in ("mkdir", "copyto") and "--config" in c
+    ]
+    assert ops_with_config, "mkdir/copyto must pass --config when conf missing"
+    for call in ops_with_config:
+        conf_idx = call.index("--config")
+        conf_path = Path(call[conf_idx + 1])
+        # Temp config is cleaned up after the with-block
+        assert not conf_path.exists()
+
+    # Env must not carry plaintext backend password
+    for env in runner.envs:
+        if env is None:
+            continue
+        assert "RCLONE_PROTONDRIVE_PASSWORD" not in env
+        assert "RCLONE_PROTONDRIVE_USERNAME" not in env
+
+    assert runner.config_paths_seen
+    assert info.path.startswith(f"protondrive:{spaced_folder}/")
+
+
+def test_write_ephemeral_protondrive_rclone_config_mode_600(tmp_path: Path):
+    conf = write_ephemeral_protondrive_rclone_config(
+        "protondrive",
+        username="user@proton.me",
+        password_obscured="obscured-pass-value",
+        otp_secret_key_obscured="obscured-otp",
+        two_fa="123456",
+    )
+    try:
+        mode = conf.stat().st_mode
+        assert stat.S_IMODE(mode) == 0o600
+        text = conf.read_text(encoding="utf-8")
+        assert "[protondrive]" in text
+        assert "type = protondrive" in text
+        assert "username = user@proton.me" in text
+        assert "password = obscured-pass-value" in text
+        assert "otp_secret_key = obscured-otp" in text
+        assert "2fa = 123456" in text
+        assert "plain-secret" not in text
+    finally:
+        conf.unlink(missing_ok=True)
+
+
+def test_existing_rclone_conf_skips_ephemeral_config(
+    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """When ``[protondrive]`` already exists, do not inject --config / obscure."""
+    monkeypatch.setattr(
+        "db_storage_manager.backups.protondrive.rclone_remote_configured",
+        lambda *_a, **_k: True,
+    )
+    runner = FakeRcloneRunner(remotes=["protondrive"])
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "plain-secret",
+        },
+        runner=runner,
+    )
+    options = BackupOptions(
+        connectionId="c1",
+        connectionName="labdb",
+        databaseType="sqlite",
+        backupPath=str(source_dump),
+        compression="none",
+        encryption=True,
+        encryptionKey="existing-conf-key",
+        adapterType="protondrive",
+    )
+    info = asyncio.run(adapter.create_backup(options))
+    assert info.status == "completed"
+    assert not any(_rclone_verb(c) == "obscure" for c in runner.calls)
+    assert not any("--config" in c for c in runner.calls if _rclone_verb(c) == "mkdir")

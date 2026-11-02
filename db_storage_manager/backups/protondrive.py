@@ -18,10 +18,11 @@ import shutil
 import subprocess
 import tempfile
 import uuid
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Protocol, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Protocol, Sequence
 
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from .local import sanitize_backup_basename
@@ -194,6 +195,101 @@ def rclone_remote_configured(
         return False
     target = f"[{remote_name}]"
     return any(line.strip() == target for line in text.splitlines())
+
+
+def obscure_rclone_secret(
+    runner: RcloneRunner,
+    value: str,
+    *,
+    timeout: Optional[float] = 30,
+) -> str:
+    """Obscure a secret with ``rclone obscure`` (required for password fields).
+
+    Official protondrive options ``password``, ``otp_secret_key``, and
+    ``mailbox_password`` must be rclone-obscured in config / env — not plaintext.
+    """
+    result = runner.run(["obscure", value], timeout=timeout)
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(
+            "rclone obscure failed (exit "
+            f"{result.returncode})"
+            + (f": {detail}" if detail else "")
+        )
+    obscured = (result.stdout or "").strip()
+    if not obscured:
+        raise RuntimeError("rclone obscure returned empty output")
+    return obscured
+
+
+def write_ephemeral_protondrive_rclone_config(
+    remote_name: str,
+    *,
+    username: str,
+    password_obscured: str,
+    otp_secret_key_obscured: Optional[str] = None,
+    mailbox_password_obscured: Optional[str] = None,
+    two_fa: Optional[str] = None,
+) -> Path:
+    """Write a mode-600 temp rclone.conf with a ``protondrive`` remote section.
+
+    Used when SecureStore/env has credentials but ``~/.config/rclone/rclone.conf``
+    has no matching ``[remote]`` section — so ``rclone mkdir remote:path`` works
+    without interactive ``rclone config``.
+
+    Do not set ``app_version`` here: Proton's auth API returns
+    ``Invalid section name (Code=2064)`` for some custom values; leaving it
+    empty lets rclone derive a compliant default from its own version.
+    """
+    fd, name = tempfile.mkstemp(prefix="dsm-rclone-", suffix=".conf")
+    os.close(fd)
+    path = Path(name)
+    try:
+        os.chmod(path, 0o600)
+        # Values are username / rclone-obscured secrets / short 2FA codes — no
+        # multiline. Escape leading spaces so INI parsers do not strip them.
+        def _ini_value(raw: str) -> str:
+            text = str(raw).replace("\n", "").replace("\r", "")
+            if text[:1] in (" ", "\t"):
+                return f'"{text}"'
+            return text
+
+        lines = [
+            f"[{remote_name}]",
+            "type = protondrive",
+            f"username = {_ini_value(username)}",
+            f"password = {_ini_value(password_obscured)}",
+        ]
+        if otp_secret_key_obscured:
+            lines.append(
+                f"otp_secret_key = {_ini_value(otp_secret_key_obscured)}"
+            )
+        if mailbox_password_obscured:
+            lines.append(
+                f"mailbox_password = {_ini_value(mailbox_password_obscured)}"
+            )
+        if two_fa:
+            lines.append(f"2fa = {_ini_value(two_fa)}")
+        lines.append("")
+        path.write_text("\n".join(lines), encoding="utf-8")
+        os.chmod(path, 0o600)
+        return path
+    except Exception:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+
+def _unlink_secret_file(path: Optional[Path]) -> None:
+    """Best-effort delete of a temp file that may contain obscured secrets."""
+    if path is None:
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def save_proton_drive_credentials(
@@ -460,46 +556,113 @@ class ProtonDriveBackupAdapter(BackupAdapter):
             )
 
     def _build_env(self) -> Dict[str, str]:
+        """Process env for rclone.
+
+        Credentials are supplied via a named remote in ``rclone.conf`` or an
+        ephemeral temp config (``--config``) — not as plaintext
+        ``RCLONE_PROTONDRIVE_PASSWORD`` (must be rclone-obscured per docs).
+        """
         env = os.environ.copy()
-        # Identify as third-party rclone consumer when creating an ephemeral remote.
-        env.setdefault(
+        # Drop inherited backend secrets / app_version so a stale shell env
+        # cannot override the ephemeral / user rclone.conf. Custom
+        # RCLONE_PROTONDRIVE_APP_VERSION values have been observed to make
+        # Proton auth return ``Invalid section name (Code=2064)``.
+        for key in (
+            "RCLONE_PROTONDRIVE_USERNAME",
+            "RCLONE_PROTONDRIVE_PASSWORD",
+            "RCLONE_PROTONDRIVE_OTP_SECRET_KEY",
+            "RCLONE_PROTONDRIVE_MAILBOX_PASSWORD",
+            "RCLONE_PROTONDRIVE_2FA",
             "RCLONE_PROTONDRIVE_APP_VERSION",
-            "external-drive-db-storage-manager@1.0.5",
-        )
-        username = self.config.get("username")
-        password = self.config.get("password")
-        if username:
-            env["RCLONE_PROTONDRIVE_USERNAME"] = str(username)
-        if password:
-            env["RCLONE_PROTONDRIVE_PASSWORD"] = str(password)
-        if self.config.get("otp_secret_key"):
-            env["RCLONE_PROTONDRIVE_OTP_SECRET_KEY"] = str(
-                self.config["otp_secret_key"]
-            )
-        if self.config.get("mailbox_password"):
-            env["RCLONE_PROTONDRIVE_MAILBOX_PASSWORD"] = str(
-                self.config["mailbox_password"]
-            )
-        if self.config.get("2fa"):
-            env["RCLONE_PROTONDRIVE_2FA"] = str(self.config["2fa"])
+        ):
+            env.pop(key, None)
         return env
 
-    def _remote_target(self, filename: str = "") -> str:
-        base = f"{self.remote}:"
-        if self.remote_folder:
-            base = f"{self.remote}:{self.remote_folder}"
-        if filename:
-            return f"{base}/{filename}" if self.remote_folder else f"{base}{filename}"
-        return base if self.remote_folder else f"{self.remote}:"
+    def _needs_ephemeral_rclone_config(self) -> bool:
+        """True when app has username+password but no matching rclone.conf section."""
+        has_creds = bool(self.config.get("username") and self.config.get("password"))
+        if not has_creds:
+            return False
+        return not rclone_remote_configured(self.remote)
 
-    def _run(self, args: Sequence[str]) -> RcloneResult:
+    def _create_ephemeral_rclone_config(self) -> Path:
+        """Build a mode-600 temp rclone.conf from SecureStore/env credentials."""
+        username = str(self.config["username"])
+        password = str(self.config["password"])
+        password_obscured = obscure_rclone_secret(
+            self._runner, password, timeout=self.timeout
+        )
+        otp_obscured: Optional[str] = None
+        if self.config.get("otp_secret_key"):
+            otp_obscured = obscure_rclone_secret(
+                self._runner,
+                str(self.config["otp_secret_key"]),
+                timeout=self.timeout,
+            )
+        mailbox_obscured: Optional[str] = None
+        if self.config.get("mailbox_password"):
+            mailbox_obscured = obscure_rclone_secret(
+                self._runner,
+                str(self.config["mailbox_password"]),
+                timeout=self.timeout,
+            )
+        two_fa = self.config.get("2fa")
+        return write_ephemeral_protondrive_rclone_config(
+            self.remote,
+            username=username,
+            password_obscured=password_obscured,
+            otp_secret_key_obscured=otp_obscured,
+            mailbox_password_obscured=mailbox_obscured,
+            two_fa=str(two_fa) if two_fa else None,
+        )
+
+    @contextmanager
+    def _with_rclone_config(self) -> Iterator[Optional[Path]]:
+        """Yield ``--config`` path when credentials need an ephemeral remote."""
+        conf_path: Optional[Path] = None
+        try:
+            if self._needs_ephemeral_rclone_config():
+                conf_path = self._create_ephemeral_rclone_config()
+            yield conf_path
+        finally:
+            _unlink_secret_file(conf_path)
+
+    def _remote_target(self, filename: str = "") -> str:
+        """Build ``remote:path`` / ``remote:path/file`` as a single argv element.
+
+        Spaces in ``remote_folder`` (e.g. ``DB Storage Manager``) are preserved;
+        callers must pass the result as one list item to rclone (never shell-split).
+        """
+        folder = self.remote_folder
+        if folder:
+            base = f"{self.remote}:{folder}"
+        else:
+            base = f"{self.remote}:"
+        if filename:
+            if folder:
+                return f"{base}/{filename}"
+            return f"{base}{filename}"
+        return base
+
+    def _run(
+        self,
+        args: Sequence[str],
+        *,
+        config_path: Optional[Path] = None,
+    ) -> RcloneResult:
+        argv: List[str] = []
+        if config_path is not None:
+            argv.extend(["--config", str(config_path)])
+        argv.extend(args)
         result = self._runner.run(
-            list(args), env=self._build_env(), timeout=self.timeout
+            argv, env=self._build_env(), timeout=self.timeout
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()
+            # Prefer the rclone subcommand name for errors (skip --config pair).
+            cmd_hint = list(args[:2]) if args else argv[:2]
             raise RuntimeError(
-                f"rclone {' '.join(args[:2])} failed (exit {result.returncode})"
+                f"rclone {' '.join(cmd_hint)} failed (exit {result.returncode})"
                 + (f": {detail}" if detail else "")
             )
         return result
@@ -613,10 +776,19 @@ class ProtonDriveBackupAdapter(BackupAdapter):
                 json.dump(metadata, handle, indent=2, default=str)
 
             # Ensure remote folder exists, then upload payload + sidecar
-            if self.remote_folder:
-                self._run(["mkdir", self._remote_target()])
-            self._run(["copyto", str(payload), self._remote_target(filename)])
-            self._run(["copyto", str(meta_local), self._remote_target(meta_name)])
+            with self._with_rclone_config() as conf:
+                if self.remote_folder:
+                    self._run(
+                        ["mkdir", self._remote_target()], config_path=conf
+                    )
+                self._run(
+                    ["copyto", str(payload), self._remote_target(filename)],
+                    config_path=conf,
+                )
+                self._run(
+                    ["copyto", str(meta_local), self._remote_target(meta_name)],
+                    config_path=conf,
+                )
 
             size = payload.stat().st_size
             info_meta = {
@@ -655,7 +827,8 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         os.close(fd)
         temp_path = Path(temp_name)
         try:
-            self._run(["copyto", remote, str(temp_path)])
+            with self._with_rclone_config() as conf:
+                self._run(["copyto", remote, str(temp_path)], config_path=conf)
         except Exception:
             temp_path.unlink(missing_ok=True)
             raise
@@ -669,10 +842,14 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         """Download a Proton Drive backup to a local temp file."""
         return str(self._download_to_temp(backup_info))
 
-    def _load_remote_meta(self, filename: str) -> Dict[str, Any]:
+    def _load_remote_meta(
+        self, filename: str, *, config_path: Optional[Path] = None
+    ) -> Dict[str, Any]:
         meta_key = f"{filename}.meta.json"
         try:
-            result = self._run(["cat", self._remote_target(meta_key)])
+            result = self._run(
+                ["cat", self._remote_target(meta_key)], config_path=config_path
+            )
             data = json.loads(result.stdout)
             return data if isinstance(data, dict) else {}
         except Exception:
@@ -681,63 +858,69 @@ class ProtonDriveBackupAdapter(BackupAdapter):
     async def list_backups(self) -> list[BackupInfo]:
         """List backup objects under the configured Proton Drive folder."""
         self._require_configured()
-        result = self._run(
-            ["lsjson", self._remote_target(), "--files-only", "--no-mimetype"]
-        )
-        try:
-            entries = json.loads(result.stdout or "[]")
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"Invalid rclone lsjson output: {exc}") from exc
-
-        backups: List[BackupInfo] = []
-        for entry in entries:
-            name = str(entry.get("Name") or entry.get("Path") or "")
-            if not name or name.endswith(".meta.json"):
-                continue
-            if ".backup" not in name:
-                continue
-            stored = self._load_remote_meta(name)
-            backup_id = str(stored.get("id") or uuid.uuid4())
-            size = int(entry.get("Size") or stored.get("size") or 0)
-            created_at = datetime.now()
-            mod = entry.get("ModTime") or stored.get("createdAt")
-            if isinstance(mod, str):
-                try:
-                    created_at = datetime.fromisoformat(mod.replace("Z", "+00:00"))
-                except ValueError:
-                    pass
-
-            metadata: Dict[str, Any] = {
-                "key": name,
-                "remote": self.remote,
-                "remotePath": self.remote_folder,
-                "metaKey": f"{name}.meta.json",
-                "destination": "protondrive",
-                "compression": stored.get("compression", "none"),
-                "encryption": bool(stored.get("encryption", name.endswith(".enc"))),
-            }
-            for key in (
-                "databaseType",
-                "connectionId",
-                "connectionName",
-                "sha256",
-                "encryptionScheme",
-            ):
-                if key in stored and stored[key] is not None:
-                    metadata[key] = stored[key]
-
-            backups.append(
-                BackupInfo(
-                    id=backup_id,
-                    name=name,
-                    path=self._remote_target(name),
-                    size=size,
-                    createdAt=created_at,
-                    status="completed",
-                    metadata=metadata,
-                )
+        with self._with_rclone_config() as conf:
+            result = self._run(
+                ["lsjson", self._remote_target(), "--files-only", "--no-mimetype"],
+                config_path=conf,
             )
-        return backups
+            try:
+                entries = json.loads(result.stdout or "[]")
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid rclone lsjson output: {exc}") from exc
+
+            backups: List[BackupInfo] = []
+            for entry in entries:
+                name = str(entry.get("Name") or entry.get("Path") or "")
+                if not name or name.endswith(".meta.json"):
+                    continue
+                if ".backup" not in name:
+                    continue
+                stored = self._load_remote_meta(name, config_path=conf)
+                backup_id = str(stored.get("id") or uuid.uuid4())
+                size = int(entry.get("Size") or stored.get("size") or 0)
+                created_at = datetime.now()
+                mod = entry.get("ModTime") or stored.get("createdAt")
+                if isinstance(mod, str):
+                    try:
+                        created_at = datetime.fromisoformat(
+                            mod.replace("Z", "+00:00")
+                        )
+                    except ValueError:
+                        pass
+
+                metadata: Dict[str, Any] = {
+                    "key": name,
+                    "remote": self.remote,
+                    "remotePath": self.remote_folder,
+                    "metaKey": f"{name}.meta.json",
+                    "destination": "protondrive",
+                    "compression": stored.get("compression", "none"),
+                    "encryption": bool(
+                        stored.get("encryption", name.endswith(".enc"))
+                    ),
+                }
+                for key in (
+                    "databaseType",
+                    "connectionId",
+                    "connectionName",
+                    "sha256",
+                    "encryptionScheme",
+                ):
+                    if key in stored and stored[key] is not None:
+                        metadata[key] = stored[key]
+
+                backups.append(
+                    BackupInfo(
+                        id=backup_id,
+                        name=name,
+                        path=self._remote_target(name),
+                        size=size,
+                        createdAt=created_at,
+                        status="completed",
+                        metadata=metadata,
+                    )
+                )
+            return backups
 
     async def delete_backup(self, backup_id: str) -> None:
         """Delete a backup (and sidecar) from Proton Drive."""
@@ -747,18 +930,25 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         if not backup:
             raise FileNotFoundError(f"Backup not found: {backup_id}")
         key = (backup.metadata or {}).get("key") or Path(backup.path).name
-        self._run(["deletefile", self._remote_target(str(key))])
-        meta_key = (backup.metadata or {}).get("metaKey") or f"{key}.meta.json"
-        try:
-            self._run(["deletefile", self._remote_target(str(meta_key))])
-        except RuntimeError:
-            pass
+        with self._with_rclone_config() as conf:
+            self._run(
+                ["deletefile", self._remote_target(str(key))], config_path=conf
+            )
+            meta_key = (backup.metadata or {}).get("metaKey") or f"{key}.meta.json"
+            try:
+                self._run(
+                    ["deletefile", self._remote_target(str(meta_key))],
+                    config_path=conf,
+                )
+            except RuntimeError:
+                pass
 
     async def validate_options(self, options: BackupOptions) -> bool:
         """Return True when Proton Drive appears configured and reachable."""
         try:
             self._require_configured()
-            self._run(["lsd", f"{self.remote}:"])
+            with self._with_rclone_config() as conf:
+                self._run(["lsd", f"{self.remote}:"], config_path=conf)
             return True
         except Exception:
             return False
