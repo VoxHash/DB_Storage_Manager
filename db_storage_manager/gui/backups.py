@@ -236,7 +236,19 @@ class BackupsWidget(QWidget):
     def _adapter(self) -> LocalBackupAdapter:
         return LocalBackupAdapter(base_path=self.backup_dir)
 
+    def _selected_adapter_type(self) -> str:
+        return str(self.adapter_combo.currentData() or "local")
+
     def _refresh_proton_status(self) -> None:
+        """Show Proton Drive readiness only when that adapter is selected.
+
+        Local create/restore must not surface rclone/Proton configuration errors.
+        """
+        if self._selected_adapter_type() != "protondrive":
+            self.proton_status_label.clear()
+            self.proton_status_label.setStyleSheet("")
+            return
+
         t = self.i18n.translate
         status = proton_drive_status()
         if status.get("configured"):

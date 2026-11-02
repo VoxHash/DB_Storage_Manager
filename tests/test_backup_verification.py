@@ -302,3 +302,73 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_se
     widget.update_connections([])
     widget.close()
     app.processEvents()
+
+
+def test_proton_status_gated_by_adapter_and_refresh(
+    tmp_path: Path, monkeypatch, isolated_secure_store
+):
+    """Proton config errors must not dominate Local create or local restore lists."""
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtWidgets import QApplication
+
+    from db_storage_manager.gui.backups import BackupsWidget
+    from db_storage_manager.security.auth import reset_auth_manager
+
+    _store, _ = isolated_secure_store
+    reset_auth_manager()
+
+    proton_error = (
+        "rclone is not installed or not on PATH. Install rclone "
+        "(https://rclone.org/install/) with the protondrive backend."
+    )
+
+    monkeypatch.setattr(
+        "db_storage_manager.gui.backups.proton_drive_status",
+        lambda: {
+            "configured": False,
+            "error": proton_error,
+            "message": proton_error,
+            "remote": "protondrive",
+            "remote_path": "db-storage-manager-backups",
+        },
+    )
+
+    app = QApplication.instance() or QApplication([])
+    backup_dir = tmp_path / "ui-proton-gate"
+    backup_dir.mkdir()
+    widget = BackupsWidget([], backup_dir=backup_dir)
+
+    # Default adapter is Local — no Proton/rclone banner on Create
+    assert widget.adapter_combo.currentData() == "local"
+    assert "Proton Drive not configured" not in widget.proton_status_label.text()
+    assert "rclone" not in widget.proton_status_label.text().lower()
+
+    # Local restore listing — idle/local status only
+    widget.refresh_backups()
+    assert "Proton Drive not configured" not in widget.verify_status_label.text()
+    assert "rclone" not in widget.verify_status_label.text().lower()
+
+    # Selecting Proton Drive surfaces configuration status
+    proton_idx = widget.adapter_combo.findData("protondrive")
+    assert proton_idx >= 0
+    widget.adapter_combo.setCurrentIndex(proton_idx)
+    assert "Proton Drive not configured" in widget.proton_status_label.text()
+    assert "rclone" in widget.proton_status_label.text().lower()
+
+    # Switching back to Local clears the Proton banner
+    local_idx = widget.adapter_combo.findData("local")
+    widget.adapter_combo.setCurrentIndex(local_idx)
+    assert "Proton Drive not configured" not in widget.proton_status_label.text()
+
+    # Refresh Proton Drive is the explicit path to show Proton status on Restore
+    widget.refresh_proton_backups()
+    assert "Proton Drive not configured" in widget.verify_status_label.text()
+
+    # Local Refresh clears Proton banner and restores local listing status
+    widget.refresh_backups()
+    assert "Proton Drive not configured" not in widget.verify_status_label.text()
+    assert widget._list_source == "local"
+
+    widget.close()
+    app.processEvents()
