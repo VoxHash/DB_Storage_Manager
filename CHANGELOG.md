@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-11-02
+
+### Fixed
+- **Linux window identity**: set unique FreeDesktop desktop-file id (`db-storage-manager`) via Qt `setDesktopFileName` so Wayland/KDE no longer treats the app as generic `python3` and groups or closes it with sibling VoxHash Python GUIs (e.g. Telegram Multi-Account Message Sender).
+
+## [1.0.5]
+
 ### Fixed
 - **Proton Drive Create Backup missing rclone remote section**: when SecureStore / `.env.protondrive.local` had username+password (and optional OTP / 2FA / mailbox password) but `~/.config/rclone/rclone.conf` had no `[protondrive]` section, Create Backup still ran `rclone mkdir protondrive:…` and failed with “didn't find section in config file”. Adapter now `rclone obscure`s secrets, writes a mode-600 ephemeral rclone.conf, passes `--config` for mkdir/copyto/list/delete, and deletes the temp file afterward; remote paths with spaces (e.g. `DB Storage Manager`) stay a single argv element
 - **Proton Drive Create Backup Errno 2 on unsafe connection names**: Proton `_prepare_payload` built `/tmp/dsm-proton-<rand>/<connection>_TIMESTAMP.backup` from the raw label, so names with `/` (Postgres pooler `…/postgres`, SSH/MySQL `vps/prod…`) nested under the temp dir and failed before DSMENC1 encrypt / rclone upload. Reuse `sanitize_backup_basename` + `mkdir(parents=True, exist_ok=True)` like Local; remote object names stay a single path segment

@@ -9,7 +9,7 @@ from typing import Optional
 
 # Application paths
 APP_NAME = "DB Storage Manager"
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 
 # User data directory
 if os.name == "nt":  # Windows
