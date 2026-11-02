@@ -3,8 +3,9 @@ MySQL/MariaDB database connection
 """
 
 import asyncio
+import shutil
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence
 import pymysql
 from pymysql.cursors import DictCursor
 
@@ -15,6 +16,39 @@ from .base import (
     QueryResult,
     SchemaInfo,
 )
+
+_DUMP_CLIENT_CANDIDATES = ("mysqldump", "mariadb-dump")
+_CLIENT_CANDIDATES = ("mysql", "mariadb")
+_ARCH_CLIENTS_HINT = (
+    "Install MariaDB/MySQL client tools "
+    "(Arch/Garuda: sudo pacman -S --needed mariadb-clients) "
+    "and ensure the dump binary is on PATH."
+)
+
+
+def resolve_mysql_cli(candidates: Sequence[str] = _DUMP_CLIENT_CANDIDATES) -> Optional[str]:
+    """Return the first dump/client binary found on PATH, or None."""
+    for name in candidates:
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def require_mysql_cli(
+    candidates: Sequence[str] = _DUMP_CLIENT_CANDIDATES,
+    *,
+    purpose: str = "backup",
+) -> str:
+    """Resolve a MySQL/MariaDB CLI tool or raise with an install hint."""
+    path = resolve_mysql_cli(candidates)
+    if path:
+        return path
+    names = " or ".join(candidates)
+    raise FileNotFoundError(
+        f"{names} not found on PATH (required for MySQL/MariaDB {purpose}). "
+        f"{_ARCH_CLIENTS_HINT}"
+    )
 
 
 class MySQLConnection(DatabaseConnection):
@@ -292,16 +326,16 @@ class MySQLConnection(DatabaseConnection):
         }
 
     async def create_backup(self, backup_path: str) -> Dict[str, Any]:
-        """Create MySQL backup using mysqldump"""
+        """Create MySQL backup using mysqldump or mariadb-dump"""
         if not self.connection:
             await self.connect()
 
         backup_file = Path(backup_path)
         backup_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Build mysqldump command
+        dump_bin = require_mysql_cli(_DUMP_CLIENT_CANDIDATES, purpose="backup")
         cmd = [
-            "mysqldump",
+            dump_bin,
             f"--host={self.config.host or 'localhost'}",
             f"--port={self.config.port or 3306}",
             f"--user={self.config.username}",
@@ -309,19 +343,22 @@ class MySQLConnection(DatabaseConnection):
             self.config.database,
         ]
 
-        # Run mysqldump
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"{dump_bin} disappeared from PATH during backup. {_ARCH_CLIENTS_HINT}"
+            ) from exc
 
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise RuntimeError(f"mysqldump failed: {stderr.decode()}")
+            raise RuntimeError(f"{Path(dump_bin).name} failed: {stderr.decode()}")
 
-        # Write output to file
         backup_file.write_bytes(stdout)
         size = backup_file.stat().st_size
         return {"path": str(backup_file), "size": size}
@@ -335,12 +372,11 @@ class MySQLConnection(DatabaseConnection):
         if not backup_file.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
 
-        # Read backup file
         backup_data = backup_file.read_bytes()
 
-        # Build mysql command
+        client_bin = require_mysql_cli(_CLIENT_CANDIDATES, purpose="restore")
         cmd = [
-            "mysql",
+            client_bin,
             f"--host={self.config.host or 'localhost'}",
             f"--port={self.config.port or 3306}",
             f"--user={self.config.username}",
@@ -348,15 +384,19 @@ class MySQLConnection(DatabaseConnection):
             self.config.database,
         ]
 
-        # Run mysql restore
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"{client_bin} disappeared from PATH during restore. {_ARCH_CLIENTS_HINT}"
+            ) from exc
 
         stdout, stderr = await process.communicate(input=backup_data)
 
         if process.returncode != 0:
-            raise RuntimeError(f"mysql restore failed: {stderr.decode()}")
+            raise RuntimeError(f"{Path(client_bin).name} restore failed: {stderr.decode()}")
