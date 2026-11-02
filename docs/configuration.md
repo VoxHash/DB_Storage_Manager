@@ -74,6 +74,23 @@ No required secrets for core operation. Useful optional variables:
 
 Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
 
+### Importing connections
+
+| Source | How | Notes |
+|---|---|---|
+| Project `.env` | Connections → **Import from .env…** or `POST /api/v1/connections/import/env` | Parses `DATABASE_URL`, `DIRECT_URL`, `DATABASE_URL_UNPOOLED`, `DB_*`, `POSTGRES_*`, `MYSQL_*`. Prefers direct/unpooled URLs first. |
+| SSH key folder | Connections → **Import SSH key…** or `POST /api/v1/connections/import/ssh` | Reads private `KEY` (path referenced, not copied to git). Optional `SSH.pub`, `VPS.txt` (bastion host/user), `DB.txt` (database/user/password). Builds an SSH-tunnel MySQL/Postgres profile. |
+| OAuth / grant permissions | Not fully automated | Platforms need a registered OAuth client + user tokens. See `db_storage_manager.importers.oauth_platforms` and `GET /api/v1/connections/import/platforms`. Until then, export `.env` from the dashboard or use SSH import. |
+
+Local e2e helper (never commits secrets):
+
+```bash
+.venv/bin/python scripts/import_connections_e2e.py --save-on-pass \
+  --json-out artifacts/import-dumps/report.local.json
+```
+
+Optional pytest live probes: `DSM_E2E_IMPORT=1 pytest -v tests/test_import_connections_e2e.py`.
+
 ### Cloud-managed databases (RDS / Cloud SQL / Azure SQL)
 
 1. Optional extras: `pip install -e ".[aws]"`, `".[gcp]"`, `".[azure]"`, or `".[cloud]"` (boto3 is already a core dependency; Azure/GCP Admin SDKs are optional — GCP uses PyPI `google-cloud-sql`).

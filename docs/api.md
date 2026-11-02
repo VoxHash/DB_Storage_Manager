@@ -68,6 +68,9 @@ python -m db_storage_manager.api --host 127.0.0.1 --port 8765
 | GET | `/api/v1/health` | Liveness (no auth) |
 | GET | `/api/v1/info` | Version + native backend |
 | GET | `/api/v1/connections` | SecureStore profiles; passwords redacted |
+| GET | `/api/v1/connections/import/platforms` | OAuth / env import guides (no secrets) |
+| POST | `/api/v1/connections/import/env` | Body `{ "path": "/path/.env", "save": false }` — parse profiles (redacted); `save: true` writes SecureStore |
+| POST | `/api/v1/connections/import/ssh` | Body `{ "path": "/path/KEY-or-dir", "save": false }` — SSH bastion profile from key + sidecars |
 | GET | `/api/v1/backups` | Local backups (`?backup_dir=` optional) |
 | POST | `/api/v1/backups/{id}/verify` | SHA-256 verify |
 | POST | `/api/v1/backups/{id}/dry-run` | Checksum + payload dry-run (no live DB write) |

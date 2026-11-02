@@ -204,6 +204,12 @@ class CompanionHandler(BaseHTTPRequestHandler):
             )
             return self._send(status, body, ctype)
 
+        if path == "/api/v1/connections/import/platforms":
+            if not self._require_perm("connections:read"):
+                return
+            status, body, ctype = _json_bytes(service.list_import_platform_guides())
+            return self._send(status, body, ctype)
+
         if path == "/api/v1/backups":
             if not self._require_perm("backups:read"):
                 return
@@ -254,6 +260,60 @@ class CompanionHandler(BaseHTTPRequestHandler):
         backup_dir = self._backup_dir_from_query(query)
         if "backup_dir" in payload and payload["backup_dir"]:
             backup_dir = Path(str(payload["backup_dir"]))
+
+        if path == "/api/v1/connections/import/env":
+            if not self._require_perm("connections:write"):
+                return
+            env_path = payload.get("path") or payload.get("env_path")
+            if not env_path:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": "path is required"}, 400
+                )
+                return self._send(status, body, ctype)
+            try:
+                result = service.import_connections_from_env(
+                    str(env_path),
+                    save=bool(payload.get("save")),
+                )
+            except FileNotFoundError as exc:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": str(exc)}, 404
+                )
+                return self._send(status, body, ctype)
+            except Exception as exc:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": str(exc)}, 400
+                )
+                return self._send(status, body, ctype)
+            status, body, ctype = _json_bytes(result)
+            return self._send(status, body, ctype)
+
+        if path == "/api/v1/connections/import/ssh":
+            if not self._require_perm("connections:write"):
+                return
+            ssh_path = payload.get("path") or payload.get("ssh_path")
+            if not ssh_path:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": "path is required"}, 400
+                )
+                return self._send(status, body, ctype)
+            try:
+                result = service.import_connections_from_ssh(
+                    str(ssh_path),
+                    save=bool(payload.get("save")),
+                )
+            except FileNotFoundError as exc:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": str(exc)}, 404
+                )
+                return self._send(status, body, ctype)
+            except Exception as exc:
+                status, body, ctype = _json_bytes(
+                    {"ok": False, "error": str(exc)}, 400
+                )
+                return self._send(status, body, ctype)
+            status, body, ctype = _json_bytes(result)
+            return self._send(status, body, ctype)
 
         if path == "/api/v1/backups/verify":
             if not self._require_perm("backups:read"):

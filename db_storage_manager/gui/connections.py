@@ -522,6 +522,8 @@ class ConnectionsWidget(QWidget):
         can_write = auth.has_permission("connections:write")
         self.add_button.setEnabled(can_write)
         self.discover_button.setEnabled(can_write)
+        self.import_env_button.setEnabled(can_write)
+        self.import_ssh_button.setEnabled(can_write)
         # edit/delete/test still depend on selection; re-evaluate
         self._on_selection_changed()
 
@@ -561,6 +563,18 @@ class ConnectionsWidget(QWidget):
         )
         self.discover_button.clicked.connect(self._discover_cloud)
         button_layout.addWidget(self.discover_button)
+
+        self.import_env_button = QPushButton(
+            t("connections.import_env", "Import from .env…")
+        )
+        self.import_env_button.clicked.connect(self._import_from_env)
+        button_layout.addWidget(self.import_env_button)
+
+        self.import_ssh_button = QPushButton(
+            t("connections.import_ssh", "Import SSH key…")
+        )
+        self.import_ssh_button.clicked.connect(self._import_from_ssh)
+        button_layout.addWidget(self.import_ssh_button)
 
         self.edit_button = QPushButton(t("connections.edit"))
         self.edit_button.clicked.connect(self._edit_connection)
@@ -715,6 +729,125 @@ class ConnectionsWidget(QWidget):
                 self.connections.append(connection)
                 self.connection_added.emit(connection)
             self._update_table()
+
+    def _import_from_env(self) -> None:
+        """Import connection profiles from a platform ``.env`` file."""
+        try:
+            get_auth_manager().require("connections:write")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
+        t = self.i18n.translate
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            t("connections.import_env_title", "Import from .env"),
+            "",
+            "Env files (*.env .env.*);;All files (*)",
+        )
+        if not path:
+            return
+        try:
+            from ..importers import import_env_file, summarize_profile
+
+            profiles = import_env_file(path)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                t("common.error"),
+                t(
+                    "connections.import_failed",
+                    "Import failed:\n{error}",
+                ).format(error=str(exc)),
+            )
+            return
+        if not profiles:
+            QMessageBox.warning(
+                self,
+                t("common.error"),
+                t(
+                    "connections.import_env_empty",
+                    "No DATABASE_URL / DB_* / POSTGRES_* / MYSQL_* keys found.",
+                ),
+            )
+            return
+        names = ", ".join(summarize_profile(p)["name"] or "?" for p in profiles[:5])
+        if len(profiles) > 5:
+            names += f" (+{len(profiles) - 5})"
+        reply = QMessageBox.question(
+            self,
+            t("connections.import_confirm_title", "Import connections"),
+            t(
+                "connections.import_confirm_body",
+                "Import {count} profile(s)?\n{names}",
+            ).format(count=len(profiles), names=names),
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        for connection in profiles:
+            self.connections.append(connection)
+            self.connection_added.emit(connection)
+        self._update_table()
+
+    def _import_from_ssh(self) -> None:
+        """Import an SSH-enabled profile from a private key or key folder."""
+        try:
+            get_auth_manager().require("connections:write")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
+        t = self.i18n.translate
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            t("connections.import_ssh_title", "Import SSH private key"),
+            "",
+            "SSH keys (KEY id_* *.pem);;All files (*)",
+        )
+        if not path:
+            # Also allow picking a directory via a second dialog
+            path = QFileDialog.getExistingDirectory(
+                self,
+                t(
+                    "connections.import_ssh_dir_title",
+                    "Or select a folder containing KEY / SSH.pub",
+                ),
+            )
+        if not path:
+            return
+        try:
+            from ..importers import import_ssh_key_path, summarize_profile
+
+            profile = import_ssh_key_path(path)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                t("common.error"),
+                t(
+                    "connections.import_failed",
+                    "Import failed:\n{error}",
+                ).format(error=str(exc)),
+            )
+            return
+        summary = summarize_profile(profile)
+        reply = QMessageBox.question(
+            self,
+            t("connections.import_confirm_title", "Import connections"),
+            t(
+                "connections.import_ssh_confirm",
+                "Import SSH profile “{name}”?\n"
+                "Type: {type}  Host: {host}  Bastion: {bastion}\n"
+                "Private key path is referenced (not copied into git).",
+            ).format(
+                name=summary.get("name"),
+                type=summary.get("type"),
+                host=summary.get("host"),
+                bastion=summary.get("ssh_host") or "—",
+            ),
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self.connections.append(profile)
+        self.connection_added.emit(profile)
+        self._update_table()
 
     def _edit_connection(self):
         """Edit selected connection"""

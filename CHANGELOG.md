@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **License**: project relicensed from MIT to **GPL-3.0-only** for coherence with PyQt6’s GPL-or-commercial dual license when distributing the free PyQt6 wheels; LICENSE, README badge/section, `setup.py` classifiers, native crate metadata, and FAQ updated accordingly
 
 ### Added
+- **Connection importers** (`db_storage_manager.importers`): parse platform `.env` (`DATABASE_URL` / `DIRECT_URL` / `DB_*` / `POSTGRES_*` / `MYSQL_*` / Supabase) and SSH key folders (`KEY` + optional `SSH.pub` / `VPS.txt` / `DB.txt`) into `ConnectionConfig` profiles; prefer key path references; OAuth platform guides document grant-permissions flows that need user tokens
+- Connections UI **Import from .env…** / **Import SSH key…**; REST `POST /api/v1/connections/import/env`, `POST /api/v1/connections/import/ssh`, `GET /api/v1/connections/import/platforms` (responses redacted)
+- SecureStore merge helper + probe (`test_connection` / SSH tunnel); e2e script `scripts/import_connections_e2e.py`; unit fixtures + optional live pytest (`DSM_E2E_IMPORT=1`); gitignore for import dumps
+- Docs: usage / configuration / API import sections
 - **Application icon**: original SVG + PNG sizes (16–512) and Windows ICO under `db_storage_manager/resources/icons/`; `QApplication.setWindowIcon` plus MainWindow / LoginDialog; packaged via `setup.py` / `MANIFEST.in`; Linux `.desktop` (`packaging/linux/db-storage-manager.desktop`) and hicolor install via `scripts/install-local-shims.sh`; PyInstaller `icon=` + datas; offscreen load test (`tests/test_app_icon.py`)
 - **Android / GrapheneOS companion foundation**: Kotlin sideload debug APK under `companions/android/` (no Play Services) calling local REST `health` / `connections` / `backups` with Bearer auth; token in EncryptedSharedPreferences
 - **Companion privacy / credential-export review** ([docs/privacy-companion.md](docs/privacy-companion.md)): Fernet master keys never mirrored to mobile; sanitized `dsm-companion-export` format; plaintext secrets require `--include-secrets --i-consent`

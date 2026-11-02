@@ -109,6 +109,11 @@ dist-native/
 .env.e2e.local
 tests/fixtures/connections.local.json
 
+# Local connection import dumps / e2e reports (may reference real hosts)
+artifacts/import-dumps/
+*.import.local.json
+scripts/import-report.local.json
+
 # Android companion build outputs (APKs never committed)
 companions/android/.gradle/
 companions/android/.kotlin/

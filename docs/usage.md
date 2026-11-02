@@ -3,13 +3,18 @@
 ## Connections
 
 1. Open **Connections**
-2. Add a profile with type, name, and credentials (or SQLite path), **or** use **Discover Cloud…** to import AWS RDS / GCP Cloud SQL / Azure SQL endpoints from the cloud APIs
+2. Add a profile with type, name, and credentials (or SQLite path), **or** use one of the import affordances:
+   - **Discover Cloud…** — AWS RDS / GCP Cloud SQL / Azure SQL from cloud APIs
+   - **Import from .env…** — Supabase / Laravel / Prisma-style `DATABASE_URL`, `DIRECT_URL`, `DB_*`, `POSTGRES_*`, `MYSQL_*`
+   - **Import SSH key…** — private `KEY` (or folder with `KEY` + optional `SSH.pub` / `VPS.txt` / `DB.txt`) for bastion tunnels
 3. **Test Connection** before saving
 4. Credentials are written to `connections.enc` through `SecureStore`
 
 Supported types in the UI factory: `postgresql`, `mysql`/`mariadb`, `sqlite`, `mongodb`, `redis`, `oracle`, `sqlserver`/`mssql`, `clickhouse`, `influxdb`.
 
 Cloud discovery needs provider credentials (see [configuration.md](configuration.md) and `.env.cloud.local.example`). Imported profiles can use password auth or IAM / Microsoft Entra tokens (`extra.auth_mode`). Clear errors are raised when SDKs or credentials are missing.
+
+Platform “Connect with OAuth / grant permissions” flows need a registered OAuth client and user tokens — those are documented in `db_storage_manager.importers.oauth_platforms` and are **not** fully automated yet. Prefer exporting a project `.env` or importing SSH keys until tokens are configured. See [configuration.md](configuration.md#importing-connections).
 
 Unsupported types raise `ValueError: Unsupported database type: ...` from `DatabaseConnectionFactory`.
 

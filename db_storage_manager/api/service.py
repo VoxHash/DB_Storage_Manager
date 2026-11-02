@@ -50,6 +50,70 @@ def list_connections(store: Optional[SecureStore] = None) -> List[Dict[str, Any]
     return sanitize_connections(store.get_connections())
 
 
+def import_connections_from_env(
+    path: str,
+    *,
+    save: bool = False,
+    store: Optional[SecureStore] = None,
+) -> Dict[str, Any]:
+    """Parse a ``.env`` file into profiles; optionally persist to SecureStore."""
+    from ..importers import import_env_file, save_imported_connections, summarize_profile
+
+    profiles = import_env_file(path)
+    result: Dict[str, Any] = {
+        "ok": True,
+        "source": "env",
+        "path": str(path),
+        "count": len(profiles),
+        "profiles": [summarize_profile(p) for p in profiles],
+    }
+    if save and profiles:
+        persisted = save_imported_connections(profiles, store=store)
+        result["saved"] = persisted
+    return result
+
+
+def import_connections_from_ssh(
+    path: str,
+    *,
+    save: bool = False,
+    store: Optional[SecureStore] = None,
+) -> Dict[str, Any]:
+    """Parse an SSH key file/folder into profiles; optionally persist."""
+    from ..importers import (
+        import_ssh_key_path,
+        save_imported_connections,
+        summarize_profile,
+    )
+
+    profile = import_ssh_key_path(path)
+    profiles = [profile]
+    result: Dict[str, Any] = {
+        "ok": True,
+        "source": "ssh",
+        "path": str(path),
+        "count": len(profiles),
+        "profiles": [summarize_profile(p) for p in profiles],
+    }
+    if save and profiles:
+        persisted = save_imported_connections(profiles, store=store)
+        result["saved"] = persisted
+    return result
+
+
+def list_import_platform_guides() -> Dict[str, Any]:
+    from ..importers import list_platform_guides
+
+    return {
+        "ok": True,
+        "platforms": list_platform_guides(),
+        "note": (
+            "OAuth / grant-permissions flows need a registered client and user "
+            "tokens; use .env or SSH key import until those are configured."
+        ),
+    }
+
+
 def list_backups(backup_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
     adapter = LocalBackupAdapter(base_path=backup_dir or BACKUP_DIR)
     backups = _run_async(adapter.list_backups())
