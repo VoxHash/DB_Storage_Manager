@@ -137,7 +137,7 @@ jobs:
             dist/macos-latest/dist/*.tar.gz
             dist/macos-latest/release/*.dmg
             dist/macos-latest/release/*.app
-          generate_release_notes: true
+          generate_release_notes: false
           draft: false
           prerelease: false
         env:
