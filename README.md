@@ -60,6 +60,8 @@ pip install -e .
 db-storage-manager
 ```
 
+Not on PyPI or npm (no JavaScript companion). To install a tagged release without cloning: `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.7"`. **Help → Changelog & Updates** checks GitHub Releases on demand (stable / experimental channel, no auto-install).
+
 Optional engines:
 
 ```bash
@@ -105,6 +107,7 @@ Details: [docs/usage.md](docs/usage.md)
 | Safe Mode | Block non-SELECT queries | Enabled |
 | Auto Connect | Connect on startup | Disabled |
 | Notifications | Desktop notifications | Enabled |
+| Notification auto-dismiss | Seconds before a notification closes (clamped 2–60) | `5` |
 | Telemetry | Anonymous telemetry | Disabled |
 
 User data: `~/.config/db-storage-manager/` (Linux/macOS) or `%APPDATA%\DB Storage Manager\` (Windows).  

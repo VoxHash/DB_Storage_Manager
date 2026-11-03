@@ -35,6 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Opsec**: Proton Drive Create Backup forces DSMENC1 encryption (checkbox locked on); encryption before rclone upload remains the enterprise default for cloud destinations
+- **Release workflow**: `release.yml` artifact names (Windows `.exe`, macOS binary / `.dmg`, Linux `.AppImage`) now use the pushed tag (`github.ref_name`) instead of a stale hard-coded `v1.0.1`
+- **README**: documents installing a tagged release with `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.7"` and the notification auto-dismiss setting
 
 ## [1.0.6] - 2026-11-02
 
