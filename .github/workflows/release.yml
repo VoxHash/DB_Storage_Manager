@@ -127,16 +127,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/ubuntu-latest/dist/*.whl
-            dist/ubuntu-latest/dist/*.tar.gz
-            dist/ubuntu-latest/release/*
-            dist/windows-latest/dist/*.whl
-            dist/windows-latest/dist/*.tar.gz
-            dist/windows-latest/release/*.exe
-            dist/macos-latest/dist/*.whl
-            dist/macos-latest/dist/*.tar.gz
-            dist/macos-latest/release/*.dmg
-            dist/macos-latest/release/*.app
+            dist/dist-ubuntu-latest/dist/*.whl
+            dist/dist-ubuntu-latest/dist/*.tar.gz
+            dist/dist-ubuntu-latest/release/*.AppImage
+            dist/dist-windows-latest/release/*.exe
+            dist/dist-macos-latest/release/*.dmg
           generate_release_notes: false
           draft: false
           prerelease: false
