@@ -11,6 +11,7 @@ import os
 
 from ..config import (
     CONNECTIONS_FILE,
+    SCHEDULED_BACKUP_SECRETS_FILE,
     SETTINGS_FILE,
     SSH_KEYS_FILE,
     USERS_FILE,
@@ -215,6 +216,29 @@ class SecureStore:
         keys = [k for k in existing if k.get("connection_id") != connection_id]
         if len(keys) != len(existing):
             self.save_ssh_keys(keys)
+
+    def get_scheduled_backup_secrets(self) -> Dict[str, str]:
+        """Encrypted schedule-id -> backup passphrase map (never stored in plaintext JSON)."""
+        if not SCHEDULED_BACKUP_SECRETS_FILE.exists():
+            return {}
+        try:
+            data = self._decrypt(
+                SCHEDULED_BACKUP_SECRETS_FILE.read_text(encoding="utf-8")
+            )
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v) for k, v in data.items() if v}
+
+    def save_scheduled_backup_secrets(self, secrets: Dict[str, str]) -> None:
+        """Persist the schedule passphrase map with restrictive permissions."""
+        encrypted = self._encrypt(
+            {str(k): str(v) for k, v in secrets.items() if v}
+        )
+        SCHEDULED_BACKUP_SECRETS_FILE.write_text(encrypted, encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(SCHEDULED_BACKUP_SECRETS_FILE, 0o600)
 
     def get_users(self) -> Dict[str, Any]:
         """Load encrypted local user accounts (RBAC). Empty dict if missing."""

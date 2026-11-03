@@ -536,7 +536,9 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         self.remote = str(self.config["remote"])
         self.remote_folder = str(self.config.get("path") or "").strip().strip("/")
         self.prefer_encryption = bool(self.config.get("prefer_encryption", True))
-        self.timeout = float(self.config.get("timeout_seconds") or 300)
+        # Large SSH dumps + Proton uploads need a generous ceiling; UI work must
+        # still run this adapter off the Qt main thread to avoid "Not Responding".
+        self.timeout = float(self.config.get("timeout_seconds") or 900)
         binary = str(
             self.config.get("rclone_resolved")
             or resolve_rclone_binary(str(self.config.get("rclone_bin") or "rclone"))
@@ -644,15 +646,37 @@ class ProtonDriveBackupAdapter(BackupAdapter):
             return f"{base}{filename}"
         return base
 
+    @staticmethod
+    def _proton_transfer_flags() -> List[str]:
+        """Flags that harden Proton uploads against drafts / transient 502s.
+
+        ``--protondrive-replace-existing-draft`` clears leftover upload drafts
+        (rclone recommends this when a prior client failed mid-upload). Extra
+        retries help ride out Proton ``502 Bad Gateway`` spikes without freezing
+        the desktop UI (callers must still run rclone off the GUI thread).
+        """
+        return [
+            "--protondrive-replace-existing-draft=true",
+            "--retries",
+            "5",
+            "--retries-sleep",
+            "2s",
+            "--low-level-retries",
+            "10",
+        ]
+
     def _run(
         self,
         args: Sequence[str],
         *,
         config_path: Optional[Path] = None,
+        transfer: bool = False,
     ) -> RcloneResult:
         argv: List[str] = []
         if config_path is not None:
             argv.extend(["--config", str(config_path)])
+        if transfer:
+            argv.extend(self._proton_transfer_flags())
         argv.extend(args)
         result = self._runner.run(
             argv, env=self._build_env(), timeout=self.timeout
@@ -660,6 +684,36 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()
             # Prefer the rclone subcommand name for errors (skip --config pair).
+            cmd = list(args)
+            verb = cmd[0] if cmd else (argv[0] if argv else "rclone")
+            # On draft/name conflicts after transfer flags, delete remote object once and retry.
+            if transfer and verb == "copyto" and len(cmd) >= 3:
+                lower = detail.lower()
+                if (
+                    "draft exist" in lower
+                    or "already exists" in lower
+                    or "code=2500" in lower
+                ):
+                    remote_obj = cmd[2]
+                    try:
+                        self._run(
+                            ["deletefile", remote_obj],
+                            config_path=config_path,
+                            transfer=False,
+                        )
+                    except RuntimeError:
+                        pass
+                    retry_argv: List[str] = []
+                    if config_path is not None:
+                        retry_argv.extend(["--config", str(config_path)])
+                    retry_argv.extend(self._proton_transfer_flags())
+                    retry_argv.extend(args)
+                    result = self._runner.run(
+                        retry_argv, env=self._build_env(), timeout=self.timeout
+                    )
+                    if result.returncode == 0:
+                        return result
+                    detail = (result.stderr or result.stdout or "").strip()
             cmd_hint = list(args[:2]) if args else argv[:2]
             raise RuntimeError(
                 f"rclone {' '.join(cmd_hint)} failed (exit {result.returncode})"
@@ -779,15 +833,19 @@ class ProtonDriveBackupAdapter(BackupAdapter):
             with self._with_rclone_config() as conf:
                 if self.remote_folder:
                     self._run(
-                        ["mkdir", self._remote_target()], config_path=conf
+                        ["mkdir", self._remote_target()],
+                        config_path=conf,
+                        transfer=False,
                     )
                 self._run(
                     ["copyto", str(payload), self._remote_target(filename)],
                     config_path=conf,
+                    transfer=True,
                 )
                 self._run(
                     ["copyto", str(meta_local), self._remote_target(meta_name)],
                     config_path=conf,
+                    transfer=True,
                 )
 
             size = payload.stat().st_size
@@ -828,7 +886,11 @@ class ProtonDriveBackupAdapter(BackupAdapter):
         temp_path = Path(temp_name)
         try:
             with self._with_rclone_config() as conf:
-                self._run(["copyto", remote, str(temp_path)], config_path=conf)
+                self._run(
+                    ["copyto", remote, str(temp_path)],
+                    config_path=conf,
+                    transfer=True,
+                )
         except Exception:
             temp_path.unlink(missing_ok=True)
             raise

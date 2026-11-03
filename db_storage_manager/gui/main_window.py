@@ -2,7 +2,10 @@
 Main application window — modern desktop shell with library-style navigation.
 """
 
+from typing import Optional
+
 from PyQt6.QtWidgets import (
+    QApplication,
     QFrame,
     QHBoxLayout,
     QLayout,
@@ -23,10 +26,13 @@ from .settings import SettingsWidget
 from .monitoring import MonitoringWidget
 from .plugins import PluginsWidget
 from .sidebar import NavSidebar
+from ..config import APP_VERSION
 from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
+from .tray import AppTray, clamp_notification_seconds
+from .updates import UpdatesDialog
 from .utils import apply_glassmorphism, apply_theme_to_app
 from ..resources import apply_app_icon
 
@@ -102,6 +108,7 @@ class MainWindow(QMainWindow):
         self.settings_widget.theme_changed.connect(self._on_theme_changed)
         self.settings_widget.language_changed.connect(self._on_language_changed)
         self.settings_widget.users_admin.users_changed.connect(self.apply_rbac)
+        self.settings_widget.updates_requested.connect(self.show_updates)
 
         self.tab_widget.addTab(self.dashboard, "")
         self.tab_widget.addTab(self.connections_widget, "")
@@ -133,8 +140,52 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
         self.statusBar().showMessage(self.i18n.translate("common.ready"))
 
+        self.tray: Optional[AppTray] = None
+        self._setup_tray()
+
         self._apply_theme()
         self.apply_rbac()
+
+    def _setup_tray(self) -> None:
+        """Left click toggles the window; right click opens the tray menu."""
+        if not AppTray.is_available():
+            return
+        seconds = clamp_notification_seconds(
+            self.secure_store.get_settings().get("notification_timeout_seconds")
+        )
+        self.tray = AppTray(
+            self,
+            timeout_seconds=seconds,
+            status_provider=self._tray_status,
+            open_section=self.show_section,
+            open_updates=self.show_updates,
+        )
+        self.tray.quit_requested.connect(self._quit_app)
+        self.settings_widget.notification_timeout_changed.connect(
+            self.tray.set_timeout_seconds
+        )
+        self.monitoring_widget.attach_tray(self.tray)
+        self.tray.show()
+
+    def _tray_status(self):
+        return (
+            self.monitoring_widget.status_summary(),
+            self.backups_widget.status_summary(),
+        )
+
+    def show_section(self, key: str) -> None:
+        """Navigate to a nav section by key (tray / menu helpers)."""
+        if key in self._nav_keys:
+            self.tab_widget.setCurrentIndex(self._nav_keys.index(key))
+
+    def show_updates(self) -> None:
+        UpdatesDialog(self).exec()
+
+    def _quit_app(self) -> None:
+        self.close()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def apply_rbac(self) -> None:
         """Refresh permission-gated controls after login / user changes."""
@@ -145,6 +196,9 @@ class MainWindow(QMainWindow):
             self.plugins_widget.apply_rbac()
         if hasattr(self.backups_widget, "apply_rbac"):
             self.backups_widget.apply_rbac()
+        for widget in (self.monitoring_widget, self.query_widget):
+            if hasattr(widget, "apply_rbac"):
+                widget.apply_rbac()
         if hasattr(self.settings_widget, "apply_rbac"):
             self.settings_widget.apply_rbac()
         if auth.is_rbac_active() and auth.current_user:
@@ -212,6 +266,11 @@ class MainWindow(QMainWindow):
         about_action = QAction(t("menu.about"), self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
+        updates_action = QAction(
+            t("updates.title", default="Changelog & Updates"), self
+        )
+        updates_action.triggered.connect(self.show_updates)
+        help_menu.addAction(updates_action)
 
     def _show_about(self):
         """Show about dialog"""
@@ -219,9 +278,8 @@ class MainWindow(QMainWindow):
         QMessageBox.about(
             self,
             t("about.title"),
-            f"{t('about.version')}\n\n"
+            f"{t('about.version', version=APP_VERSION)}\n\n"
             f"{t('about.description')}\n\n"
-            f"{t('about.built_with')}\n\n"
             f"{t('about.copyright')}",
         )
 
@@ -244,6 +302,8 @@ class MainWindow(QMainWindow):
             t("nav.workspace", default="Workspace")
         )
         self.sidebar.brand.setText(t("app.title", default="DB Storage Manager"))
+        if getattr(self, "tray", None) is not None:
+            self.tray.retranslate()
 
     def _on_sidebar_navigated(self, index: int) -> None:
         if self._syncing_nav:
@@ -332,6 +392,13 @@ class MainWindow(QMainWindow):
             self.connections_widget.close_all_tunnels()
         except Exception:
             pass
+        for widget in (self.backups_widget, self.monitoring_widget):
+            try:
+                widget.shutdown()
+            except Exception:
+                pass
+        if self.tray is not None:
+            self.tray.hide()
         try:
             from ..db.factory import DatabaseConnectionFactory
 

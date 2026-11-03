@@ -9,7 +9,7 @@ from typing import Optional
 
 # Application paths
 APP_NAME = "DB Storage Manager"
-APP_VERSION = "1.0.6"
+APP_VERSION = "1.0.7"
 
 # User data directory
 if os.name == "nt":  # Windows
@@ -28,6 +28,8 @@ SETTINGS_FILE = USER_DATA_DIR / "settings.enc"
 SSH_KEYS_FILE = USER_DATA_DIR / "ssh-keys.enc"
 USERS_FILE = USER_DATA_DIR / "users.enc"
 SCHEDULED_BACKUPS_FILE = USER_DATA_DIR / "scheduled-backups.json"
+# Fernet-encrypted map of schedule id -> DSMENC1 passphrase (never in the JSON schedule file)
+SCHEDULED_BACKUP_SECRETS_FILE = USER_DATA_DIR / "scheduled-backup-secrets.enc"
 BACKUP_DIR = USER_DATA_DIR / "backups"
 PLUGINS_DIR = USER_DATA_DIR / "plugins"
 MASTER_KEY_FILE = USER_DATA_DIR / ".master-key"
@@ -122,6 +124,10 @@ DEFAULT_SETTINGS = {
     "safe_mode": True,
     "auto_connect": False,
     "notifications": True,
+    # Desktop notification auto-dismiss (seconds, clamped 2-60 by the tray)
+    "notification_timeout_seconds": 5,
+    # Manual update checks: "stable" or "experimental" (GitHub pre-releases)
+    "update_channel": "stable",
     "telemetry": False,
     "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),

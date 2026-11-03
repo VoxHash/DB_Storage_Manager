@@ -44,6 +44,25 @@ class HealthChecker:
         if not getattr(self.connection, "connected", False):
             await self.connection.connect()
 
+    async def _ping(self) -> Any:
+        """Run the ping query; on a dead session reconnect once and retry.
+
+        Dropped sockets (idle timeout, SSH tunnel blip) surface as driver
+        ``InterfaceError`` / ``OperationalError``; a single reconnect avoids a
+        permanent false-critical while a genuinely unreachable server still fails.
+        """
+        sql = self._ping_sql()
+        try:
+            await self._ensure_connected()
+            return await self.connection.execute_query(sql, safe_mode=True)
+        except Exception:
+            try:
+                await self.connection.disconnect()
+            except Exception:
+                pass
+            await self.connection.connect()
+            return await self.connection.execute_query(sql, safe_mode=True)
+
     async def check_health(self) -> Dict[str, Any]:
         """Perform comprehensive health check without tearing down the session."""
         checks = {
@@ -87,8 +106,7 @@ class HealthChecker:
     async def _check_connectivity(self) -> Dict[str, Any]:
         """Check database connectivity without disconnecting the live session."""
         try:
-            await self._ensure_connected()
-            await self.connection.execute_query(self._ping_sql(), safe_mode=True)
+            await self._ping()
             return {
                 "status": "healthy",
                 "connected": True,
@@ -108,7 +126,7 @@ class HealthChecker:
         try:
             await self._ensure_connected()
             start_time = time.time()
-            await self.connection.execute_query(self._ping_sql(), safe_mode=True)
+            await self._ping()
             response_time = (time.time() - start_time) * 1000  # Convert to milliseconds
 
             # Remote / SSH-tunneled DBs commonly sit in the 100–500ms range;
@@ -134,14 +152,12 @@ class HealthChecker:
 
     async def _check_query_performance(self) -> Dict[str, Any]:
         """Check query performance"""
-        test_query = self._ping_sql()
-
         try:
             import time
 
             await self._ensure_connected()
             start_time = time.time()
-            await self.connection.execute_query(test_query, safe_mode=True)
+            await self._ping()
             execution_time = (time.time() - start_time) * 1000
 
             if execution_time < 500:

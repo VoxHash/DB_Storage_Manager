@@ -269,14 +269,17 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_se
 
     widget.backups_table.selectRow(0)
     widget.verify_selected()
+    widget.wait_idle()
     assert widget._verify_results[info.id]["ok"] is True
     assert "PASS" in widget.verify_status_label.text()
 
     widget.verify_all()
+    widget.wait_idle()
     assert "PASS" in widget.verify_status_label.text()
 
     widget.backups_table.selectRow(0)
     widget.dry_run_selected()
+    widget.wait_idle()
     dry = widget._verify_results[info.id]
     assert dry["ok"] is True
     assert dry.get("integrity") == "ok"
@@ -294,8 +297,10 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_se
     # Tamper file → checksum fail presentation
     Path(info.path).write_bytes(Path(info.path).read_bytes() + b"x")
     widget.refresh_backups()
+    widget.wait_idle()
     widget.backups_table.selectRow(0)
     widget.verify_selected()
+    widget.wait_idle()
     assert widget._verify_results[info.id]["ok"] is False
     assert "FAIL" in widget.verify_status_label.text()
 
@@ -339,6 +344,21 @@ def test_proton_status_gated_by_adapter_and_refresh(
     backup_dir.mkdir()
     widget = BackupsWidget([], backup_dir=backup_dir)
 
+    # Hermetic: a developer machine may hold real Proton credentials in the
+    # project .env.*.local files, which must never be exercised by this test.
+    from db_storage_manager.backups.protondrive import ProtonDriveNotConfiguredError
+
+    original_get_adapter = widget.backup_manager.get_adapter
+
+    def _get_adapter(adapter_type, config=None):
+        if adapter_type in ("protondrive", "proton_drive", "proton"):
+            raise ProtonDriveNotConfiguredError(
+                f"Proton Drive is not configured. {proton_error}"
+            )
+        return original_get_adapter(adapter_type, config)
+
+    monkeypatch.setattr(widget.backup_manager, "get_adapter", _get_adapter)
+
     # Default adapter is Local — no Proton/rclone banner on Create
     assert widget.adapter_combo.currentData() == "local"
     assert "Proton Drive not configured" not in widget.proton_status_label.text()
@@ -346,6 +366,7 @@ def test_proton_status_gated_by_adapter_and_refresh(
 
     # Local restore listing — idle/local status only
     widget.refresh_backups()
+    widget.wait_idle()
     assert "Proton Drive not configured" not in widget.verify_status_label.text()
     assert "rclone" not in widget.verify_status_label.text().lower()
 
@@ -363,10 +384,12 @@ def test_proton_status_gated_by_adapter_and_refresh(
 
     # Refresh Proton Drive is the explicit path to show Proton status on Restore
     widget.refresh_proton_backups()
+    widget.wait_idle()
     assert "Proton Drive not configured" in widget.verify_status_label.text()
 
     # Local Refresh clears Proton banner and restores local listing status
     widget.refresh_backups()
+    widget.wait_idle()
     assert "Proton Drive not configured" not in widget.verify_status_label.text()
     assert widget._list_source == "local"
 

@@ -39,12 +39,34 @@ _UNSAFE_CONNECTION_NAME = (
 _UNSAFE_SSH_MYSQL_NAME = "vps/prod — SSH tunnel (mysql)"
 
 
+_RCLONE_FLAGS_WITH_VALUE = frozenset(
+    {
+        "--config",
+        "--retries",
+        "--retries-sleep",
+        "--low-level-retries",
+    }
+)
+_RCLONE_FLAGS_BOOL = frozenset(
+    {
+        "--protondrive-replace-existing-draft=true",
+        "--protondrive-replace-existing-draft=false",
+    }
+)
+
+
 def _strip_rclone_global_flags(argv: List[str]) -> List[str]:
-    """Drop leading ``--config PATH`` pairs so command dispatch sees the verb."""
+    """Drop leading rclone global / Proton transfer flags so dispatch sees the verb."""
     i = 0
     while i < len(argv):
-        if argv[i] == "--config" and i + 1 < len(argv):
+        tok = argv[i]
+        if tok in _RCLONE_FLAGS_WITH_VALUE and i + 1 < len(argv):
             i += 2
+            continue
+        if tok in _RCLONE_FLAGS_BOOL or tok.startswith(
+            "--protondrive-replace-existing-draft="
+        ):
+            i += 1
             continue
         break
     return argv[i:]
@@ -357,6 +379,12 @@ def test_create_list_verify_delete_with_encryption(
     assert info.metadata["sha256"]
     assert info.metadata["destination"] == "protondrive"
 
+    copyto_calls = [c for c in runner.calls if _rclone_verb(c) == "copyto"]
+    assert copyto_calls, "expected rclone copyto for payload + meta"
+    for call in copyto_calls:
+        assert "--protondrive-replace-existing-draft=true" in call
+        assert "--retries" in call
+
     assert any(k.endswith(info.name) for k in runner.objects)
     assert any(k.endswith(f"{info.name}.meta.json") for k in runner.objects)
 
@@ -376,6 +404,84 @@ def test_create_list_verify_delete_with_encryption(
 
     asyncio.run(adapter.delete_backup(listed[0].id))
     assert asyncio.run(adapter.list_backups()) == []
+
+
+def test_copyto_retries_after_draft_conflict(
+    source_dump: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Draft/422 from Proton should deletefile + retry with replace-existing-draft."""
+    monkeypatch.setenv("DSM_PROTONDRIVE_USERNAME", "user@proton.me")
+    monkeypatch.setenv("DSM_PROTONDRIVE_PASSWORD", "secret")
+
+    class DraftThenOkRunner(FakeRcloneRunner):
+        def __init__(self) -> None:
+            super().__init__(remotes=["protondrive"])
+            self._copyto_attempts = 0
+
+        def run(
+            self,
+            args: Sequence[str],
+            *,
+            env: Optional[Dict[str, str]] = None,
+            timeout: Optional[float] = None,
+        ) -> RcloneResult:
+            argv = list(args)
+            cmd_argv = _strip_rclone_global_flags(argv)
+            cmd = cmd_argv[0] if cmd_argv else ""
+            if cmd == "copyto" and len(cmd_argv) >= 3:
+                self.calls.append(argv)
+                self.envs.append(env)
+                src, dst = cmd_argv[1], cmd_argv[2]
+                self._copyto_attempts += 1
+                # Fail first payload upload with draft conflict; succeed retry + meta.
+                if self._copyto_attempts == 1 and os.path.isfile(src):
+                    return RcloneResult(
+                        1,
+                        "",
+                        "Failed to copy: a draft exist - usually this means a file "
+                        "is being uploaded (Code=2500, Status=422)",
+                        argv,
+                    )
+                if os.path.isfile(src):
+                    self.objects[dst] = Path(src).read_bytes()
+                    return RcloneResult(0, "", "", argv)
+                if src in self.objects:
+                    Path(dst).write_bytes(self.objects[src])
+                    return RcloneResult(0, "", "", argv)
+                return RcloneResult(1, "", f"object not found: {src}", argv)
+            if cmd == "deletefile":
+                self.calls.append(argv)
+                self.envs.append(env)
+                remote = cmd_argv[1]
+                self.objects.pop(remote, None)
+                return RcloneResult(0, "", "", argv)
+            return super().run(args, env=env, timeout=timeout)
+
+    runner = DraftThenOkRunner()
+    adapter = ProtonDriveBackupAdapter(
+        {
+            "rclone_bin": "/usr/bin/env",
+            "remote": "protondrive",
+            "path": "db-storage-manager-backups",
+            "prefer_encryption": True,
+            "username": "user@proton.me",
+            "password": "secret",
+        },
+        runner=runner,
+    )
+    options = BackupOptions(
+        connectionId="c1",
+        connectionName="labdb",
+        databaseType="sqlite",
+        backupPath=str(source_dump),
+        encryption=True,
+        encryptionKey="test-passphrase-proton",
+        adapterType="protondrive",
+    )
+    info = asyncio.run(adapter.create_backup(options))
+    assert info.status == "completed"
+    assert any(_rclone_verb(c) == "deletefile" for c in runner.calls)
+    assert sum(1 for c in runner.calls if _rclone_verb(c) == "copyto") >= 2
 
 
 def test_prefer_encryption_requires_key(source_dump: Path):

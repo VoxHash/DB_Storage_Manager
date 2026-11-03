@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -25,6 +26,10 @@ _DEFAULT_PBKDF2_ITERATIONS = 390_000
 _SALT_BYTES = 16
 _HASH_BYTES = 32
 _HASH_PREFIX = "pbkdf2_sha256"
+
+# Failed-login throttle (per username, in-memory).
+MAX_FAILED_LOGINS = 5
+LOGIN_LOCKOUT_SECONDS = 60
 
 
 def _pbkdf2_iterations() -> int:
@@ -72,6 +77,7 @@ PERM_PLUGINS_READ = "plugins:read"
 PERM_PLUGINS_MANAGE = "plugins:manage"
 PERM_USERS_MANAGE = "users:manage"
 PERM_QUERY_EXECUTE = "query:execute"
+PERM_QUERY_WRITE = "query:write"  # run non-SELECT SQL (Safe Mode off)
 PERM_MONITORING_READ = "monitoring:read"
 PERM_MONITORING_WRITE = "monitoring:write"
 PERM_API_READ = "api:read"
@@ -91,6 +97,7 @@ ALL_PERMISSIONS: Set[str] = {
     PERM_PLUGINS_MANAGE,
     PERM_USERS_MANAGE,
     PERM_QUERY_EXECUTE,
+    PERM_QUERY_WRITE,
     PERM_MONITORING_READ,
     PERM_MONITORING_WRITE,
     PERM_API_READ,
@@ -110,18 +117,20 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[str]] = {
         PERM_SETTINGS_READ,
         PERM_PLUGINS_READ,
         PERM_QUERY_EXECUTE,
+        PERM_QUERY_WRITE,
         PERM_MONITORING_READ,
         PERM_MONITORING_WRITE,
         PERM_API_READ,
         PERM_API_WRITE,
         PERM_DASHBOARD_READ,
     },
+    # Read-only: dashboards, backup lists/verify, monitoring. No ad-hoc SQL
+    # (a SELECT console can read any table) and no writes of any kind.
     UserRole.VIEWER: {
         PERM_CONNECTIONS_READ,
         PERM_BACKUPS_READ,
         PERM_SETTINGS_READ,
         PERM_PLUGINS_READ,
-        PERM_QUERY_EXECUTE,
         PERM_MONITORING_READ,
         PERM_API_READ,
         PERM_DASHBOARD_READ,
@@ -308,6 +317,9 @@ class AuthenticationManager:
         self.users: Dict[str, User] = {}
         self.current_user: Optional[User] = None
         self._system_admin = False  # API Bearer machine token
+        # username -> recent failed-login timestamps (brute-force throttle for
+        # desktop login and HTTP Basic on the companion API).
+        self._failed_logins: Dict[str, List[float]] = {}
         self.reload()
 
     def _get_store(self):
@@ -503,22 +515,55 @@ class AuthenticationManager:
         password: str,
         mfa_token: Optional[str] = None,
     ) -> Optional[User]:
-        """Verify password (+ optional MFA) and set ``current_user``."""
+        """Verify password (+ optional MFA) and set ``current_user``.
+
+        After ``MAX_FAILED_LOGINS`` failures within ``LOGIN_LOCKOUT_SECONDS``
+        further attempts for that username are rejected until the window
+        expires (even with the right password).
+        """
+        key = (username or "").lower()
+        if self.is_locked_out(key):
+            return None
         user = self.get_user(username)
         if not user or not user.enabled:
+            self._record_failed_login(key)
             return None
         if not user.password_hash or not verify_password(
             password, user.password_hash
         ):
+            self._record_failed_login(key)
             return None
         if user.mfa_enabled and user.mfa_secret:
             if not self.mfa.verify_token(user.mfa_secret, mfa_token or ""):
+                self._record_failed_login(key)
                 return None
+        self._failed_logins.pop(key, None)
         user.last_login = _utc_now_iso()
         self._persist()
         self.current_user = user
         self._system_admin = False
         return user
+
+    def _recent_failures(self, key: str) -> List[float]:
+        now = time.monotonic()
+        recent = [
+            ts
+            for ts in self._failed_logins.get(key, [])
+            if now - ts < LOGIN_LOCKOUT_SECONDS
+        ]
+        if recent:
+            self._failed_logins[key] = recent
+        else:
+            self._failed_logins.pop(key, None)
+        return recent
+
+    def _record_failed_login(self, key: str) -> None:
+        self._recent_failures(key)
+        self._failed_logins.setdefault(key, []).append(time.monotonic())
+
+    def is_locked_out(self, username: str) -> bool:
+        """True while ``username`` is throttled after repeated failed logins."""
+        return len(self._recent_failures((username or "").lower())) >= MAX_FAILED_LOGINS
 
     def logout(self) -> None:
         self.current_user = None

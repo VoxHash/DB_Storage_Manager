@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
     QMessageBox,
+    QSpinBox,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -23,6 +24,12 @@ from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
 from .proton_drive_config import open_proton_drive_config
+from .tray import (
+    DEFAULT_NOTIFICATION_SECONDS,
+    MAX_NOTIFICATION_SECONDS,
+    MIN_NOTIFICATION_SECONDS,
+    clamp_notification_seconds,
+)
 from .users import UsersAdminWidget
 from .utils import apply_glassmorphism, apply_page_layout, make_page_header
 
@@ -32,6 +39,8 @@ class SettingsWidget(QWidget):
 
     theme_changed = pyqtSignal(str)
     language_changed = pyqtSignal(str)
+    notification_timeout_changed = pyqtSignal(int)
+    updates_requested = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -104,6 +113,23 @@ class SettingsWidget(QWidget):
         self.notifications_check.setChecked(self.settings.get("notifications", True))
         form.addRow(self.notifications_label, self.notifications_check)
 
+        # Desktop notification auto-dismiss
+        self.notification_timeout_label = QLabel()
+        self.notification_timeout_spin = QSpinBox()
+        self.notification_timeout_spin.setRange(
+            MIN_NOTIFICATION_SECONDS, MAX_NOTIFICATION_SECONDS
+        )
+        self.notification_timeout_spin.setValue(
+            clamp_notification_seconds(
+                self.settings.get(
+                    "notification_timeout_seconds", DEFAULT_NOTIFICATION_SECONDS
+                )
+            )
+        )
+        form.addRow(
+            self.notification_timeout_label, self.notification_timeout_spin
+        )
+
         # Telemetry
         self.telemetry_label = QLabel()
         self.telemetry_check = QCheckBox()
@@ -129,6 +155,11 @@ class SettingsWidget(QWidget):
         self.save_button.clicked.connect(self._save_settings)
         layout.addWidget(self.save_button)
 
+        # Changelog + manual update check (GitHub Releases)
+        self.updates_button = QPushButton()
+        self.updates_button.clicked.connect(self.updates_requested.emit)
+        layout.addWidget(self.updates_button)
+
         self.users_admin = UsersAdminWidget()
         layout.addWidget(self.users_admin)
 
@@ -148,6 +179,7 @@ class SettingsWidget(QWidget):
             self.safe_mode_check,
             self.auto_connect_check,
             self.notifications_check,
+            self.notification_timeout_spin,
             self.telemetry_check,
             self.proton_configure_button,
         ):
@@ -189,6 +221,13 @@ class SettingsWidget(QWidget):
         self.safe_mode_label.setText(f"{t('settings.safe_mode')}:")
         self.auto_connect_label.setText(f"{t('settings.auto_connect')}:")
         self.notifications_label.setText(f"{t('settings.notifications')}:")
+        self.notification_timeout_label.setText(
+            f"{t('settings.notification_timeout')}:"
+        )
+        self.notification_timeout_spin.setSuffix(
+            f" {t('settings.seconds_suffix')}"
+        )
+        self.updates_button.setText(t("updates.title"))
         self.telemetry_label.setText(f"{t('settings.telemetry')}:")
         self.proton_section_label.setText(
             t("settings.proton_drive", default="Proton Drive backups")
@@ -235,6 +274,12 @@ class SettingsWidget(QWidget):
             "safe_mode": self.safe_mode_check.isChecked(),
             "auto_connect": self.auto_connect_check.isChecked(),
             "notifications": self.notifications_check.isChecked(),
+            "notification_timeout_seconds": int(
+                self.notification_timeout_spin.value()
+            ),
+            "update_channel": existing.get(
+                "update_channel", DEFAULT_SETTINGS.get("update_channel")
+            ),
             "telemetry": self.telemetry_check.isChecked(),
             # Preserve monitoring / dashboard prefs edited in their tabs
             "alert_thresholds": existing.get(
@@ -262,6 +307,9 @@ class SettingsWidget(QWidget):
             ),
         }
         self.secure_store.set_settings(self.settings)
+        self.notification_timeout_changed.emit(
+            self.settings["notification_timeout_seconds"]
+        )
         QMessageBox.information(
             self,
             self.i18n.translate("common.success"),

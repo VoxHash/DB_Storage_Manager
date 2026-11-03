@@ -3,8 +3,10 @@ Backup manager for coordinating backup operations
 """
 
 from typing import Any, Dict, List, Optional, Callable, Union
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import tempfile
+import threading
 
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..db.factory import DatabaseConnectionFactory
@@ -41,15 +43,24 @@ class BackupManager:
 
     def __init__(self):
         self.adapters: Dict[str, BackupAdapter] = {}
+        # GUI jobs, scheduled jobs and the API may resolve adapters concurrently.
+        self._adapter_lock = threading.RLock()
 
     def register_adapter(self, adapter_type: str, adapter: BackupAdapter) -> None:
         """Register a backup adapter"""
-        self.adapters[adapter_type] = adapter
+        with self._adapter_lock:
+            self.adapters[adapter_type] = adapter
 
     def get_adapter(
         self, adapter_type: str, config: Optional[Dict[str, Any]] = None
     ) -> Optional[BackupAdapter]:
         """Get a backup adapter by type"""
+        with self._adapter_lock:
+            return self._get_adapter_locked(adapter_type, config)
+
+    def _get_adapter_locked(
+        self, adapter_type: str, config: Optional[Dict[str, Any]] = None
+    ) -> Optional[BackupAdapter]:
         if adapter_type in self.adapters:
             return self.adapters[adapter_type]
 
@@ -255,10 +266,63 @@ class BackupManager:
             "error": None if matched else "SHA-256 mismatch",
         }
 
+    @staticmethod
+    def is_remote_backup(backup_info: BackupInfo) -> bool:
+        """True when the listing came from a non-local destination (Proton Drive)."""
+        destination = str((backup_info.metadata or {}).get("destination") or "")
+        return destination.lower() in ("protondrive", "proton_drive", "proton")
+
+    def verify_backup(self, backup_info: BackupInfo) -> Dict[str, Any]:
+        """Adapter-aware SHA-256 verification (local file or Proton Drive object).
+
+        ``BackupInfo.path`` for Proton rows is an rclone remote target such as
+        ``protondrive:folder/name`` - never a local filesystem path - so it must
+        not be checked with ``Path.exists``.
+        """
+        if self.is_remote_backup(backup_info):
+            adapter = self.get_adapter("protondrive")
+            verify = getattr(adapter, "verify_remote_checksum", None)
+            if verify is None:
+                return {
+                    "ok": False,
+                    "status": "not_configured",
+                    "id": backup_info.id,
+                    "path": backup_info.path,
+                    "expected": (backup_info.metadata or {}).get("sha256"),
+                    "actual": None,
+                    "error": "Proton Drive adapter unavailable",
+                }
+            result = dict(verify(backup_info))
+        else:
+            result = self.verify_backup_checksum(backup_info)
+        result.setdefault("id", backup_info.id)
+        return result
+
     def verify_backups_parallel(
+        self, backups: List[BackupInfo], *, remote_workers: int = 3
+    ) -> List[Dict[str, Any]]:
+        """Verify many backups: native parallel hashing for local files and
+        adapter-aware checks (rclone download + SHA-256) for Proton Drive rows."""
+        local = [b for b in backups if not self.is_remote_backup(b)]
+        remote = [b for b in backups if self.is_remote_backup(b)]
+
+        by_id: Dict[str, Dict[str, Any]] = {}
+        for result in self._verify_local_parallel(local):
+            by_id[str(result["id"])] = result
+
+        if remote:
+            workers = max(1, min(remote_workers, len(remote)))
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                for backup, result in zip(remote, pool.map(self.verify_backup, remote)):
+                    by_id[str(backup.id)] = result
+
+        return [by_id[str(b.id)] for b in backups]
+
+    def _verify_local_parallel(
         self, backups: List[BackupInfo]
     ) -> List[Dict[str, Any]]:
-        """Verify many backup checksums using parallel native hashing when available."""
+        if not backups:
+            return []
         paths = [b.path for b in backups]
         digests = dict(sha256_files_parallel(paths))
         results = []

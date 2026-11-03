@@ -15,7 +15,7 @@ long_description = (
 
 setup(
     name="db-storage-manager",
-    version="1.0.6",
+    version="1.0.7",
     description="Professional desktop application for database storage management and backups",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -30,6 +30,10 @@ setup(
             "resources/icons/*.png",
             "resources/icons/*.svg",
             "resources/icons/*.ico",
+            # Locale catalogs: without these a pip-installed app shows raw i18n keys.
+            "i18n/translations/*.json",
+            # Web UI served by db-storage-manager-api
+            "api/static/*",
         ],
     },
     python_requires=">=3.10",

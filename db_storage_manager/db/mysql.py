@@ -85,6 +85,29 @@ class MySQLConnection(DatabaseConnection):
         self.connection = pymysql.connect(**connect_kwargs)
         self.connected = True
 
+    async def _ensure_alive(self) -> None:
+        """Connect, or transparently re-connect a dropped session.
+
+        pymysql keeps ``self.connection`` set after the socket dies (idle
+        timeout, SSH tunnel blip, server restart). Every later call then raises
+        ``InterfaceError (0, '')`` and monitoring reported a permanent false
+        critical. ``ping(reconnect=True)`` revives the socket; if that fails we
+        rebuild the session from the stored config (fresh IAM token / tunnel).
+        """
+        if self.connection is None:
+            await self.connect()
+            return
+        try:
+            self.connection.ping(reconnect=True)
+        except Exception:
+            try:
+                self.connection.close()
+            except Exception:
+                pass
+            self.connection = None
+            self.connected = False
+            await self.connect()
+
     async def disconnect(self) -> None:
         """Disconnect from MySQL database"""
         if self.connection:
@@ -98,8 +121,7 @@ class MySQLConnection(DatabaseConnection):
         Table sizes use ``TABLES.DATA_LENGTH`` / ``INDEX_LENGTH``. Index listing
         uses ``STATISTICS`` only (that view has no ``index_length`` column).
         """
-        if not self.connection:
-            await self.connect()
+        await self._ensure_alive()
 
         cursor = self.connection.cursor(DictCursor)
 
@@ -196,8 +218,7 @@ class MySQLConnection(DatabaseConnection):
 
     async def execute_query(self, query: str, safe_mode: bool = True) -> QueryResult:
         """Execute a MySQL query"""
-        if not self.connection:
-            await self.connect()
+        await self._ensure_alive()
 
         if safe_mode and not query.strip().upper().startswith("SELECT"):
             raise ValueError("Only SELECT queries are allowed in safe mode")
@@ -239,8 +260,7 @@ class MySQLConnection(DatabaseConnection):
 
     async def get_schema(self) -> SchemaInfo:
         """Get MySQL schema"""
-        if not self.connection:
-            await self.connect()
+        await self._ensure_alive()
 
         cursor = self.connection.cursor(DictCursor)
 

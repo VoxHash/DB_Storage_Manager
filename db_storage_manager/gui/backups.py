@@ -7,9 +7,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QCoreApplication, Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -17,9 +17,11 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -35,10 +37,12 @@ from ..backups.protondrive import (
     ProtonDriveNotConfiguredError,
     configuration_status as proton_drive_status,
 )
+from ..backups.scheduler import ScheduledBackupManager
 from ..config import BACKUP_DIR
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
+from .jobs import JobRunner, JobWorker
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -57,6 +61,15 @@ _STATUS_COLORS = {
 }
 
 
+# Backwards-compatible name (tests / callers import ``BackupJobWorker``).
+BackupJobWorker = JobWorker
+
+# Independent job groups: one active job per group, groups run concurrently.
+_GROUP_CREATE = "create"
+_GROUP_LIST = "list"
+_GROUP_VERIFY = "verify"
+
+
 class BackupsWidget(QWidget):
     """Backups management widget"""
 
@@ -65,33 +78,89 @@ class BackupsWidget(QWidget):
         self.connections = connections
         self.i18n = get_i18n_manager()
         self.backup_manager = BackupManager()
+        self.schedule_manager = ScheduledBackupManager()
         self.backup_dir = backup_dir or BACKUP_DIR
         self._backups: List[BackupInfo] = []
         self._verify_results: Dict[str, Dict[str, Any]] = {}
         self._list_source = "local"
+        self._jobs = JobRunner(self)
+        self._jobs.state_changed.connect(self._refresh_job_buttons)
         self.setObjectName("glassmorphism")
         self.init_ui()
         apply_glassmorphism(self)
-        self.refresh_backups()
-        self._refresh_proton_status()
+        self._refresh_backups_sync()
+        self._on_adapter_changed()
+        self._reload_schedules_table()
         self.apply_rbac()
+        # Scheduler thread is idle until at least one enabled schedule exists.
+        if any(s.enabled for s in self.schedule_manager.get_schedules()):
+            self.schedule_manager.start()
 
     def apply_rbac(self) -> None:
+        self._refresh_job_buttons()
+
+    def _refresh_job_buttons(self) -> None:
+        """Enable controls from RBAC permissions minus groups with a running job."""
+        if not hasattr(self, "create_button"):
+            return
         auth = get_auth_manager()
         can_read = auth.has_permission("backups:read")
         can_create = auth.has_permission("backups:create")
         can_restore = auth.has_permission("backups:restore")
-        self.refresh_button.setEnabled(can_read)
-        self.refresh_proton_button.setEnabled(can_read)
-        self.verify_selected_button.setEnabled(can_read)
-        self.verify_all_button.setEnabled(can_read)
-        self.dry_run_button.setEnabled(can_restore)
-        self.create_button.setEnabled(can_create)
+        busy_create = self._jobs.is_busy(_GROUP_CREATE)
+        busy_list = self._jobs.is_busy(_GROUP_LIST)
+        busy_verify = self._jobs.is_busy(_GROUP_VERIFY)
+        self.create_button.setEnabled(can_create and not busy_create)
+        self.refresh_button.setEnabled(can_read and not busy_list)
+        self.refresh_proton_button.setEnabled(can_read and not busy_list)
+        self.verify_selected_button.setEnabled(can_read and not busy_verify)
+        self.verify_all_button.setEnabled(can_read and not busy_verify)
+        self.dry_run_button.setEnabled(can_restore and not busy_verify)
         can_settings = auth.has_permission("settings:write")
         if hasattr(self, "configure_proton_button"):
             self.configure_proton_button.setEnabled(
                 can_settings or not auth.is_rbac_active()
             )
+        if hasattr(self, "schedule_add_button"):
+            self.schedule_add_button.setEnabled(can_create)
+            self.schedule_remove_button.setEnabled(can_create)
+            self.schedule_toggle_button.setEnabled(can_create)
+            self.schedule_refresh_button.setEnabled(can_read)
+
+    def wait_idle(self, timeout_ms: int = 10000) -> None:
+        """Pump the event loop until every background job finished (tests / shutdown)."""
+        import time
+
+        deadline = time.monotonic() + timeout_ms / 1000.0
+        while self._jobs.any_busy() and time.monotonic() < deadline:
+            QCoreApplication.processEvents()
+            time.sleep(0.005)
+        self._jobs.wait_all(1000)
+        QCoreApplication.processEvents()
+
+    def status_summary(self) -> str:
+        """One-line backups status for the system tray menu."""
+        t = self.i18n.translate
+        schedules = self.schedule_manager.get_schedules()
+        enabled = sum(1 for s in schedules if s.enabled)
+        state = (
+            t("tray.backups_job_running")
+            if self._jobs.any_busy()
+            else t("tray.backups_job_idle")
+        )
+        return t(
+            "tray.backups_status",
+            enabled=enabled,
+            total=len(schedules),
+            state=state,
+        )
+
+    def shutdown(self) -> None:
+        """Stop the scheduler thread and wait briefly for running jobs."""
+        try:
+            self.schedule_manager.stop()
+        finally:
+            self._jobs.wait_all(3000)
 
     def init_ui(self):
         """Initialize UI"""
@@ -122,7 +191,7 @@ class BackupsWidget(QWidget):
         self.adapter_combo = QComboBox()
         self.adapter_combo.addItem(t("backups.local"), "local")
         self.adapter_combo.addItem(t("backups.proton_drive"), "protondrive")
-        self.adapter_combo.currentIndexChanged.connect(self._refresh_proton_status)
+        self.adapter_combo.currentIndexChanged.connect(self._on_adapter_changed)
         create_form.addRow(t("backups.adapter"), self.adapter_combo)
 
         self.compression_combo = QComboBox()
@@ -133,6 +202,13 @@ class BackupsWidget(QWidget):
 
         self.encrypt_checkbox = QCheckBox(t("backups.encryption"))
         self.encrypt_checkbox.setChecked(True)
+        self.encrypt_checkbox.setToolTip(
+            t(
+                "backups.encryption_tooltip",
+                default="Enterprise default: encrypt before upload (DSMENC1). "
+                "Required for Proton Drive backups.",
+            )
+        )
         create_form.addRow("", self.encrypt_checkbox)
 
         self.encryption_key_edit = QLineEdit()
@@ -174,11 +250,15 @@ class BackupsWidget(QWidget):
 
         actions = QHBoxLayout()
         self.refresh_button = QPushButton(t("backups.refresh"))
-        self.refresh_button.clicked.connect(self.refresh_backups)
+        self.refresh_button.clicked.connect(
+            lambda _checked=False: self.refresh_backups(queue=True)
+        )
         actions.addWidget(self.refresh_button)
 
         self.refresh_proton_button = QPushButton(t("backups.refresh_proton"))
-        self.refresh_proton_button.clicked.connect(self.refresh_proton_backups)
+        self.refresh_proton_button.clicked.connect(
+            lambda _checked=False: self.refresh_proton_backups(queue=True)
+        )
         actions.addWidget(self.refresh_proton_button)
 
         self.verify_selected_button = QPushButton(t("backups.verify_checksum"))
@@ -220,7 +300,103 @@ class BackupsWidget(QWidget):
 
         scheduled_widget = QWidget()
         scheduled_layout = QVBoxLayout(scheduled_widget)
-        scheduled_layout.addWidget(QLabel(t("backups.scheduled_backups")))
+        scheduled_layout.addWidget(
+            QLabel(
+                t(
+                    "backups.scheduled_help",
+                    default="Schedule recurring dumps.",
+                )
+            )
+        )
+        schedule_form = QFormLayout()
+        self.schedule_name_edit = QLineEdit()
+        self.schedule_name_edit.setPlaceholderText(
+            t("backups.schedule_name_placeholder", default="Nightly production dump")
+        )
+        schedule_form.addRow(
+            t("backups.schedule_name", default="Name"), self.schedule_name_edit
+        )
+        self.schedule_connection_combo = QComboBox()
+        schedule_form.addRow(
+            t("backups.connection"), self.schedule_connection_combo
+        )
+        # The Create-tab combo is filled before this one exists; fill both now.
+        self._reload_connection_combo()
+        self.schedule_adapter_combo = QComboBox()
+        self.schedule_adapter_combo.addItem(t("backups.local"), "local")
+        self.schedule_adapter_combo.addItem(t("backups.proton_drive"), "protondrive")
+        schedule_form.addRow(t("backups.adapter"), self.schedule_adapter_combo)
+        self.schedule_interval_spin = QSpinBox()
+        self.schedule_interval_spin.setRange(5, 10080)
+        self.schedule_interval_spin.setValue(1440)
+        self.schedule_interval_spin.setSuffix(
+            t("backups.schedule_minutes_suffix", default=" min")
+        )
+        schedule_form.addRow(
+            t("backups.schedule_interval", default="Interval"),
+            self.schedule_interval_spin,
+        )
+        self.schedule_encrypt_checkbox = QCheckBox(t("backups.encryption"))
+        self.schedule_encrypt_checkbox.setChecked(True)
+        schedule_form.addRow("", self.schedule_encrypt_checkbox)
+        self.schedule_passphrase_edit = QLineEdit()
+        self.schedule_passphrase_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.schedule_passphrase_edit.setPlaceholderText(
+            t("backups.encryption_key_placeholder")
+        )
+        schedule_form.addRow(
+            t("backups.encryption_key"), self.schedule_passphrase_edit
+        )
+        scheduled_layout.addLayout(schedule_form)
+
+        schedule_actions = QHBoxLayout()
+        self.schedule_add_button = QPushButton(
+            t("backups.schedule_add", default="Add schedule")
+        )
+        self.schedule_add_button.setObjectName("PrimaryButton")
+        self.schedule_add_button.clicked.connect(self._add_schedule)
+        schedule_actions.addWidget(self.schedule_add_button)
+        self.schedule_toggle_button = QPushButton(
+            t("backups.schedule_toggle", default="Enable / Disable")
+        )
+        self.schedule_toggle_button.clicked.connect(self._toggle_selected_schedule)
+        schedule_actions.addWidget(self.schedule_toggle_button)
+        self.schedule_remove_button = QPushButton(
+            t("backups.schedule_remove", default="Remove")
+        )
+        self.schedule_remove_button.clicked.connect(self._remove_selected_schedule)
+        schedule_actions.addWidget(self.schedule_remove_button)
+        self.schedule_refresh_button = QPushButton(
+            t("backups.schedule_refresh", default="Refresh schedules")
+        )
+        self.schedule_refresh_button.clicked.connect(self._reload_schedules_table)
+        schedule_actions.addWidget(self.schedule_refresh_button)
+        schedule_actions.addStretch()
+        scheduled_layout.addLayout(schedule_actions)
+
+        self.schedules_table = QTableWidget(0, 6)
+        self.schedules_table.setHorizontalHeaderLabels(
+            [
+                t("backups.schedule_col_name", default="Name"),
+                t("backups.schedule_col_connection", default="Connection"),
+                t("backups.schedule_col_adapter", default="Adapter"),
+                t("backups.schedule_col_interval", default="Interval"),
+                t("backups.schedule_col_enabled", default="Enabled"),
+                t("backups.schedule_col_last", default="Last run"),
+            ]
+        )
+        self.schedules_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.schedules_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
+        self.schedules_table.setSelectionMode(
+            QTableWidget.SelectionMode.SingleSelection
+        )
+        self.schedules_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        configure_dense_table(self.schedules_table)
+        scheduled_layout.addWidget(self.schedules_table, 1)
         tabs.addTab(scheduled_widget, t("backups.scheduled_backups"))
 
     def update_connections(self, connections):
@@ -229,18 +405,36 @@ class BackupsWidget(QWidget):
         self._reload_connection_combo()
 
     def _reload_connection_combo(self) -> None:
-        current = self.connection_combo.currentData() if hasattr(self, "connection_combo") else None
-        self.connection_combo.clear()
-        for conn in self.connections or []:
-            if isinstance(conn, ConnectionConfig):
-                self.connection_combo.addItem(conn.name, conn)
-            elif isinstance(conn, dict):
-                name = str(conn.get("name") or conn.get("id") or "connection")
-                self.connection_combo.addItem(name, conn)
+        current = (
+            self.connection_combo.currentData()
+            if hasattr(self, "connection_combo")
+            else None
+        )
+        schedule_current = (
+            self.schedule_connection_combo.currentData()
+            if hasattr(self, "schedule_connection_combo")
+            else None
+        )
+        combos = [self.connection_combo]
+        if hasattr(self, "schedule_connection_combo"):
+            combos.append(self.schedule_connection_combo)
+        for combo in combos:
+            combo.clear()
+            for conn in self.connections or []:
+                if isinstance(conn, ConnectionConfig):
+                    combo.addItem(conn.name, conn)
+                elif isinstance(conn, dict):
+                    name = str(conn.get("name") or conn.get("id") or "connection")
+                    combo.addItem(name, conn)
         if current is not None:
             for idx in range(self.connection_combo.count()):
                 if self.connection_combo.itemData(idx) == current:
                     self.connection_combo.setCurrentIndex(idx)
+                    break
+        if schedule_current is not None and hasattr(self, "schedule_connection_combo"):
+            for idx in range(self.schedule_connection_combo.count()):
+                if self.schedule_connection_combo.itemData(idx) == schedule_current:
+                    self.schedule_connection_combo.setCurrentIndex(idx)
                     break
 
     def _adapter(self) -> LocalBackupAdapter:
@@ -255,6 +449,66 @@ class BackupsWidget(QWidget):
 
         if open_proton_drive_config(self):
             self._refresh_proton_status()
+
+    def _on_adapter_changed(self) -> None:
+        """Proton Drive backups must encrypt at rest before upload (opsec)."""
+        if self._selected_adapter_type() == "protondrive":
+            self.encrypt_checkbox.setChecked(True)
+            self.encrypt_checkbox.setEnabled(False)
+        else:
+            self.encrypt_checkbox.setEnabled(True)
+        self._refresh_proton_status()
+
+    def _announce(self, message: str, *, create_tab: bool) -> None:
+        if create_tab:
+            self.proton_status_label.setText(message)
+            self.proton_status_label.setStyleSheet("")
+        else:
+            self._set_status(message, "idle")
+
+    def _run_backup_job(
+        self,
+        job: Callable[[], Any],
+        *,
+        group: str,
+        busy_message: str,
+        on_ok: Callable[[Any], None],
+        create_tab: bool = False,
+        on_fail: Optional[Callable[[str], None]] = None,
+        queue: bool = False,
+    ) -> bool:
+        """Run ``job`` on a worker thread; other groups keep running concurrently."""
+
+        def _fail(message: str) -> None:
+            if on_fail is not None:
+                on_fail(message)
+            elif create_tab:
+                self.proton_status_label.setText(
+                    self.i18n.translate("backups.backup_failed_detail", error=message)
+                )
+            else:
+                self._set_status(
+                    self.i18n.translate("backups.refresh_failed", error=message),
+                    "fail",
+                )
+
+        started = self._jobs.submit(
+            group,
+            job,
+            on_ok,
+            _fail,
+            on_start=lambda: self._announce(busy_message, create_tab=create_tab),
+            queue=queue,
+        )
+        if not started:
+            self._announce(
+                self.i18n.translate(
+                    "backups.job_in_progress",
+                    default="A backup job is already running. Wait for it to finish.",
+                ),
+                create_tab=create_tab,
+            )
+        return started
 
     def _refresh_proton_status(self) -> None:
         """Show Proton Drive readiness only when that adapter is selected.
@@ -328,9 +582,10 @@ class BackupsWidget(QWidget):
 
         adapter_type = self.adapter_combo.currentData() or "local"
         compression = self.compression_combo.currentData() or "none"
-        encrypt = self.encrypt_checkbox.isChecked()
+        # Opsec: Proton Drive uploads are always DSMENC1-encrypted before rclone.
+        encrypt = True if adapter_type == "protondrive" else self.encrypt_checkbox.isChecked()
         enc_key = self.encryption_key_edit.text().strip() or None
-        if adapter_type == "protondrive" and encrypt and not enc_key:
+        if encrypt and not enc_key:
             self.proton_status_label.setText(t("backups.encryption_key_required"))
             return
 
@@ -340,36 +595,69 @@ class BackupsWidget(QWidget):
             "encryptionKey": enc_key,
             "adapterType": adapter_type,
         }
-        try:
+        manager = self.backup_manager
+        local_dir = self.backup_dir
+
+        def job() -> BackupInfo:
             if adapter_type == "protondrive":
-                adapter = self.backup_manager.get_adapter("protondrive")
+                adapter = manager.get_adapter("protondrive")
                 if adapter is None:
                     raise ProtonDriveNotConfiguredError(
-                        t("backups.proton_not_configured", error="adapter unavailable")
+                        "Proton Drive adapter unavailable"
                     )
             else:
-                adapter = self._adapter()
-            info = asyncio.run(
-                self.backup_manager.create_backup(adapter, connection, options)
+                adapter = LocalBackupAdapter(base_path=local_dir)
+            return asyncio.run(
+                manager.create_backup(adapter, connection, options)
             )
+
+        def on_ok(info: BackupInfo) -> None:
             self.proton_status_label.setText(
                 t("backups.backup_created_detail", name=info.name, path=info.path)
             )
             if adapter_type == "protondrive":
-                self.refresh_proton_backups()
+                self.refresh_proton_backups(queue=True)
             else:
-                self.refresh_backups()
-        except ProtonDriveNotConfiguredError as exc:
-            self.proton_status_label.setText(
-                t("backups.proton_not_configured", error=str(exc))
+                self.refresh_backups(queue=True)
+
+        def on_fail(message: str) -> None:
+            if "not configured" in message.lower() or "unavailable" in message.lower():
+                self.proton_status_label.setText(
+                    t("backups.proton_not_configured", error=message)
+                )
+            else:
+                self.proton_status_label.setText(
+                    t("backups.backup_failed_detail", error=message)
+                )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_CREATE,
+            busy_message=t("backups.create_in_progress", default="Creating backup…"),
+            on_ok=on_ok,
+            on_fail=on_fail,
+            create_tab=True,
+        )
+
+    def _refresh_backups_sync(self) -> None:
+        """Local FS list used only during widget construction (no event loop yet)."""
+        t = self.i18n.translate
+        self._list_source = "local"
+        try:
+            self._backups = asyncio.run(self._adapter().list_backups())
+            self._verify_results.clear()
+            self._populate_table()
+            self._set_status(
+                t("backups.verify_idle_count", count=len(self._backups)),
+                "idle",
             )
         except Exception as exc:
-            self.proton_status_label.setText(
-                t("backups.backup_failed_detail", error=str(exc))
-            )
+            self._backups = []
+            self._populate_table()
+            self._set_status(t("backups.refresh_failed", error=str(exc)), "fail")
 
-    def refresh_backups(self) -> None:
-        """Reload local backups into the table."""
+    def refresh_backups(self, *, queue: bool = False) -> None:
+        """Reload local backups into the table (off the GUI thread)."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:read")
@@ -377,25 +665,32 @@ class BackupsWidget(QWidget):
             self._set_status(str(exc), "fail")
             return
         self._list_source = "local"
-        try:
-            self._backups = asyncio.run(self._adapter().list_backups())
-        except Exception as exc:
-            self._backups = []
-            self._set_status(
-                t("backups.refresh_failed", error=str(exc)),
-                "fail",
-            )
-            self._populate_table()
-            return
+        local_dir = self.backup_dir
 
-        self._verify_results.clear()
-        self._populate_table()
-        self._set_status(
-            t("backups.verify_idle_count", count=len(self._backups)),
-            "idle",
+        def job() -> List[BackupInfo]:
+            return asyncio.run(LocalBackupAdapter(base_path=local_dir).list_backups())
+
+        def on_ok(backups: List[BackupInfo]) -> None:
+            self._backups = backups
+            self._verify_results.clear()
+            self._populate_table()
+            self._set_status(
+                t("backups.verify_idle_count", count=len(self._backups)),
+                "idle",
+            )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_LIST,
+            busy_message=t(
+                "backups.refresh_in_progress",
+                default="Refreshing local backups…",
+            ),
+            on_ok=on_ok,
+            queue=queue,
         )
 
-    def refresh_proton_backups(self) -> None:
+    def refresh_proton_backups(self, *, queue: bool = False) -> None:
         """List backups from Proton Drive when credentials/rclone are available."""
         t = self.i18n.translate
         try:
@@ -404,33 +699,47 @@ class BackupsWidget(QWidget):
             self._set_status(str(exc), "fail")
             return
         self._list_source = "protondrive"
-        try:
-            adapter = self.backup_manager.get_adapter("protondrive")
+        manager = self.backup_manager
+
+        def job() -> List[BackupInfo]:
+            adapter = manager.get_adapter("protondrive")
             if adapter is None:
                 raise ProtonDriveNotConfiguredError("Proton Drive adapter unavailable")
-            self._backups = asyncio.run(adapter.list_backups())
-        except ProtonDriveNotConfiguredError as exc:
-            self._backups = []
-            self._set_status(
-                t("backups.proton_not_configured", error=str(exc)),
-                "not_configured",
-            )
-            self._populate_table()
-            return
-        except Exception as exc:
-            self._backups = []
-            self._set_status(
-                t("backups.refresh_failed", error=str(exc)),
-                "fail",
-            )
-            self._populate_table()
-            return
+            return asyncio.run(adapter.list_backups())
 
-        self._verify_results.clear()
-        self._populate_table()
-        self._set_status(
-            t("backups.proton_listed", count=len(self._backups)),
-            "idle",
+        def on_ok(backups: List[BackupInfo]) -> None:
+            self._backups = backups
+            self._verify_results.clear()
+            self._populate_table()
+            self._set_status(
+                t("backups.proton_listed", count=len(self._backups)),
+                "idle",
+            )
+
+        def on_fail(message: str) -> None:
+            self._backups = []
+            self._populate_table()
+            if "not configured" in message.lower() or "unavailable" in message.lower():
+                self._set_status(
+                    t("backups.proton_not_configured", error=message),
+                    "not_configured",
+                )
+            else:
+                self._set_status(
+                    t("backups.refresh_failed", error=message),
+                    "fail",
+                )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_LIST,
+            busy_message=t(
+                "backups.proton_refresh_in_progress",
+                default="Listing Proton Drive backups…",
+            ),
+            on_ok=on_ok,
+            on_fail=on_fail,
+            queue=queue,
         )
 
     def _populate_table(self) -> None:
@@ -502,7 +811,7 @@ class BackupsWidget(QWidget):
         return next((b for b in self._backups if b.id == backup_id), None)
 
     def verify_selected(self) -> None:
-        """Verify SHA-256 for the selected backup."""
+        """Verify SHA-256 for the selected backup (off GUI thread)."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:read")
@@ -514,24 +823,24 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
 
-        if self._list_source == "protondrive" or (
-            backup.metadata or {}
-        ).get("destination") == "protondrive":
-            adapter = self.backup_manager.get_adapter("protondrive")
-            if isinstance(adapter, ProtonDriveBackupAdapter):
-                result = adapter.verify_remote_checksum(backup)
-            else:
-                result = {
-                    "ok": False,
-                    "status": "not_configured",
-                    "error": "Proton Drive adapter unavailable",
-                }
-        else:
-            result = self.backup_manager.verify_backup_checksum(backup)
-        self._verify_results[backup.id] = result
-        self._verify_results[backup.path] = result
-        self._populate_table()
-        self._present_checksum_result(result, single=True)
+        manager = self.backup_manager
+
+        def job() -> Dict[str, Any]:
+            # Adapter-aware: Proton rows are remote objects, not local paths.
+            return manager.verify_backup(backup)
+
+        def on_ok(result: Dict[str, Any]) -> None:
+            self._verify_results[backup.id] = result
+            self._verify_results[backup.path] = result
+            self._populate_table()
+            self._present_checksum_result(result, single=True)
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_VERIFY,
+            busy_message=t("backups.verify_in_progress", default="Verifying backup…"),
+            on_ok=on_ok,
+        )
 
     def verify_all(self) -> None:
         """Verify SHA-256 for every listed backup via parallel helpers."""
@@ -545,35 +854,66 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_backups"), "missing_checksum")
             return
 
-        results = self.backup_manager.verify_backups_parallel(self._backups)
-        by_id = {r.get("id"): r for r in results}
-        for backup in self._backups:
-            result = by_id.get(backup.id) or {
-                "ok": False,
-                "status": "not_found",
-                "error": "Verification result missing",
-            }
-            self._verify_results[backup.id] = result
-            self._verify_results[backup.path] = result
-        self._populate_table()
+        backups = list(self._backups)
+        manager = self.backup_manager
 
-        passed = sum(1 for r in results if r.get("ok"))
-        failed = len(results) - passed
-        if failed == 0:
-            self._set_status(
-                t("backups.verify_all_pass", count=passed),
-                "pass",
-            )
-        else:
-            self._set_status(
-                t(
-                    "backups.verify_all_fail",
-                    passed=passed,
-                    failed=failed,
-                    total=len(results),
-                ),
-                "fail",
-            )
+        def job() -> List[Dict[str, Any]]:
+            return manager.verify_backups_parallel(backups)
+
+        def on_ok(results: List[Dict[str, Any]]) -> None:
+            by_id = {r.get("id"): r for r in results}
+            for backup in self._backups:
+                result = by_id.get(backup.id) or {
+                    "ok": False,
+                    "status": "not_found",
+                    "error": "Verification result missing",
+                }
+                self._verify_results[backup.id] = result
+                self._verify_results[backup.path] = result
+            self._populate_table()
+            passed = sum(1 for r in results if r.get("ok"))
+            failed = len(results) - passed
+            if failed == 0:
+                self._set_status(
+                    t("backups.verify_all_pass", count=passed),
+                    "pass",
+                )
+            else:
+                self._set_status(
+                    t(
+                        "backups.verify_all_fail",
+                        passed=passed,
+                        failed=failed,
+                        total=len(results),
+                    ),
+                    "fail",
+                )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_VERIFY,
+            busy_message=t(
+                "backups.verify_all_in_progress",
+                default="Verifying all backups…",
+            ),
+            on_ok=on_ok,
+        )
+
+    def _prompt_passphrase(self, backup_name: str) -> Optional[str]:
+        """Ask for the DSMENC1 passphrase (never stored); None when cancelled."""
+        t = self.i18n.translate
+        text, ok = QInputDialog.getText(
+            self,
+            t("backups.passphrase_title", default="Encryption passphrase"),
+            t(
+                "backups.passphrase_prompt",
+                default="Passphrase for {name}:",
+                name=backup_name,
+            ),
+            QLineEdit.EchoMode.Password,
+        )
+        text = text.strip()
+        return text if ok and text else None
 
     def dry_run_selected(self) -> None:
         """Checksum + payload dry-run restore for the selected backup."""
@@ -588,55 +928,220 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
 
-        local_info = backup
-        temp_download: Optional[Path] = None
-        try:
-            if self._list_source == "protondrive" or (
-                backup.metadata or {}
-            ).get("destination") == "protondrive":
-                adapter = self.backup_manager.get_adapter("protondrive")
-                if not isinstance(adapter, ProtonDriveBackupAdapter):
-                    self._set_status(
-                        t(
-                            "backups.proton_not_configured",
-                            error="adapter unavailable",
-                        ),
-                        "not_configured",
-                    )
-                    return
-                temp_download = Path(asyncio.run(adapter.restore_backup(backup)))
-                local_info = BackupInfo(
-                    id=backup.id,
-                    name=backup.name,
-                    path=str(temp_download),
-                    size=backup.size,
-                    createdAt=backup.createdAt,
-                    status=backup.status,
-                    metadata=dict(backup.metadata or {}),
+        passphrase: Optional[str] = None
+        if (backup.metadata or {}).get("encryption"):
+            passphrase = self.encryption_key_edit.text().strip() or None
+            if passphrase is None:
+                passphrase = self._prompt_passphrase(backup.name)
+            if not passphrase:
+                self._set_status(
+                    t(
+                        "backups.dry_run_passphrase_required",
+                        default="Encrypted backup: enter the encryption passphrase to run a dry-run restore.",
+                    ),
+                    "missing_checksum",
                 )
-            result = self.backup_manager.dry_run_restore(local_info)
-        finally:
-            if temp_download is not None:
-                temp_download.unlink(missing_ok=True)
+                return
 
-        self._verify_results[backup.id] = result
-        self._verify_results[backup.path] = result
-        self._populate_table()
-        if result.get("ok"):
-            integrity = result.get("integrity")
-            detail = (
-                t("backups.dry_run_pass_integrity", integrity=integrity)
-                if integrity
-                else t("backups.dry_run_pass")
+        manager = self.backup_manager
+
+        def job() -> Dict[str, Any]:
+            local_info = backup
+            temp_download: Optional[Path] = None
+            try:
+                if manager.is_remote_backup(backup):
+                    adapter = manager.get_adapter("protondrive")
+                    if not isinstance(adapter, ProtonDriveBackupAdapter):
+                        return {
+                            "ok": False,
+                            "status": "not_configured",
+                            "error": "Proton Drive adapter unavailable",
+                        }
+                    temp_download = Path(asyncio.run(adapter.restore_backup(backup)))
+                    local_info = BackupInfo(
+                        id=backup.id,
+                        name=backup.name,
+                        path=str(temp_download),
+                        size=backup.size,
+                        createdAt=backup.createdAt,
+                        status=backup.status,
+                        metadata=dict(backup.metadata or {}),
+                    )
+                return manager.dry_run_restore(local_info, encryption_key=passphrase)
+            finally:
+                if temp_download is not None:
+                    temp_download.unlink(missing_ok=True)
+
+        def on_ok(result: Dict[str, Any]) -> None:
+            self._verify_results[backup.id] = result
+            self._verify_results[backup.path] = result
+            self._populate_table()
+            if result.get("ok"):
+                integrity = result.get("integrity")
+                detail = (
+                    t("backups.dry_run_pass_integrity", integrity=integrity)
+                    if integrity
+                    else t("backups.dry_run_pass")
+                )
+                self._set_status(detail, "pass")
+            else:
+                stage = result.get("stage") or "dry_run"
+                error = result.get("error") or t("backups.dry_run_failed")
+                self._set_status(
+                    t("backups.dry_run_fail", stage=stage, error=error),
+                    str(result.get("status") or "fail"),
+                )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_VERIFY,
+            busy_message=t(
+                "backups.dry_run_in_progress",
+                default="Dry-run restore in progress…",
+            ),
+            on_ok=on_ok,
+        )
+
+    def _reload_schedules_table(self) -> None:
+        """Refresh the scheduled backups table from disk."""
+        if not hasattr(self, "schedules_table"):
+            return
+        schedules = self.schedule_manager.get_schedules()
+        self.schedules_table.setRowCount(0)
+        for schedule in schedules:
+            row = self.schedules_table.rowCount()
+            self.schedules_table.insertRow(row)
+            last = (
+                schedule.last_run.strftime("%Y-%m-%d %H:%M:%S")
+                if schedule.last_run
+                else "—"
             )
-            self._set_status(detail, "pass")
-        else:
-            stage = result.get("stage") or "dry_run"
-            error = result.get("error") or t("backups.dry_run_failed")
+            values = [
+                schedule.name,
+                ", ".join(schedule.connections)
+                if isinstance(schedule.connections, list)
+                else str(schedule.connections),
+                schedule.adapter_type,
+                f"{schedule.interval_minutes}"
+                f"{self.i18n.translate('backups.schedule_minutes_suffix', default=' min')}",
+                self.i18n.translate("common.yes")
+                if schedule.enabled
+                else self.i18n.translate("common.no"),
+                last,
+            ]
+            for col, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                item.setData(Qt.ItemDataRole.UserRole, schedule.id)
+                self.schedules_table.setItem(row, col, item)
+
+    def _selected_schedule_id(self) -> Optional[str]:
+        if not hasattr(self, "schedules_table"):
+            return None
+        rows = self.schedules_table.selectionModel().selectedRows()
+        if not rows:
+            return None
+        item = self.schedules_table.item(rows[0].row(), 0)
+        if item is None:
+            return None
+        return str(item.data(Qt.ItemDataRole.UserRole) or "") or None
+
+    def _add_schedule(self) -> None:
+        t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:create")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
+
+        name = self.schedule_name_edit.text().strip()
+        connection = self._as_connection_config(
+            self.schedule_connection_combo.currentData()
+        )
+        if not name:
             self._set_status(
-                t("backups.dry_run_fail", stage=stage, error=error),
-                str(result.get("status") or "fail"),
+                t("backups.schedule_name_required", default="Schedule name is required"),
+                "fail",
             )
+            return
+        if connection is None:
+            self._set_status(t("backups.no_connection_selected"), "fail")
+            return
+
+        adapter_type = str(self.schedule_adapter_combo.currentData() or "local")
+        encrypt = True if adapter_type == "protondrive" else self.schedule_encrypt_checkbox.isChecked()
+        enc_key = self.schedule_passphrase_edit.text().strip() or None
+        if encrypt and not enc_key:
+            self._set_status(t("backups.encryption_key_required"), "fail")
+            return
+
+        self.schedule_manager.create_schedule(
+            {
+                "name": name,
+                "intervalMinutes": int(self.schedule_interval_spin.value()),
+                "enabled": True,
+                "adapterType": adapter_type,
+                "adapterConfig": {
+                    "encryption": encrypt,
+                    "encryptionKey": enc_key,
+                    "compression": "none",
+                },
+                "connections": [connection.id],
+            }
+        )
+        if not self.schedule_manager.running:
+            self.schedule_manager.start()
+        self.schedule_name_edit.clear()
+        self._reload_schedules_table()
+        self._set_status(
+            t("backups.schedule_added", default="Schedule “{name}” added", name=name),
+            "pass",
+        )
+
+    def _toggle_selected_schedule(self) -> None:
+        schedule_id = self._selected_schedule_id()
+        if not schedule_id:
+            self._set_status(
+                self.i18n.translate(
+                    "backups.schedule_none_selected",
+                    default="Select a schedule first",
+                ),
+                "fail",
+            )
+            return
+        schedule = self.schedule_manager.get_schedule(schedule_id)
+        if schedule is None:
+            return
+        payload = schedule.to_dict()
+        payload["enabled"] = not schedule.enabled
+        # to_dict uses camelCase keys matching create/update
+        self.schedule_manager.update_schedule(
+            {
+                "id": payload["id"],
+                "name": payload["name"],
+                "intervalMinutes": payload["intervalMinutes"],
+                "enabled": payload["enabled"],
+                "adapterType": payload["adapterType"],
+                "adapterConfig": payload.get("adapterConfig"),
+                "connections": payload["connections"],
+            }
+        )
+        if payload["enabled"] and not self.schedule_manager.running:
+            self.schedule_manager.start()
+        self._reload_schedules_table()
+
+    def _remove_selected_schedule(self) -> None:
+        schedule_id = self._selected_schedule_id()
+        if not schedule_id:
+            self._set_status(
+                self.i18n.translate(
+                    "backups.schedule_none_selected",
+                    default="Select a schedule first",
+                ),
+                "fail",
+            )
+            return
+        self.schedule_manager.delete_schedule(schedule_id)
+        self._reload_schedules_table()
 
     def _present_checksum_result(
         self, result: Dict[str, Any], *, single: bool = False

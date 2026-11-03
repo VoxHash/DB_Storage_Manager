@@ -100,6 +100,13 @@ class LoginDialog(QDialog):
     def _try_login(self) -> None:
         t = self.i18n.translate
         auth = get_auth_manager()
+        if auth.is_locked_out(self.username_edit.text().strip()):
+            QMessageBox.warning(
+                self,
+                t("auth.login_failed", default="Sign in failed"),
+                t("auth.login_locked"),
+            )
+            return
         user = auth.authenticate(
             self.username_edit.text().strip(),
             self.password_edit.text(),

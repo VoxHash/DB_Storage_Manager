@@ -8,8 +8,8 @@ import asyncio
 import copy
 from typing import Any, Dict, List, Optional, Tuple
 
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QBrush, QColor, QIcon
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSystemTrayIcon,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -42,7 +41,9 @@ from ..db.factory import DatabaseConnectionFactory
 from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
+from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
+from .jobs import JobRunner
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -102,11 +103,25 @@ def _format_metric_value(key: str, value: Any) -> str:
     return str(value)
 
 
+_GROUP_START = "monitor-start"
+_GROUP_POLL = "monitor-poll"
+
+
 class MonitoringWidget(QWidget):
-    """Real-time monitoring widget"""
+    """Real-time monitoring widget.
+
+    Tunnel setup, connection checkout and every poll run on worker threads
+    (``JobRunner``); the Qt timer only schedules them and the GUI thread only
+    renders results, so monitoring never freezes the window and runs alongside
+    Create / Refresh / Verify backup jobs.
+    """
+
+    # Alerts are raised inside the poll worker thread; marshal to the GUI thread.
+    alert_raised = pyqtSignal(object)
 
     def __init__(self, connections):
         super().__init__()
+        self._jobs = JobRunner(self)
         self.connections = connections
         self.i18n = get_i18n_manager()
         self.secure_store = SecureStore()
@@ -119,13 +134,16 @@ class MonitoringWidget(QWidget):
         self.growth_predictor = None
         self.capacity_planner = None
         self.notification_dispatcher = NotificationDispatcher()
-        self._tray_icon: Optional[QSystemTrayIcon] = None
+        self._tray = None
+        self._can_read = True
+        self._can_write = True
         self._threshold_spins: Dict[str, Dict[str, QDoubleSpinBox]] = {}
         self.setObjectName("glassmorphism")
         self.init_ui()
         self._load_alert_prefs()
-        self._setup_desktop_notifications()
+        self.alert_raised.connect(self._handle_alert)
         apply_glassmorphism(self)
+        self.apply_rbac()
 
     def init_ui(self):
         """Initialize UI"""
@@ -389,7 +407,7 @@ class MonitoringWidget(QWidget):
         """Handle connection selection change"""
         if index > 0:
             self.current_connection = self.connection_combo.itemData(index)
-            self.start_button.setEnabled(self.monitor is None)
+            self.start_button.setEnabled(self.monitor is None and self._can_read)
         else:
             self.current_connection = None
             self.start_button.setEnabled(False)
@@ -442,6 +460,8 @@ class MonitoringWidget(QWidget):
             self.monitor.alert_manager.apply_thresholds(thresholds)
 
     def _save_thresholds(self) -> None:
+        if not self._require("monitoring:write"):
+            return
         t = self.i18n.translate
         thresholds = self._read_threshold_spins()
         # Validate via a temporary AlertManager
@@ -472,6 +492,8 @@ class MonitoringWidget(QWidget):
         self._populate_threshold_spins(copy.deepcopy(DEFAULT_ALERT_THRESHOLDS))
 
     def _save_channels(self) -> None:
+        if not self._require("monitoring:write"):
+            return
         t = self.i18n.translate
         channels = {
             "desktop": self.desktop_channel_check.isChecked(),
@@ -516,49 +538,96 @@ class MonitoringWidget(QWidget):
             self.notification_log.setItem(row, 2, chan_item)
             self.notification_log.setItem(row, 3, msg_item)
 
-    def _setup_desktop_notifications(self) -> None:
-        """Create a system-tray icon for real OS desktop notifications when available."""
-        if not QSystemTrayIcon.isSystemTrayAvailable():
-            self.notification_dispatcher.set_desktop_handler(None)
-            return
-        if self._tray_icon is None:
-            self._tray_icon = QSystemTrayIcon(self)
-            self._tray_icon.setIcon(self.windowIcon() or QIcon())
-            self._tray_icon.setToolTip(
-                self.i18n.translate("app.title", default="DB Storage Manager")
+    def attach_tray(self, tray) -> None:
+        """Deliver desktop alerts through the shared application tray icon."""
+        self._tray = tray
+        self.notification_dispatcher.set_desktop_handler(tray.notify)
+
+    def apply_rbac(self) -> None:
+        """Gate monitoring controls: read starts/polls, write edits prefs / acks."""
+        auth = get_auth_manager()
+        self._can_read = auth.has_permission("monitoring:read")
+        self._can_write = auth.has_permission("monitoring:write")
+        self.start_button.setEnabled(
+            self._can_read and self.current_connection is not None and self.monitor is None
+        )
+        for widget in (
+            self.save_thresholds_button,
+            self.reset_thresholds_button,
+            self.save_channels_button,
+            self.clear_notif_button,
+            self.desktop_channel_check,
+            self.in_app_channel_check,
+        ):
+            widget.setEnabled(self._can_write)
+        for spins in self._threshold_spins.values():
+            for spin in spins.values():
+                spin.setEnabled(self._can_write)
+        running = self.monitor is not None
+        self.acknowledge_all_button.setEnabled(self._can_write and running)
+        self.acknowledge_button.setEnabled(
+            self._can_write
+            and running
+            and bool(self.alerts_table.selectionModel().selectedRows())
+        )
+
+    def _require(self, permission: str) -> bool:
+        try:
+            get_auth_manager().require(permission)
+            return True
+        except PermissionDenied as exc:
+            QMessageBox.warning(
+                self,
+                self.i18n.translate("auth.denied", default="Access denied"),
+                str(exc),
             )
-            self._tray_icon.setVisible(True)
+            return False
 
-        def _show(title: str, message: str, severity: str) -> None:
-            if self._tray_icon is None:
-                return
-            icon = QSystemTrayIcon.MessageIcon.Warning
-            if severity == AlertSeverity.CRITICAL.value:
-                icon = QSystemTrayIcon.MessageIcon.Critical
-            elif severity == AlertSeverity.INFO.value:
-                icon = QSystemTrayIcon.MessageIcon.Information
-            self._tray_icon.showMessage(title, message, icon, 8000)
+    def status_summary(self) -> str:
+        """One-line monitoring status for the system tray menu."""
+        t = self.i18n.translate
+        if self.monitor is None or not self.current_connection:
+            return ""
+        counts = self.monitor.alert_manager.get_counts()
+        return t(
+            "tray.monitoring_status",
+            connection=self.current_connection.get("name", ""),
+            alerts=counts.get("total", 0),
+        )
 
-        self.notification_dispatcher.set_desktop_handler(_show)
+    def shutdown(self) -> None:
+        """Stop timers and wait briefly for in-flight polls (window close)."""
+        self.update_timer.stop()
+        self._jobs.wait_all(3000)
 
     def _start_monitoring(self):
-        """Start monitoring via timer-driven poll_once against real modules."""
-        if not self.current_connection:
+        """Start monitoring: tunnel + checkout on a worker, then timer-driven polls."""
+        if not self.current_connection or self.monitor is not None:
             return
+        if not self._require("monitoring:read"):
+            return
+        connection = self.current_connection
+        t = self.i18n.translate
 
-        try:
+        def job():
             # Open/reuse SSH tunnel before driver connect (same as Connections test)
-            kwargs = ensure_tunnel_for_connection(self.current_connection)
-            ssh = self.current_connection.get("ssh_config") or {}
+            kwargs = ensure_tunnel_for_connection(connection)
+            config = ConnectionConfig(**kwargs)
+            return asyncio.run(DatabaseConnectionFactory.acquire(config))
+
+        def on_start():
+            self.start_button.setEnabled(False)
+            self.connection_combo.setEnabled(False)
+            self.status_label.setText(
+                t("monitoring.status_connecting", default="Connecting…")
+            )
+
+        def on_ok(db):
+            ssh = connection.get("ssh_config") or {}
             if ssh.get("enabled"):
                 self._monitoring_tunnel_id = str(
-                    self.current_connection.get("id")
-                    or self.current_connection.get("name")
-                    or "session"
+                    connection.get("id") or connection.get("name") or "session"
                 )
-            config = ConnectionConfig(**kwargs)
-            db = asyncio.run(DatabaseConnectionFactory.acquire(config))
-
             self._db = db
             self.monitor = DatabaseMonitor(db)
             self.monitor.monitoring = True
@@ -571,31 +640,46 @@ class MonitoringWidget(QWidget):
             self.growth_predictor = StorageGrowthPredictor(db)
             self.capacity_planner = CapacityPlanner(db)
 
-            self.start_button.setEnabled(False)
             self.stop_button.setEnabled(True)
             self.refresh_button.setEnabled(True)
-            self.acknowledge_all_button.setEnabled(True)
-            self.connection_combo.setEnabled(False)
-
+            self.apply_rbac()
             self._poll_now()
             self.update_timer.start()
-        except Exception as e:
+
+        def on_fail(message):
             self._cleanup_monitor()
-            QMessageBox.critical(self, self.i18n.translate("common.error"), str(e))
+            self.connection_combo.setEnabled(True)
+            self.start_button.setEnabled(
+                self._can_read and self.current_connection is not None
+            )
+            self.status_label.setText(t("monitoring.status_idle"))
+            QMessageBox.critical(self, t("common.error"), message)
+
+        if not self._jobs.submit(
+            _GROUP_START, job, on_ok, on_fail, on_start=on_start
+        ):
+            return
 
     def _stop_monitoring(self):
-        """Stop monitoring"""
+        """Stop monitoring; the checkout is released after any in-flight poll."""
         self.update_timer.stop()
+        db = self._db
         if self.monitor:
             self.monitor.monitoring = False
             self.monitor.metrics_collector.stop_collecting()
-        if self._db is not None:
-            try:
-                asyncio.run(DatabaseConnectionFactory.release(self._db))
-            except Exception:
-                pass
         self._cleanup_monitor()
-        self.start_button.setEnabled(self.current_connection is not None)
+        if db is not None:
+
+            def release():
+                asyncio.run(DatabaseConnectionFactory.release(db))
+
+            # Same group as polls: runs once the current poll (if any) finished.
+            self._jobs.submit(
+                _GROUP_POLL, release, lambda _r: None, lambda _m: None, queue=True
+            )
+        self.start_button.setEnabled(
+            self._can_read and self.current_connection is not None
+        )
         self.stop_button.setEnabled(False)
         self.refresh_button.setEnabled(False)
         self.acknowledge_button.setEnabled(False)
@@ -618,19 +702,33 @@ class MonitoringWidget(QWidget):
         self._monitoring_tunnel_id = None
 
     def _poll_now(self):
-        """Run one real poll cycle and refresh the tables."""
-        if not self.monitor:
+        """Run one real poll cycle on a worker thread, then refresh the tables."""
+        monitor = self.monitor
+        if monitor is None:
             return
-        try:
-            asyncio.run(self.monitor.poll_once())
-            self._update_display()
-        except Exception as e:
-            self.status_label.setText(
-                self.i18n.translate("monitoring.poll_failed", error=str(e))
-            )
+
+        def job():
+            asyncio.run(monitor.poll_once())
+
+        def on_ok(_result):
+            if self.monitor is monitor:
+                self._update_display()
+
+        def on_fail(message):
+            if self.monitor is monitor:
+                self.status_label.setText(
+                    self.i18n.translate("monitoring.poll_failed", error=message)
+                )
+
+        # A poll still running (slow SSH link) simply skips this timer tick.
+        self._jobs.submit(_GROUP_POLL, job, on_ok, on_fail)
 
     def _on_alert(self, alert: Alert):
-        """Handle new alert from AlertManager callbacks — fire notification channels."""
+        """AlertManager callback (poll worker thread) - hand off to the GUI thread."""
+        self.alert_raised.emit(alert)
+
+    def _handle_alert(self, alert: Alert):
+        """Fire notification channels on the GUI thread."""
         self.notification_dispatcher.notify(alert)
         self._refresh_notification_log()
 
@@ -640,10 +738,12 @@ class MonitoringWidget(QWidget):
 
     def _on_alert_selection_changed(self):
         has_selection = bool(self.alerts_table.selectionModel().selectedRows())
-        self.acknowledge_button.setEnabled(bool(self.monitor) and has_selection)
+        self.acknowledge_button.setEnabled(
+            bool(self.monitor) and has_selection and self._can_write
+        )
 
     def _acknowledge_selected(self):
-        if not self.monitor:
+        if not self.monitor or not self._require("monitoring:write"):
             return
         ids: List[str] = []
         for index in self.alerts_table.selectionModel().selectedRows():
@@ -658,7 +758,7 @@ class MonitoringWidget(QWidget):
         self._update_display()
 
     def _acknowledge_all(self):
-        if not self.monitor:
+        if not self.monitor or not self._require("monitoring:write"):
             return
         self.monitor.alert_manager.acknowledge_all()
         self._update_display()
@@ -707,7 +807,9 @@ class MonitoringWidget(QWidget):
         rows = [(k, v) for k, v in metrics.items() if k != "timestamp"]
         self.metrics_table.setRowCount(len(rows))
         for row, (key, value) in enumerate(rows):
-            label = _METRIC_LABELS.get(key, key)
+            label = self.i18n.translate(
+                f"monitoring.metric_{key}", default=_METRIC_LABELS.get(key, key)
+            )
             self.metrics_table.setItem(row, 0, QTableWidgetItem(label))
             self.metrics_table.setItem(
                 row, 1, QTableWidgetItem(_format_metric_value(key, value))
@@ -720,7 +822,11 @@ class MonitoringWidget(QWidget):
             brush = QBrush(_SEVERITY_COLORS.get(severity, _SEVERITY_COLORS["info"]))
             time_item = QTableWidgetItem(str(alert.get("timestamp", "")))
             time_item.setData(Qt.ItemDataRole.UserRole, alert.get("id"))
-            sev_item = QTableWidgetItem(severity.upper())
+            sev_item = QTableWidgetItem(
+                self.i18n.translate(
+                    f"monitoring.severity_{severity}", default=severity.upper()
+                )
+            )
             title_item = QTableWidgetItem(str(alert.get("title", "")))
             msg_item = QTableWidgetItem(str(alert.get("message", "")))
             src_item = QTableWidgetItem(str(alert.get("source", "")))
@@ -751,8 +857,15 @@ class MonitoringWidget(QWidget):
             status = str(check_data.get("status", "unknown"))
             detail = str(check_data.get("message", ""))
             brush = QBrush(_STATUS_COLORS.get(status, _STATUS_COLORS["unknown"]))
-            name_item = QTableWidgetItem(check_name.replace("_", " ").title())
-            status_item = QTableWidgetItem(status)
+            name_item = QTableWidgetItem(
+                self.i18n.translate(
+                    f"monitoring.check_{check_name}",
+                    default=check_name.replace("_", " ").title(),
+                )
+            )
+            status_item = QTableWidgetItem(
+                self.i18n.translate(f"monitoring.status_{status}", default=status)
+            )
             detail_item = QTableWidgetItem(detail)
             for item in (name_item, status_item, detail_item):
                 item.setForeground(brush)
@@ -763,17 +876,33 @@ class MonitoringWidget(QWidget):
         if self.performance_analyzer:
             stats = self.performance_analyzer.get_query_statistics()
             summary = self.monitor.get_performance_summary()
+            tr = self.i18n.translate
             self.performance_text.setPlainText(
-                "Query Performance Statistics:\n"
-                f"Total Queries: {stats.get('totalQueries', 0)}\n"
-                f"Average Execution Time: {stats.get('averageExecutionTime', 0):.2f}ms\n"
-                f"Slow Queries: {stats.get('slowQueries', 0)}\n"
-                f"Error Queries: {stats.get('errorQueries', 0)}\n"
-                "\nMonitor Summary:\n"
-                f"Average Connections: {summary.get('averageConnections', 0):.2f}\n"
-                f"Max Connections: {summary.get('maxConnections', 0)}\n"
-                f"Average Cache Hit Ratio: {summary.get('averageCacheHitRatio', 0):.2f}%\n"
-                f"Data Points: {summary.get('dataPoints', 0)}\n"
+                "\n".join(
+                    [
+                        tr("monitoring.perf_stats_title"),
+                        tr("monitoring.perf_total_queries", value=stats.get("totalQueries", 0)),
+                        tr(
+                            "monitoring.perf_avg_time",
+                            value=f"{stats.get('averageExecutionTime', 0):.2f}",
+                        ),
+                        tr("monitoring.perf_slow_queries", value=stats.get("slowQueries", 0)),
+                        tr("monitoring.perf_error_queries", value=stats.get("errorQueries", 0)),
+                        "",
+                        tr("monitoring.perf_summary_title"),
+                        tr(
+                            "monitoring.perf_avg_connections",
+                            value=f"{summary.get('averageConnections', 0):.2f}",
+                        ),
+                        tr("monitoring.perf_max_connections", value=summary.get("maxConnections", 0)),
+                        tr(
+                            "monitoring.perf_avg_cache",
+                            value=f"{summary.get('averageCacheHitRatio', 0):.2f}",
+                        ),
+                        tr("monitoring.perf_data_points", value=summary.get("dataPoints", 0)),
+                    ]
+                )
+                + "\n"
             )
 
     def update_connections(self, connections):

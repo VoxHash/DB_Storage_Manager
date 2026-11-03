@@ -139,7 +139,9 @@ def test_suggest_uses_provided_explain_plan_without_connection():
     asyncio.run(run())
 
 
-def test_query_widget_offscreen_smoke(tmp_path: Path, monkeypatch):
+def test_query_widget_offscreen_smoke(
+    tmp_path: Path, monkeypatch, isolated_secure_store
+):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     pytest.importorskip("PyQt6.QtWidgets")
     from PyQt6.QtWidgets import QApplication

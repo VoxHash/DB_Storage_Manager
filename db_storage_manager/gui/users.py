@@ -32,6 +32,11 @@ from ..security.store import SecureStore
 from .utils import apply_glassmorphism
 
 
+def role_label(role: UserRole) -> str:
+    """Localized role name (the stored value stays ``admin`` / ``user`` / ...)."""
+    return get_i18n_manager().translate(f"auth.role_{role.value}", default=role.value)
+
+
 class _UserDialog(QDialog):
     """Create or edit a local user (role / password)."""
 
@@ -47,6 +52,7 @@ class _UserDialog(QDialog):
         parent=None,
     ):
         super().__init__(parent)
+        t = get_i18n_manager().translate
         self.setWindowTitle(title)
         self.setModal(True)
         self.setMinimumWidth(360)
@@ -54,19 +60,19 @@ class _UserDialog(QDialog):
         layout = QFormLayout(self)
         self.username_edit = QLineEdit(username)
         self.username_edit.setEnabled(username_editable)
-        layout.addRow("Username", self.username_edit)
+        layout.addRow(t("auth.username", default="Username"), self.username_edit)
         self.email_edit = QLineEdit(email)
-        layout.addRow("Email", self.email_edit)
+        layout.addRow(t("auth.email"), self.email_edit)
         self.role_combo = QComboBox()
         for r in UserRole:
-            self.role_combo.addItem(r.value, r)
+            self.role_combo.addItem(role_label(r), r)
         idx = self.role_combo.findData(role)
         if idx >= 0:
             self.role_combo.setCurrentIndex(idx)
-        layout.addRow("Role", self.role_combo)
+        layout.addRow(t("auth.role"), self.role_combo)
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addRow("Password", self.password_edit)
+        layout.addRow(t("auth.password", default="Password"), self.password_edit)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
@@ -112,7 +118,13 @@ class UsersAdminWidget(QWidget):
 
         self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ["Username", "Email", "Role", "Enabled", "Last login"]
+            [
+                t("auth.username", default="Username"),
+                t("auth.email"),
+                t("auth.role"),
+                t("auth.col_enabled"),
+                t("auth.col_last_login"),
+            ]
         )
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
@@ -164,22 +176,18 @@ class UsersAdminWidget(QWidget):
         apply_glassmorphism(self)
 
     def refresh(self) -> None:
+        t = self.i18n.translate
         auth = get_auth_manager()
         auth.reload()
         users = auth.list_users()
         active = auth.is_rbac_active()
         current = auth.current_user
         if not active:
-            self.status_label.setText(
-                "RBAC inactive (single-user open mode). "
-                "Bootstrap a local admin to require sign-in on this "
-                "workstation. CLI: db-storage-manager-bootstrap"
-            )
+            self.status_label.setText(t("auth.status_inactive"))
         else:
-            who = current.username if current else "(not signed in)"
+            who = current.username if current else t("auth.not_signed_in")
             self.status_label.setText(
-                f"RBAC active — {len(users)} user(s). "
-                f"Signed in as: {who}"
+                t("auth.status_active", count=len(users), user=who)
             )
         self.bootstrap_btn.setEnabled(not active)
         can_manage = auth.has_permission("users:manage")
@@ -194,8 +202,8 @@ class UsersAdminWidget(QWidget):
             values = [
                 user.username,
                 user.email,
-                user.role.value,
-                "Yes" if user.enabled else "No",
+                role_label(user.role),
+                t("common.yes") if user.enabled else t("common.no"),
                 user.last_login or "—",
             ]
             for col, value in enumerate(values):
@@ -209,8 +217,9 @@ class UsersAdminWidget(QWidget):
         return item.text() if item else None
 
     def _bootstrap(self) -> None:
+        t = self.i18n.translate
         dlg = _UserDialog(
-            title="Bootstrap first admin",
+            title=t("auth.bootstrap_title"),
             role=UserRole.ADMIN,
             require_password=True,
             parent=self,
@@ -232,19 +241,19 @@ class UsersAdminWidget(QWidget):
             auth.reload()
             auth.authenticate(vals["username"], vals["password"])
         except (ValueError, RuntimeError) as exc:
-            QMessageBox.critical(self, "Bootstrap failed", str(exc))
+            QMessageBox.critical(self, t("auth.bootstrap_failed"), str(exc))
             return
         QMessageBox.information(
             self,
-            "RBAC enabled",
-            f"Admin '{vals['username']}' created. "
-            "Sign-in is now required on this workstation.",
+            t("auth.rbac_enabled_title"),
+            t("auth.rbac_enabled_body", user=vals["username"]),
         )
         self.refresh()
         self.users_changed.emit()
 
     def _add_user(self) -> None:
-        dlg = _UserDialog(title="Add user", parent=self)
+        t = self.i18n.translate
+        dlg = _UserDialog(title=t("auth.add_user_title"), parent=self)
         if dlg.exec() != QDialog.DialogCode.Accepted:
             return
         vals = dlg.values()
@@ -256,7 +265,7 @@ class UsersAdminWidget(QWidget):
                 role=vals["role"] or UserRole.USER,
             )
         except (ValueError, PermissionDenied) as exc:
-            QMessageBox.warning(self, "Add user", str(exc))
+            QMessageBox.warning(self, t("auth.add_user_title"), str(exc))
             return
         self.refresh()
         self.users_changed.emit()
@@ -264,14 +273,19 @@ class UsersAdminWidget(QWidget):
     def _change_role(self) -> None:
         username = self._selected_username()
         if not username:
-            QMessageBox.information(self, "Users", "Select a user first.")
+            QMessageBox.information(
+                self,
+                self.i18n.translate("auth.users_title"),
+                self.i18n.translate("auth.select_user_first"),
+            )
             return
         auth = get_auth_manager()
         user = auth.get_user(username)
         if not user:
             return
+        t = self.i18n.translate
         dlg = _UserDialog(
-            title=f"Change role — {username}",
+            title=t("auth.change_role_title", user=username),
             username=username,
             email=user.email,
             role=user.role,
@@ -285,7 +299,7 @@ class UsersAdminWidget(QWidget):
         try:
             auth.set_user_role(username, dlg.values()["role"])
         except (ValueError, PermissionDenied) as exc:
-            QMessageBox.warning(self, "Change role", str(exc))
+            QMessageBox.warning(self, t("auth.change_role_title", user=username), str(exc))
             return
         self.refresh()
         self.users_changed.emit()
@@ -293,10 +307,15 @@ class UsersAdminWidget(QWidget):
     def _reset_password(self) -> None:
         username = self._selected_username()
         if not username:
-            QMessageBox.information(self, "Users", "Select a user first.")
+            QMessageBox.information(
+                self,
+                self.i18n.translate("auth.users_title"),
+                self.i18n.translate("auth.select_user_first"),
+            )
             return
+        t = self.i18n.translate
         dlg = _UserDialog(
-            title=f"Reset password — {username}",
+            title=t("auth.reset_password_title", user=username),
             username=username,
             username_editable=False,
             require_password=True,
@@ -311,15 +330,23 @@ class UsersAdminWidget(QWidget):
                 username, dlg.values()["password"]
             )
         except (ValueError, PermissionDenied) as exc:
-            QMessageBox.warning(self, "Reset password", str(exc))
+            QMessageBox.warning(
+                self, t("auth.reset_password_title", user=username), str(exc)
+            )
             return
-        QMessageBox.information(self, "Users", "Password updated.")
+        QMessageBox.information(
+            self, t("auth.users_title"), t("auth.password_updated")
+        )
         self.refresh()
 
     def _toggle_enabled(self) -> None:
         username = self._selected_username()
         if not username:
-            QMessageBox.information(self, "Users", "Select a user first.")
+            QMessageBox.information(
+                self,
+                self.i18n.translate("auth.users_title"),
+                self.i18n.translate("auth.select_user_first"),
+            )
             return
         auth = get_auth_manager()
         user = auth.get_user(username)
@@ -328,7 +355,11 @@ class UsersAdminWidget(QWidget):
         try:
             auth.set_user_enabled(username, not user.enabled)
         except (ValueError, PermissionDenied) as exc:
-            QMessageBox.warning(self, "Enable / Disable", str(exc))
+            QMessageBox.warning(
+                self,
+                self.i18n.translate("auth.toggle_enabled", default="Enable / Disable"),
+                str(exc),
+            )
             return
         self.refresh()
         self.users_changed.emit()
@@ -336,19 +367,26 @@ class UsersAdminWidget(QWidget):
     def _delete_user(self) -> None:
         username = self._selected_username()
         if not username:
-            QMessageBox.information(self, "Users", "Select a user first.")
+            QMessageBox.information(
+                self,
+                self.i18n.translate("auth.users_title"),
+                self.i18n.translate("auth.select_user_first"),
+            )
             return
+        t = self.i18n.translate
         reply = QMessageBox.question(
             self,
-            "Delete user",
-            f"Delete user '{username}'?",
+            t("auth.delete_user", default="Delete user"),
+            t("auth.delete_confirm", user=username),
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
         try:
             get_auth_manager().delete_user(username)
         except (ValueError, PermissionDenied) as exc:
-            QMessageBox.warning(self, "Delete user", str(exc))
+            QMessageBox.warning(
+                self, t("auth.delete_user", default="Delete user"), str(exc)
+            )
             return
         self.refresh()
         self.users_changed.emit()

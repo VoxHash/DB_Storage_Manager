@@ -7,8 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-11-03
+
+### Added
+- **Concurrent GUI jobs**: new `gui/jobs.py` (`JobWorker` / `JobRunner`) - one active job per group, groups run in parallel. Backups (create / list / verify), Monitoring (start / poll / stop) and the update check run in worker threads so the window never freezes; the Rust native helpers are unchanged
+- **System tray**: left click shows/hides the window, double click raises it, middle click opens Backups, right click opens a menu (Show/Hide, Dashboard / Backups / Monitoring, live monitoring + backup status lines, Changelog & Updates, Quit)
+- **Notification auto-dismiss**: desktop notifications close after a configurable number of seconds (Settings, default 5, clamped 2-60). Some desktops treat the timeout as a hint
+- **Changelog & Updates dialog** (Help menu, tray, Settings): shows `CHANGELOG.md` and checks the public GitHub Releases API on demand. Stable vs experimental channel (GitHub pre-releases). No auto-install and no private update server - it links to the release page and offers a `pip install ... @ git+https://github.com/VoxHash/DB_Storage_Manager.git@<tag>` command
+- **Adapter-aware verification**: `BackupManager.verify_backup` / `verify_backups_parallel` verify Proton Drive rows through the adapter (rclone download + SHA-256) instead of treating remote targets as local paths
+- **Dry-run passphrase prompt**: dry-run restore of an encrypted (DSMENC1) backup asks for the passphrase (the encryption field is used first); it is never stored
+- **RBAC**: new `query:write` permission; Query Console and Monitoring enforce `query:*` / `monitoring:*` permissions; login throttle (5 failures, 60 s lockout) for the desktop and API Basic auth
+- **Scheduler passphrase vault**: scheduled-backup passphrases are kept in the encrypted SecureStore file `scheduled-backup-secrets.enc`; legacy plaintext `encryptionKey` entries in `scheduled-backups.json` are migrated automatically
+- **Translations**: all 11 locales are complete (previously ~208 keys were English-only in every non-English locale) including Chinese Settings / Backups / Monitoring / Plugins / RBAC / tray / updates / schedule strings; `tests/test_v107_features.py` audits key parity and placeholders
+
 ### Fixed
+- **Raw i18n key in Settings (Chinese)**: `backups.proton_ready` no longer shows as a raw key - lookups fall back to English per key before showing the key, and every locale now carries the key
+- **Verify All NOT_FOUND** for valid Proton Drive or local rows
+- **Scheduled Backups**: the Connection dropdown is populated; add / list / toggle / remove covered by tests; schedules run on a private `schedule.Scheduler` with per-schedule run locks (no overlapping runs) and a bounded number of concurrent dumps
+- **Monitoring false criticals** (`InterfaceError (0, '')`): MySQL/MariaDB sessions are revived with `ping(reconnect=True)` (full reconnect fallback) and the health check reconnects once before reporting a failure
+- **Packaging**: `package_data` now ships the translation JSON files and the API static UI (a pip-installed copy previously had neither)
+- **Backups**: removed technical busy text (Create Backup shows only "Creating backup…"; Scheduled Backups help shows only "Schedule recurring dumps."); removed "Built with Python and PyQt6." from About; About shows the real version (was hard-coded 1.0.5) and © 2026
+- **Tests**: tests no longer read or write the developer's real RBAC state or language preference; pooled SQL engine threads are closed at session end
+- **Backups UI freeze (“Not Responding”)**: Create / refresh / verify / dry-run no longer call blocking `asyncio.run` / rclone on the Qt GUI thread; work runs in `BackupJobWorker` (`QThread`) so Proton uploads and large SSH dumps keep the window responsive
+- **Proton Drive rclone draft / 502 / 422**: transfer uploads use `--protondrive-replace-existing-draft=true` plus higher retries; on draft/name conflict, `deletefile` once and retry `copyto`; default rclone timeout raised to 900s for large dumps
+- **Scheduled Backups tab**: wired to `ScheduledBackupManager` (add / enable-disable / remove / refresh); jobs tag by schedule id so stopping one does not clear others; Proton schedules require DSMENC1 passphrase in adapter config
 - **Linux window identity (vs Telegram Multi-Account Message Sender)**: migrate FreeDesktop / Wayland app id to reverse-DNS `dev.voxhash.db-storage-manager` (matching `StartupWMClass` and Qt `setDesktopFileName`) so KDE/Plasma no longer groups or closes this process with sibling Python GUIs that previously shared generic `python3`. Org domain stays `db-storage-manager.voxhash.dev`; user data remains `~/.config/db-storage-manager/`. `scripts/install-local-shims.sh` installs the new `.desktop` and removes the legacy `db-storage-manager.desktop`. Closing a Plasma/workspace panel still only closes windows that share that host process — DSM is a separate process when launched via its own entry point.
+
+### Changed
+- **Opsec**: Proton Drive Create Backup forces DSMENC1 encryption (checkbox locked on); encryption before rclone upload remains the enterprise default for cloud destinations
 
 ## [1.0.6] - 2026-11-02
 

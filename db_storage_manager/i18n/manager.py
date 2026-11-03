@@ -19,7 +19,10 @@ class I18nManager:
         self.current_language = DEFAULT_LANGUAGE
         self.translations: Dict[str, Dict[str, str]] = {}
         self.load_language_preference()
-        self.load_translations(self.current_language)
+        # English is always loaded: it is the per-key fallback for every locale.
+        self.load_translations(DEFAULT_LANGUAGE)
+        if self.current_language != DEFAULT_LANGUAGE:
+            self.load_translations(self.current_language)
 
     def load_language_preference(self) -> None:
         """Load saved language preference"""
@@ -68,25 +71,29 @@ class I18nManager:
             self.load_translations(language)
             self.save_language_preference()
 
-    def translate(self, key: str, default: Optional[str] = None, **kwargs) -> str:
-        """Translate a key to current language with optional format arguments
-
-        Supports nested keys like 'dashboard.connection' or 'common.ok'
-        """
-        translations = self.translations.get(self.current_language, {})
-
-        # Handle nested keys (e.g., "dashboard.connection")
-        keys = key.split(".")
+    @staticmethod
+    def _lookup(translations: Dict, key: str) -> Optional[str]:
+        """Resolve a nested key (e.g. ``dashboard.connection``) to a string."""
         text = translations
-        for k in keys:
+        for k in key.split("."):
             if isinstance(text, dict):
                 text = text.get(k)
                 if text is None:
-                    break
+                    return None
             else:
-                text = None
-                break
+                return None
+        return text if isinstance(text, str) else None
 
+    def translate(self, key: str, default: Optional[str] = None, **kwargs) -> str:
+        """Translate a key to current language with optional format arguments
+
+        Supports nested keys like 'dashboard.connection' or 'common.ok'.
+        Lookup order: current language, English, ``default``, then the raw key
+        (so a missing locale entry never surfaces as e.g. ``backups.proton_ready``).
+        """
+        text = self._lookup(self.translations.get(self.current_language, {}), key)
+        if text is None and self.current_language != DEFAULT_LANGUAGE:
+            text = self._lookup(self.translations.get(DEFAULT_LANGUAGE, {}), key)
         if text is None:
             text = default or key
 

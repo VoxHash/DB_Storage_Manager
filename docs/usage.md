@@ -46,11 +46,19 @@ Adapters:
 
 On the **Backups** tab:
 
-1. **Create Backup** — pick a connection, adapter (Local or Proton Drive), compression, and encryption passphrase (required for Proton Drive when encryption is on; preferred for opsec).
+1. **Create Backup** — pick a connection, adapter (Local or Proton Drive), compression, and encryption passphrase. Proton Drive **always** encrypts with DSMENC1 before rclone upload (enterprise opsec); Local can optionally encrypt. Create / refresh / verify / dry-run run on a background `QThread` so long SSH dumps and Proton uploads do not freeze the window.
 2. **Restore** — **Refresh** lists local backups; **Refresh Proton Drive** lists remote objects when rclone + account are configured.
 3. **Verify Checksum** / **Dry-run Restore** work on local rows; for Proton Drive rows the app downloads to a temp file, verifies SHA-256 against the `.meta.json` sidecar, then cleans up.
+4. **Scheduled Backups** — add interval jobs (connection + Local/Proton + passphrase), then enable/disable or remove them from the table. Each due schedule runs in its own worker thread (a schedule that is still running is skipped, at most two dumps run at once). Definitions live in `scheduled-backups.json`; passphrases are stored only in the encrypted `scheduled-backup-secrets.enc`.
+5. **Dry-run Restore** of an encrypted backup prompts for the passphrase (the encryption field is used first); it is not stored. **Verify All** checks local files natively and Proton Drive rows through the adapter.
 
-Proton Drive is not configured until rclone is installed and either an rclone remote exists, SecureStore has username+password (**Configure Proton Drive…**), or `DSM_PROTONDRIVE_USERNAME` + `DSM_PROTONDRIVE_PASSWORD` are set via `.env.protondrive.local` / `./scripts/setup-protondrive-env.sh` — the UI shows a clear status line (orange when not ready) instead of a fake local path. Scheduled backups are stored in `scheduled-backups.json`.
+Proton Drive is not configured until rclone is installed and either an rclone remote exists, SecureStore has username+password (**Configure Proton Drive…**), or `DSM_PROTONDRIVE_USERNAME` + `DSM_PROTONDRIVE_PASSWORD` are set via `.env.protondrive.local` / `./scripts/setup-protondrive-env.sh` — the UI shows a clear status line (orange when not ready) instead of a fake local path. rclone transfers use `--protondrive-replace-existing-draft=true` and retry on draft/422 conflicts (Proton 502 spikes are retried with a longer timeout).
+
+## System tray, notifications and updates
+
+- **Tray**: left click shows/hides the window, double click raises it, middle click opens **Backups**, right click opens the menu (Show/Hide, Dashboard / Backups / Monitoring, live status lines, **Changelog & Updates**, Quit). Closing the window quits the app; use the tray menu to hide it instead.
+- **Notifications**: monitoring alerts raise desktop notifications that auto-dismiss after **Notification auto-dismiss** seconds (Settings, default 5).
+- **Changelog & Updates** (Help menu, tray, Settings): shows the changelog and, on demand, checks the public GitHub Releases for a newer **stable** or **experimental** (pre-release) version. Nothing is downloaded or installed automatically; it opens the release page or copies a `pip install … @ git+https://github.com/VoxHash/DB_Storage_Manager.git@<tag>` command.
 
 ## Themes and language
 

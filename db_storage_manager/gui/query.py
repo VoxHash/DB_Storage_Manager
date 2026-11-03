@@ -28,6 +28,7 @@ from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
 from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
+from ..security.auth import PermissionDenied, get_auth_manager
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -157,6 +158,18 @@ class QueryWidget(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         layout.addWidget(splitter, 1)
+        self.apply_rbac()
+
+    def apply_rbac(self) -> None:
+        """``query:execute`` runs SELECTs; ``query:write`` may disable Safe Mode."""
+        auth = get_auth_manager()
+        can_exec = auth.has_permission("query:execute")
+        can_write = auth.has_permission("query:write")
+        self.execute_button.setEnabled(can_exec)
+        self.analyze_button.setEnabled(can_exec)
+        if not can_write:
+            self.safe_mode_check.setChecked(True)
+        self.safe_mode_check.setEnabled(can_write)
 
     def _selected_connection(self):
         index = self.connection_combo.currentIndex()
@@ -175,6 +188,15 @@ class QueryWidget(QWidget):
             return
 
         safe_mode = self.safe_mode_check.isChecked()
+
+        try:
+            auth = get_auth_manager()
+            auth.require("query:execute")
+            if not safe_mode:
+                auth.require("query:write")
+        except PermissionDenied as exc:
+            self._display_error(str(exc))
+            return
 
         try:
             config = ConnectionConfig(**ensure_tunnel_for_connection(connection))
@@ -224,6 +246,12 @@ class QueryWidget(QWidget):
 
         connection = self._selected_connection()
         safe_mode = self.safe_mode_check.isChecked()
+
+        try:
+            get_auth_manager().require("query:execute")
+        except PermissionDenied as exc:
+            self._display_error(str(exc))
+            return
 
         try:
             loop = asyncio.new_event_loop()

@@ -11,6 +11,8 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `safe_mode` | Block non-SELECT queries by default | `True` |
 | `auto_connect` | Connect on startup | `False` |
 | `notifications` | Desktop notifications | `True` |
+| `notification_timeout_seconds` | Seconds before a desktop notification auto-dismisses (clamped 2-60; some desktops treat it as a hint) | `5` |
+| `update_channel` | Channel used by **Help → Changelog & Updates**: `stable` or `experimental` (GitHub pre-releases) | `stable` |
 | `telemetry` | Anonymous telemetry | `False` |
 
 Settings are persisted encrypted via `SecureStore.set_settings()` / `get_settings()`.
@@ -29,7 +31,8 @@ Key files:
 | `connections.enc` | Encrypted connection profiles |
 | `settings.enc` | Encrypted app settings |
 | `ssh-keys.enc` | Encrypted SSH bastion metadata index (host/user/key path per connection; passwords stay in `connections.enc`) |
-| `scheduled-backups.json` | Backup schedule definitions |
+| `scheduled-backups.json` | Backup schedule definitions (no secrets) |
+| `scheduled-backup-secrets.enc` | Encrypted passphrases for scheduled backups, keyed by schedule id (mode `600`) |
 | `backups/` | Local backup payloads |
 | `plugins/registry.json` | Local plugin marketplace registry (builtins + installs) |
 | `plugins/installed/` | Copied user-installed plugin packages |
@@ -47,6 +50,24 @@ db-storage-manager-bootstrap --username admin --password '…'
 ```
 
 Settings key `rbac.enabled` mirrors whether accounts exist (informational). Roles: `admin`, `user`, `viewer`, `guest`.
+
+Permission matrix (`db_storage_manager.security.auth.ROLE_PERMISSIONS`; `admin` holds `*`). The desktop UI and the REST API enforce the same permission strings:
+
+| Permission | admin | user | viewer | guest |
+|---|:-:|:-:|:-:|:-:|
+| `dashboard:read`, `connections:read`, `api:read` | yes | yes | yes | yes |
+| `backups:read`, `settings:read`, `plugins:read`, `monitoring:read` | yes | yes | yes | no |
+| `connections:write`, `connections:delete` | yes | yes | no | no |
+| `backups:create`, `backups:restore` | yes | yes | no | no |
+| `query:execute` (SELECT console) | yes | yes | no | no |
+| `query:write` (non-SELECT, Safe Mode off) | yes | yes | no | no |
+| `monitoring:write` (thresholds, channels, acknowledge) | yes | yes | no | no |
+| `api:write` | yes | yes | no | no |
+| `settings:write`, `plugins:manage`, `users:manage` | yes | no | no | no |
+
+Failed sign-ins are throttled: after 5 failures within 60 seconds the username is locked out for the rest of that window (desktop sign-in dialog and API Basic auth).
+
+`.env.rbac.local` is a gitignored, mode `600` local file. It uses the keys `USERNAME` and `PASSWORD` (template: `.env.rbac.local.example`) and is read by the opt-in sign-in tests in `tests/test_gui_shell.py`. The application itself does not read it; to create the first admin use `db-storage-manager-bootstrap` (flags, or `DSM_BOOTSTRAP_USERNAME` / `DSM_BOOTSTRAP_PASSWORD`). Never commit it.
 
 ## Environment variables
 
