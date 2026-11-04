@@ -1,29 +1,54 @@
 """
-Settings widget
+Settings widget — tabbed: General, Backups & Adapters, Notifications,
+Users & RBAC, Updates.
 """
 
+import importlib.util
+from typing import Any, Dict, List
+
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QFormLayout,
-    QComboBox,
     QCheckBox,
-    QPushButton,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
+    QPushButton,
+    QScrollArea,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import Qt, pyqtSignal
 
 from ..backups.protondrive import configuration_status as proton_drive_status
+from ..backups.s3 import configuration_status as s3_status
+from ..config import APP_VERSION, DEFAULT_SETTINGS
+from ..experimental import ENV_VAR as EXPERIMENTAL_ENV_VAR
+from ..experimental import env_forces_experimental
+from ..i18n.languages import SUPPORTED_LANGUAGES
+from ..i18n.manager import get_i18n_manager
+from ..monitoring.notifications import (
+    EMAIL_SECURITY_MODES,
+    resolve_email_config,
+    send_test_email,
+    validate_email_config,
+)
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
-from ..config import DEFAULT_SETTINGS
-from ..i18n.manager import get_i18n_manager
-from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
+from ..updates import CHANNEL_EXPERIMENTAL, CHANNEL_STABLE
+from .jobs import JobRunner
 from .proton_drive_config import open_proton_drive_config
+from .s3_config import open_s3_config
 from .tray import (
     DEFAULT_NOTIFICATION_SECONDS,
     MAX_NOTIFICATION_SECONDS,
@@ -34,6 +59,33 @@ from .users import UsersAdminWidget
 from .utils import apply_glassmorphism, apply_page_layout, make_page_header
 
 
+def _colon(text: str) -> str:
+    """Form label text with exactly one trailing colon (locales differ)."""
+    text = text.rstrip()
+    return text if text.endswith((":", "：")) else f"{text}:"
+
+
+def _mnemonic_safe(text: str) -> str:
+    """Escape ``&`` so Qt does not treat it as a keyboard-mnemonic marker."""
+    return text.replace("&", "&&")
+
+
+def _hint_label() -> QLabel:
+    label = QLabel()
+    label.setWordWrap(True)
+    label.setObjectName("SettingsHint")
+    label.setProperty("hint", True)
+    return label
+
+
+def _scrollable(content: QWidget) -> QScrollArea:
+    area = QScrollArea()
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setWidget(content)
+    return area
+
+
 class SettingsWidget(QWidget):
     """Settings widget"""
 
@@ -41,6 +93,7 @@ class SettingsWidget(QWidget):
     language_changed = pyqtSignal(str)
     notification_timeout_changed = pyqtSignal(int)
     updates_requested = pyqtSignal()
+    settings_saved = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -48,72 +101,180 @@ class SettingsWidget(QWidget):
         self.i18n = get_i18n_manager()
         self.theme_manager = get_theme_manager()
         self.settings = self.secure_store.get_settings()
+        self.jobs = JobRunner(self)
         self.init_ui()
         self._update_texts()
         self.apply_rbac()
+
+    # ------------------------------------------------------------------ UI
 
     def init_ui(self):
         """Initialize UI"""
         layout = QVBoxLayout(self)
         apply_page_layout(layout)
         t = self.i18n.translate
-        layout.addWidget(
-            make_page_header(
-                t("tabs.settings"),
-                t(
-                    "settings.page_subtitle",
-                    default="Theme, language, Safe Mode, and Users & RBAC",
-                ),
-            )
+        self.page_header = make_page_header(
+            t("tabs.settings"),
+            t(
+                "settings.page_subtitle",
+                default="Theme, language, Safe Mode, and Users & RBAC",
+            ),
         )
+        layout.addWidget(self.page_header)
 
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self._build_general_tab(), "")
+        self.tabs.addTab(_scrollable(self._build_backups_tab()), "")
+        self.tabs.addTab(_scrollable(self._build_notifications_tab()), "")
+        self.users_admin = UsersAdminWidget()
+        self.tabs.addTab(_scrollable(self._wrap(self.users_admin)), "")
+        self.tabs.addTab(self._build_updates_tab(), "")
+        layout.addWidget(self.tabs, 1)
+
+        footer = QHBoxLayout()
+        self.save_status_label = QLabel("")
+        footer.addWidget(self.save_status_label, 1)
+        self.save_button = QPushButton()
+        self.save_button.setObjectName("PrimaryButton")
+        self.save_button.clicked.connect(self._save_settings)
+        footer.addWidget(self.save_button)
+        layout.addLayout(footer)
+
+        self.setObjectName("glassmorphism")
+        apply_glassmorphism(self)
+
+    @staticmethod
+    def _wrap(widget: QWidget) -> QWidget:
+        holder = QWidget()
+        box = QVBoxLayout(holder)
+        box.setContentsMargins(8, 8, 8, 8)
+        box.addWidget(widget)
+        box.addStretch()
+        return holder
+
+    def _build_general_tab(self) -> QWidget:
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(8, 8, 8, 8)
         form = QFormLayout()
+        form.setHorizontalSpacing(16)
+        form.setVerticalSpacing(6)
 
-        # Theme
         self.theme_label = QLabel()
         self.theme_combo = QComboBox()
         for theme_key, theme_data in THEMES.items():
             self.theme_combo.addItem(theme_data["name"], theme_key)
-        current_theme = self.theme_manager.current_theme
-        index = self.theme_combo.findData(current_theme)
+        index = self.theme_combo.findData(self.theme_manager.current_theme)
         if index >= 0:
             self.theme_combo.setCurrentIndex(index)
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         form.addRow(self.theme_label, self.theme_combo)
 
-        # Language
         self.language_label = QLabel()
         self.language_combo = QComboBox()
         for lang_code, lang_data in SUPPORTED_LANGUAGES.items():
             self.language_combo.addItem(
                 f"{lang_data['name']} ({lang_data['native']})", lang_code
             )
-        current_lang = self.i18n.current_language
-        index = self.language_combo.findData(current_lang)
+        index = self.language_combo.findData(self.i18n.current_language)
         if index >= 0:
             self.language_combo.setCurrentIndex(index)
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
         form.addRow(self.language_label, self.language_combo)
 
-        # Safe Mode
         self.safe_mode_label = QLabel()
         self.safe_mode_check = QCheckBox()
         self.safe_mode_check.setChecked(self.settings.get("safe_mode", True))
         form.addRow(self.safe_mode_label, self.safe_mode_check)
+        self.safe_mode_hint = _hint_label()
+        form.addRow("", self.safe_mode_hint)
 
-        # Auto Connect
         self.auto_connect_label = QLabel()
         self.auto_connect_check = QCheckBox()
         self.auto_connect_check.setChecked(self.settings.get("auto_connect", False))
         form.addRow(self.auto_connect_label, self.auto_connect_check)
+        self.auto_connect_hint = _hint_label()
+        form.addRow("", self.auto_connect_hint)
 
-        # Notifications
+        self.telemetry_label = QLabel()
+        self.telemetry_check = QCheckBox()
+        self.telemetry_check.setChecked(self.settings.get("telemetry", False))
+        form.addRow(self.telemetry_label, self.telemetry_check)
+        self.telemetry_hint = _hint_label()
+        form.addRow("", self.telemetry_hint)
+
+        outer.addLayout(form)
+        outer.addStretch()
+        return page
+
+    def _build_backups_tab(self) -> QWidget:
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(8, 8, 8, 8)
+
+        self.adapters_group = QGroupBox()
+        g = QVBoxLayout(self.adapters_group)
+        self.adapters_hint = _hint_label()
+        g.addWidget(self.adapters_hint)
+
+        self.adapters_table = QTableWidget(0, 3)
+        self.adapters_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeMode.Stretch
+        )
+        self.adapters_table.setEditTriggers(
+            QTableWidget.EditTrigger.NoEditTriggers
+        )
+        self.adapters_table.setSelectionMode(
+            QTableWidget.SelectionMode.NoSelection
+        )
+        self.adapters_table.verticalHeader().setVisible(False)
+        self.adapters_table.setMinimumHeight(170)
+        g.addWidget(self.adapters_table)
+
+        buttons = QHBoxLayout()
+        self.proton_configure_button = QPushButton()
+        self.proton_configure_button.clicked.connect(self._configure_proton_drive)
+        buttons.addWidget(self.proton_configure_button)
+        self.s3_configure_button = QPushButton()
+        self.s3_configure_button.clicked.connect(self._configure_s3)
+        buttons.addWidget(self.s3_configure_button)
+        buttons.addStretch()
+        g.addLayout(buttons)
+        # Kept for callers that read the Proton status text directly.
+        self.proton_status_label = QLabel("")
+        self.proton_status_label.setWordWrap(True)
+        self.proton_status_label.setVisible(False)
+        outer.addWidget(self.adapters_group)
+
+        self.experimental_group = QGroupBox()
+        e = QVBoxLayout(self.experimental_group)
+        self.experimental_restore_check = QCheckBox()
+        experimental = dict(self.settings.get("experimental") or {})
+        self.experimental_restore_check.setChecked(
+            bool(experimental.get("restore", False))
+        )
+        e.addWidget(self.experimental_restore_check)
+        self.experimental_hint = _hint_label()
+        e.addWidget(self.experimental_hint)
+        outer.addWidget(self.experimental_group)
+
+        outer.addStretch()
+        return page
+
+    def _build_notifications_tab(self) -> QWidget:
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(8, 8, 8, 8)
+
+        self.alerts_group = QGroupBox()
+        form = QFormLayout(self.alerts_group)
+        form.setHorizontalSpacing(16)
+
         self.notifications_label = QLabel()
         self.notifications_check = QCheckBox()
         self.notifications_check.setChecked(self.settings.get("notifications", True))
         form.addRow(self.notifications_label, self.notifications_check)
 
-        # Desktop notification auto-dismiss
         self.notification_timeout_label = QLabel()
         self.notification_timeout_spin = QSpinBox()
         self.notification_timeout_spin.setRange(
@@ -130,65 +291,267 @@ class SettingsWidget(QWidget):
             self.notification_timeout_label, self.notification_timeout_spin
         )
 
-        # Telemetry
-        self.telemetry_label = QLabel()
-        self.telemetry_check = QCheckBox()
-        self.telemetry_check.setChecked(self.settings.get("telemetry", False))
-        form.addRow(self.telemetry_label, self.telemetry_check)
+        self.autostart_label = QLabel()
+        self.autostart_combo = QComboBox()
+        form.addRow(self.autostart_label, self.autostart_combo)
+        self.autostart_hint = _hint_label()
+        form.addRow("", self.autostart_hint)
+        outer.addWidget(self.alerts_group)
 
-        layout.addLayout(form)
+        self.email_group = QGroupBox()
+        email_form = QFormLayout(self.email_group)
+        email_form.setHorizontalSpacing(16)
+        email = resolve_email_config(self.settings)
+        self._email_password_stored = bool(email.get("password"))
 
-        # Proton Drive credentials (SecureStore)
-        self.proton_section_label = QLabel()
-        self.proton_section_label.setObjectName("PageSubtitle")
-        layout.addWidget(self.proton_section_label)
-        self.proton_status_label = QLabel("")
-        self.proton_status_label.setWordWrap(True)
-        layout.addWidget(self.proton_status_label)
-        self.proton_configure_button = QPushButton()
-        self.proton_configure_button.clicked.connect(self._configure_proton_drive)
-        layout.addWidget(self.proton_configure_button)
-        self._refresh_proton_status()
+        self.email_hint = _hint_label()
+        email_form.addRow(self.email_hint)
 
-        # Save button
-        self.save_button = QPushButton()
-        self.save_button.clicked.connect(self._save_settings)
-        layout.addWidget(self.save_button)
+        self.email_host_label = QLabel()
+        self.email_host_edit = QLineEdit(str(email.get("host") or ""))
+        self.email_host_edit.setPlaceholderText("smtp.example.com")
+        email_form.addRow(self.email_host_label, self.email_host_edit)
 
-        # Changelog + manual update check (GitHub Releases)
+        self.email_port_label = QLabel()
+        self.email_port_spin = QSpinBox()
+        self.email_port_spin.setRange(1, 65535)
+        self.email_port_spin.setValue(int(email.get("port") or 587))
+        email_form.addRow(self.email_port_label, self.email_port_spin)
+
+        self.email_security_label = QLabel()
+        self.email_security_combo = QComboBox()
+        for mode in EMAIL_SECURITY_MODES:
+            self.email_security_combo.addItem(mode.upper(), mode)
+        idx = self.email_security_combo.findData(email.get("security"))
+        self.email_security_combo.setCurrentIndex(max(idx, 0))
+        email_form.addRow(self.email_security_label, self.email_security_combo)
+
+        self.email_user_label = QLabel()
+        self.email_user_edit = QLineEdit(str(email.get("username") or ""))
+        email_form.addRow(self.email_user_label, self.email_user_edit)
+
+        self.email_password_label = QLabel()
+        self.email_password_edit = QLineEdit()
+        self.email_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        email_form.addRow(self.email_password_label, self.email_password_edit)
+
+        self.email_sender_label = QLabel()
+        self.email_sender_edit = QLineEdit(str(email.get("sender") or ""))
+        self.email_sender_edit.setPlaceholderText("alerts@example.com")
+        email_form.addRow(self.email_sender_label, self.email_sender_edit)
+
+        self.email_recipients_label = QLabel()
+        self.email_recipients_edit = QLineEdit(
+            ", ".join(email.get("recipients") or [])
+        )
+        self.email_recipients_edit.setPlaceholderText(
+            "oncall@example.com, dba@example.com"
+        )
+        email_form.addRow(self.email_recipients_label, self.email_recipients_edit)
+
+        self.email_severity_label = QLabel()
+        self.email_severity_combo = QComboBox()
+        self.email_severity_combo.addItem("", "critical")
+        self.email_severity_combo.addItem("", "warning")
+        idx = self.email_severity_combo.findData(email.get("min_severity"))
+        self.email_severity_combo.setCurrentIndex(max(idx, 0))
+        email_form.addRow(self.email_severity_label, self.email_severity_combo)
+
+        self.email_cooldown_label = QLabel()
+        self.email_cooldown_spin = QSpinBox()
+        self.email_cooldown_spin.setRange(1, 24 * 60)
+        self.email_cooldown_spin.setValue(int(email.get("cooldown_minutes") or 30))
+        email_form.addRow(self.email_cooldown_label, self.email_cooldown_spin)
+
+        test_row = QHBoxLayout()
+        self.email_test_button = QPushButton()
+        self.email_test_button.clicked.connect(self._send_test_email)
+        test_row.addWidget(self.email_test_button)
+        self.email_status_label = QLabel("")
+        self.email_status_label.setWordWrap(True)
+        test_row.addWidget(self.email_status_label, 1)
+        email_form.addRow(test_row)
+        outer.addWidget(self.email_group)
+
+        outer.addStretch()
+        return page
+
+    def _build_updates_tab(self) -> QWidget:
+        page = QWidget()
+        outer = QVBoxLayout(page)
+        outer.setContentsMargins(8, 8, 8, 8)
+        form = QFormLayout()
+        form.setHorizontalSpacing(16)
+
+        self.version_label = QLabel()
+        outer.addWidget(self.version_label)
+
+        self.update_channel_label = QLabel()
+        self.update_channel_combo = QComboBox()
+        self.update_channel_combo.addItem("", CHANNEL_STABLE)
+        self.update_channel_combo.addItem("", CHANNEL_EXPERIMENTAL)
+        idx = self.update_channel_combo.findData(
+            self.settings.get("update_channel", CHANNEL_STABLE)
+        )
+        self.update_channel_combo.setCurrentIndex(max(idx, 0))
+        form.addRow(self.update_channel_label, self.update_channel_combo)
+        outer.addLayout(form)
+
+        self.updates_hint = _hint_label()
+        outer.addWidget(self.updates_hint)
+
+        row = QHBoxLayout()
         self.updates_button = QPushButton()
         self.updates_button.clicked.connect(self.updates_requested.emit)
-        layout.addWidget(self.updates_button)
+        row.addWidget(self.updates_button)
+        row.addStretch()
+        outer.addLayout(row)
+        outer.addStretch()
+        return page
 
-        self.users_admin = UsersAdminWidget()
-        layout.addWidget(self.users_admin)
-
-        layout.addStretch()
-
-        self.setObjectName("glassmorphism")
-        apply_glassmorphism(self)
+    # ------------------------------------------------------------- state
 
     def apply_rbac(self) -> None:
-        """Enable/disable settings save based on current permissions."""
+        """Enable/disable settings editing based on current permissions."""
         auth = get_auth_manager()
         can_write = auth.has_permission("settings:write")
+        editable = can_write or not auth.is_rbac_active()
         self.save_button.setEnabled(can_write)
         for widget in (
-            self.theme_combo,
-            self.language_combo,
             self.safe_mode_check,
             self.auto_connect_check,
             self.notifications_check,
             self.notification_timeout_spin,
             self.telemetry_check,
             self.proton_configure_button,
+            self.s3_configure_button,
+            self.autostart_combo,
+            self.email_host_edit,
+            self.email_port_spin,
+            self.email_security_combo,
+            self.email_user_edit,
+            self.email_password_edit,
+            self.email_sender_edit,
+            self.email_recipients_edit,
+            self.email_severity_combo,
+            self.email_cooldown_spin,
+            self.email_test_button,
+            self.update_channel_combo,
         ):
-            widget.setEnabled(can_write or not auth.is_rbac_active())
+            widget.setEnabled(editable)
+        # Experimental toggle: editable only with settings:write, and never
+        # when the environment already forces it on.
+        forced = env_forces_experimental()
+        self.experimental_restore_check.setEnabled(editable and not forced)
+        if forced:
+            self.experimental_restore_check.setChecked(True)
         # Theme/language preview still allowed for viewers when RBAC on
-        if auth.is_rbac_active() and not can_write:
-            self.theme_combo.setEnabled(True)
-            self.language_combo.setEnabled(True)
+        self.theme_combo.setEnabled(True)
+        self.language_combo.setEnabled(True)
         self.users_admin.refresh()
+        self._refresh_adapters()
+
+    def refresh_connection_choices(self) -> None:
+        """Rebuild the auto-start monitoring choices from saved connections."""
+        t = self.i18n.translate
+        selected = (self.settings.get("monitoring") or {}).get(
+            "autostart_connection_id"
+        )
+        if self.autostart_combo.count():
+            selected = self.autostart_combo.currentData() or selected
+        self.autostart_combo.blockSignals(True)
+        self.autostart_combo.clear()
+        self.autostart_combo.addItem(
+            t("settings.autostart_none", default="Do not start automatically"), None
+        )
+        try:
+            connections = self.secure_store.get_connections()
+        except Exception:
+            connections = []
+        for conn in connections:
+            self.autostart_combo.addItem(
+                str(conn.get("name") or conn.get("id")), conn.get("id")
+            )
+        idx = self.autostart_combo.findData(selected)
+        self.autostart_combo.setCurrentIndex(max(idx, 0))
+        self.autostart_combo.blockSignals(False)
+
+    def showEvent(self, event):  # noqa: N802 (Qt API)
+        super().showEvent(event)
+        self.refresh_connection_choices()
+        self._refresh_adapters()
+
+    # ----------------------------------------------------------- adapters
+
+    def _adapter_rows(self) -> List[Dict[str, str]]:
+        t = self.i18n.translate
+        ready = t("settings.adapter_ready", default="Ready")
+        missing = t("settings.adapter_not_configured", default="Not configured")
+        rows: List[Dict[str, str]] = [
+            {
+                "name": t("backups.local", default="Local"),
+                "status": ready,
+                "detail": t(
+                    "settings.adapter_local_detail",
+                    default="Files in the app data folder with a SHA-256 sidecar",
+                ),
+            }
+        ]
+        proton = proton_drive_status()
+        if proton.get("configured"):
+            proton_detail = f"{proton.get('remote')}:{proton.get('remote_path')}"
+        else:
+            proton_detail = str(proton.get("error") or proton.get("message") or "")
+        rows.append(
+            {
+                "name": "Proton Drive",
+                "status": ready if proton.get("configured") else missing,
+                "detail": proton_detail,
+            }
+        )
+        s3 = s3_status()
+        if s3.get("configured"):
+            s3_detail = f"{s3.get('bucket')} · {s3.get('credentials')}"
+        else:
+            s3_detail = str(s3.get("error") or "")
+        rows.append(
+            {
+                "name": t("settings.adapter_s3", default="S3-compatible"),
+                "status": ready if s3.get("configured") else missing,
+                "detail": s3_detail,
+            }
+        )
+        have_gdrive = all(
+            importlib.util.find_spec(mod) is not None
+            for mod in ("googleapiclient", "google.oauth2")
+        )
+        rows.append(
+            {
+                "name": "Google Drive",
+                "status": t("settings.adapter_api_only", default="API only"),
+                "detail": t(
+                    "settings.adapter_gdrive_detail",
+                    default=(
+                        "Library adapter for scripts and plugins; not offered "
+                        "in the UI (OAuth tokens are too sensitive for a "
+                        "desktop form). Google client libraries installed: {state}"
+                    ),
+                    state=t("common.yes") if have_gdrive else t("common.no"),
+                ),
+            }
+        )
+        return rows
+
+    def _refresh_adapters(self) -> None:
+        rows = self._adapter_rows()
+        self.adapters_table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c, key in enumerate(("name", "status", "detail")):
+                item = QTableWidgetItem(row[key])
+                item.setToolTip(row[key])
+                self.adapters_table.setItem(r, c, item)
+        # Keep the legacy status label in sync for callers reading it.
+        self._refresh_proton_status()
 
     def _refresh_proton_status(self) -> None:
         status = proton_drive_status()
@@ -211,32 +574,275 @@ class SettingsWidget(QWidget):
 
     def _configure_proton_drive(self) -> None:
         if open_proton_drive_config(self):
-            self._refresh_proton_status()
+            self._refresh_adapters()
+            self.settings_saved.emit()
+
+    def _configure_s3(self) -> None:
+        if open_s3_config(self):
+            self._refresh_adapters()
+            self.settings_saved.emit()
+
+    # -------------------------------------------------------------- email
+
+    def _email_form_config(self) -> Dict[str, Any]:
+        """Current form values as an email config (password: field or stored)."""
+        stored = resolve_email_config(self.secure_store.get_settings())
+        recipients = [
+            r.strip()
+            for r in self.email_recipients_edit.text().replace(";", ",").split(",")
+            if r.strip()
+        ]
+        password = self.email_password_edit.text()
+        return {
+            "host": self.email_host_edit.text().strip(),
+            "port": int(self.email_port_spin.value()),
+            "security": str(self.email_security_combo.currentData()),
+            "username": self.email_user_edit.text().strip(),
+            "password": password if password else stored.get("password") or "",
+            "sender": self.email_sender_edit.text().strip(),
+            "recipients": recipients,
+            "min_severity": str(self.email_severity_combo.currentData()),
+            "cooldown_minutes": int(self.email_cooldown_spin.value()),
+        }
+
+    def _send_test_email(self) -> None:
+        t = self.i18n.translate
+        cfg = self._email_form_config()
+        problems = validate_email_config(cfg)
+        if problems:
+            self.email_status_label.setText("; ".join(problems))
+            return
+        self.email_test_button.setEnabled(False)
+        self.email_status_label.setText(
+            t("settings.email_test_sending", default="Sending test email…")
+        )
+
+        def _done(_result) -> None:
+            self.email_test_button.setEnabled(True)
+            self.email_status_label.setText(
+                t(
+                    "settings.email_test_ok",
+                    default="Test email sent to {recipients}.",
+                    recipients=", ".join(cfg["recipients"]),
+                )
+            )
+
+        def _failed(message: str) -> None:
+            self.email_test_button.setEnabled(True)
+            self.email_status_label.setText(
+                t(
+                    "settings.email_test_failed",
+                    default="Test email failed: {error}",
+                    error=message,
+                )
+            )
+
+        if not self.jobs.submit(
+            "settings-email-test", lambda: send_test_email(cfg), _done, _failed
+        ):
+            self.email_test_button.setEnabled(True)
+
+    # ------------------------------------------------------------- texts
 
     def _update_texts(self):
         """Update all text labels with translations"""
         t = self.i18n.translate
-        self.theme_label.setText(f"{t('settings.theme')}:")
-        self.language_label.setText(f"{t('settings.language')}:")
-        self.safe_mode_label.setText(f"{t('settings.safe_mode')}:")
-        self.auto_connect_label.setText(f"{t('settings.auto_connect')}:")
-        self.notifications_label.setText(f"{t('settings.notifications')}:")
-        self.notification_timeout_label.setText(
-            f"{t('settings.notification_timeout')}:"
+        titles = (
+            t("settings.tab_general", default="General"),
+            t("settings.tab_backups", default="Backups & Adapters"),
+            t("settings.tab_notifications", default="Notifications"),
+            t("auth.users_group", default="Users & RBAC"),
+            t("settings.tab_updates", default="Updates"),
         )
-        self.notification_timeout_spin.setSuffix(
-            f" {t('settings.seconds_suffix')}"
+        for i, title in enumerate(titles):
+            self.tabs.setTabText(i, _mnemonic_safe(title))
+
+        self.theme_label.setText(_colon(t("settings.theme")))
+        self.language_label.setText(_colon(t("settings.language")))
+        self.safe_mode_label.setText(_colon(t("settings.safe_mode")))
+        self.auto_connect_label.setText(_colon(t("settings.auto_connect")))
+        self.telemetry_label.setText(_colon(t("settings.telemetry")))
+        self.safe_mode_hint.setText(
+            t(
+                "settings.safe_mode_hint",
+                default="Blocks destructive SQL (DROP, TRUNCATE, DELETE without WHERE) until you confirm.",
+            )
         )
-        self.updates_button.setText(t("updates.title"))
-        self.telemetry_label.setText(f"{t('settings.telemetry')}:")
-        self.proton_section_label.setText(
-            t("settings.proton_drive", default="Proton Drive backups")
+        self.auto_connect_hint.setText(
+            t(
+                "settings.auto_connect_hint",
+                default="Reconnects the last used connection when the app starts.",
+            )
+        )
+        self.telemetry_hint.setText(
+            t(
+                "settings.telemetry_hint",
+                default="Off by default. Nothing leaves this machine unless you turn it on.",
+            )
+        )
+
+        self.adapters_group.setTitle(
+            _mnemonic_safe(
+                t("settings.adapters_title", default="Backup destinations")
+            )
+        )
+        self.adapters_hint.setText(
+            t(
+                "settings.adapters_hint",
+                default=(
+                    "Local backups stay on this machine. Off-machine "
+                    "destinations (Proton Drive, S3) always upload encrypted "
+                    "archives."
+                ),
+            )
+        )
+        self.adapters_table.setHorizontalHeaderLabels(
+            [
+                t("backups.schedule_col_adapter", default="Adapter"),
+                t("backups.col_status"),
+                t("settings.adapter_details", default="Details"),
+            ]
         )
         self.proton_configure_button.setText(
             t("backups.configure_proton", default="Configure Proton Drive…")
         )
+        self.s3_configure_button.setText(
+            t("settings.configure_s3", default="Configure S3…")
+        )
+        self.experimental_group.setTitle(
+            t("settings.experimental_title", default="Experimental")
+        )
+        self.experimental_restore_check.setText(
+            t(
+                "settings.experimental_restore",
+                default="Enable full Restore Backup (experimental)",
+            )
+        )
+        hint = t(
+            "settings.experimental_restore_hint",
+            default=(
+                "Adds a Restore button on the Backups tab. A restore "
+                "overwrites the target database, so it needs the "
+                "backups:restore permission, a typed confirmation, and "
+                "(by default) a safety backup first. Off on stable builds."
+            ),
+        )
+        if env_forces_experimental():
+            hint += "\n" + t(
+                "settings.experimental_env_forced",
+                default="Forced on by the {var} environment variable.",
+                var=EXPERIMENTAL_ENV_VAR,
+            )
+        self.experimental_hint.setText(hint)
+
+        self.alerts_group.setTitle(
+            _mnemonic_safe(t("settings.alerts_title", default="Alerts & monitoring"))
+        )
+        self.notifications_label.setText(_colon(t("settings.notifications")))
+        self.notification_timeout_label.setText(
+            _colon(t("settings.notification_timeout"))
+        )
+        self.notification_timeout_spin.setSuffix(
+            f" {t('settings.seconds_suffix')}"
+        )
+        self.autostart_label.setText(
+            _colon(
+                t(
+                    "settings.autostart_monitoring",
+                    default="Start monitoring on launch",
+                )
+            )
+        )
+        self.autostart_hint.setText(
+            t(
+                "settings.autostart_hint",
+                default=(
+                    "Watch this connection as soon as the app opens, so a "
+                    "monitoring user gets real-time alerts without clicking "
+                    "Start."
+                ),
+            )
+        )
+        self.refresh_connection_choices()
+
+        self.email_group.setTitle(
+            t("settings.email_title", default="Email alerts (SMTP)")
+        )
+        self.email_hint.setText(
+            t(
+                "settings.email_hint",
+                default=(
+                    "Sends critical alerts through your own SMTP server. The "
+                    "password is stored encrypted in SecureStore. Enable the "
+                    "Email channel on the Monitoring tab. Plain SMTP is only "
+                    "allowed for localhost."
+                ),
+            )
+        )
+        self.email_host_label.setText(
+            _colon(t("settings.email_host", default="SMTP host"))
+        )
+        self.email_port_label.setText(
+            _colon(t("settings.email_port", default="Port"))
+        )
+        self.email_security_label.setText(
+            _colon(t("settings.email_security", default="Security"))
+        )
+        self.email_user_label.setText(
+            _colon(t("settings.email_username", default="Username"))
+        )
+        self.email_password_label.setText(
+            _colon(t("settings.email_password", default="Password"))
+        )
+        self.email_password_edit.setPlaceholderText(
+            t(
+                "settings.email_password_set",
+                default="Stored — leave blank to keep",
+            )
+            if self._email_password_stored
+            else ""
+        )
+        self.email_sender_label.setText(
+            _colon(t("settings.email_sender", default="From address"))
+        )
+        self.email_recipients_label.setText(
+            _colon(
+                t(
+                    "settings.email_recipients",
+                    default="Recipients (comma-separated)",
+                )
+            )
+        )
+        self.email_severity_label.setText(
+            _colon(t("settings.email_min_severity", default="Minimum severity"))
+        )
+        self.email_severity_combo.setItemText(
+            0, t("settings.severity_critical", default="Critical only")
+        )
+        self.email_severity_combo.setItemText(
+            1, t("settings.severity_warning", default="Warning and critical")
+        )
+        self.email_cooldown_label.setText(
+            _colon(t("settings.email_cooldown", default="Repeat cooldown"))
+        )
+        self.email_cooldown_spin.setSuffix(
+            f" {t('settings.minutes_suffix', default='min')}"
+        )
+        self.email_test_button.setText(
+            t("settings.email_test", default="Send test email")
+        )
+
+        self.version_label.setText(t("updates.current", version=APP_VERSION))
+        self.update_channel_label.setText(_colon(t("updates.channel")))
+        self.update_channel_combo.setItemText(0, t("updates.channel_stable"))
+        self.update_channel_combo.setItemText(1, t("updates.channel_experimental"))
+        self.updates_hint.setText(t("updates.channel_hint"))
+        self.updates_button.setText(t("updates.title"))
         self.save_button.setText(t("settings.save"))
-        self._refresh_proton_status()
+        self.users_admin.retranslate()
+        self._refresh_adapters()
+
+    # ------------------------------------------------------------ handlers
 
     def _on_theme_changed(self, index):
         """Handle theme change"""
@@ -255,20 +861,51 @@ class SettingsWidget(QWidget):
 
     def _save_settings(self):
         """Save settings"""
+        t = self.i18n.translate
         try:
             get_auth_manager().require("settings:write")
         except PermissionDenied as exc:
             QMessageBox.warning(
-                self,
-                self.i18n.translate("auth.denied", default="Access denied"),
-                str(exc),
+                self, t("auth.denied", default="Access denied"), str(exc)
             )
             return
         existing = self.secure_store.get_settings()
         auth = get_auth_manager()
         rbac = dict(existing.get("rbac") or DEFAULT_SETTINGS.get("rbac") or {})
         rbac["enabled"] = auth.is_rbac_active()
+
+        email = dict(existing.get("email_alerts") or {})
+        form = self._email_form_config()
+        email.update(
+            {
+                "host": form["host"],
+                "port": form["port"],
+                "security": form["security"],
+                "username": form["username"],
+                "sender": form["sender"],
+                "recipients": form["recipients"],
+                "min_severity": form["min_severity"],
+                "cooldown_minutes": form["cooldown_minutes"],
+            }
+        )
+        typed_password = self.email_password_edit.text()
+        if typed_password:
+            email["password"] = typed_password
+        if not form["username"]:
+            email.pop("password", None)
+
+        experimental = dict(existing.get("experimental") or {})
+        if not env_forces_experimental():
+            experimental["restore"] = self.experimental_restore_check.isChecked()
+
+        monitoring = dict(existing.get("monitoring") or {})
+        monitoring["autostart_connection_id"] = self.autostart_combo.currentData()
+
+        # Start from what is stored so keys edited on other tabs (alert
+        # thresholds/channels, dashboard layout, plugins, Proton/S3/cloud/
+        # companion prefs, …) are never dropped.
         self.settings = {
+            **existing,
             "theme": self.theme_manager.current_theme,
             "language": self.i18n.current_language,
             "safe_mode": self.safe_mode_check.isChecked(),
@@ -277,41 +914,29 @@ class SettingsWidget(QWidget):
             "notification_timeout_seconds": int(
                 self.notification_timeout_spin.value()
             ),
-            "update_channel": existing.get(
-                "update_channel", DEFAULT_SETTINGS.get("update_channel")
-            ),
+            "update_channel": self.update_channel_combo.currentData()
+            or existing.get("update_channel", DEFAULT_SETTINGS.get("update_channel")),
             "telemetry": self.telemetry_check.isChecked(),
-            # Preserve monitoring / dashboard prefs edited in their tabs
-            "alert_thresholds": existing.get(
-                "alert_thresholds", DEFAULT_SETTINGS.get("alert_thresholds")
-            ),
-            "alert_channels": existing.get(
-                "alert_channels", DEFAULT_SETTINGS.get("alert_channels")
-            ),
-            "dashboard_layout": existing.get(
-                "dashboard_layout", DEFAULT_SETTINGS.get("dashboard_layout")
-            ),
-            "plugins": existing.get(
-                "plugins", DEFAULT_SETTINGS.get("plugins")
-            ),
             "rbac": rbac,
-            # Preserve encrypted cloud / Proton / companion prefs edited elsewhere
-            "proton_drive": existing.get(
-                "proton_drive", DEFAULT_SETTINGS.get("proton_drive")
-            ),
-            "cloud_managed": existing.get(
-                "cloud_managed", DEFAULT_SETTINGS.get("cloud_managed")
-            ),
-            "companion": existing.get(
-                "companion", DEFAULT_SETTINGS.get("companion")
-            ),
+            "experimental": experimental,
+            "email_alerts": email,
+            "monitoring": monitoring,
         }
         self.secure_store.set_settings(self.settings)
+        self.email_password_edit.clear()
+        self._email_password_stored = bool(email.get("password"))
+        self._update_texts()
         self.notification_timeout_changed.emit(
             self.settings["notification_timeout_seconds"]
         )
+        self.settings_saved.emit()
+        self.save_status_label.setText(t("settings.settings_saved"))
         QMessageBox.information(
             self,
-            self.i18n.translate("common.success"),
-            self.i18n.translate("settings.settings_saved"),
+            t("common.success"),
+            t("settings.settings_saved"),
         )
+
+    def closeEvent(self, event):  # noqa: N802 (Qt API)
+        self.jobs.wait_all()
+        super().closeEvent(event)

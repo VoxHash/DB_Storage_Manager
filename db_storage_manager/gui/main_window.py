@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QAction
 
 from .dashboard import DashboardWidget
@@ -109,6 +110,7 @@ class MainWindow(QMainWindow):
         self.settings_widget.language_changed.connect(self._on_language_changed)
         self.settings_widget.users_admin.users_changed.connect(self.apply_rbac)
         self.settings_widget.updates_requested.connect(self.show_updates)
+        self.settings_widget.settings_saved.connect(self._on_settings_saved)
 
         self.tab_widget.addTab(self.dashboard, "")
         self.tab_widget.addTab(self.connections_widget, "")
@@ -138,13 +140,20 @@ class MainWindow(QMainWindow):
         self.connections_widget.connection_deleted.connect(self._on_connection_deleted)
 
         self._create_menu_bar()
-        self.statusBar().showMessage(self.i18n.translate("common.ready"))
 
         self.tray: Optional[AppTray] = None
         self._setup_tray()
 
         self._apply_theme()
         self.apply_rbac()
+        # Monitoring users get live alerts without clicking Start (opt-in in Settings).
+        QTimer.singleShot(0, self.monitoring_widget.autostart_if_configured)
+
+    def _on_settings_saved(self) -> None:
+        """Settings changed: re-read SMTP / S3 / experimental flags elsewhere."""
+        self.monitoring_widget.refresh_email_channel()
+        if hasattr(self.backups_widget, "refresh_destinations"):
+            self.backups_widget.refresh_destinations()
 
     def _setup_tray(self) -> None:
         """Left click toggles the window; right click opens the tray menu."""
@@ -201,15 +210,8 @@ class MainWindow(QMainWindow):
                 widget.apply_rbac()
         if hasattr(self.settings_widget, "apply_rbac"):
             self.settings_widget.apply_rbac()
+        # Single sign-in indicator: the sidebar footer (no duplicate status bar).
         if auth.is_rbac_active() and auth.current_user:
-            self.statusBar().showMessage(
-                self.i18n.translate(
-                    "auth.signed_in",
-                    default="Signed in as {user} ({role})",
-                    user=auth.current_user.username,
-                    role=auth.current_user.role.value,
-                )
-            )
             self.sidebar.set_footer(
                 self.i18n.translate(
                     "auth.signed_in",
@@ -219,14 +221,13 @@ class MainWindow(QMainWindow):
                 )
             )
         elif auth.is_rbac_active():
-            msg = self.i18n.translate(
-                "auth.rbac_active",
-                default="RBAC active — sign in required for sensitive actions",
+            self.sidebar.set_footer(
+                self.i18n.translate(
+                    "auth.rbac_active",
+                    default="RBAC active — sign in required for sensitive actions",
+                )
             )
-            self.statusBar().showMessage(msg)
-            self.sidebar.set_footer(msg)
         else:
-            self.statusBar().showMessage(self.i18n.translate("common.ready"))
             self.sidebar.set_footer(
                 self.i18n.translate("common.ready", default="Ready")
             )
@@ -330,6 +331,9 @@ class MainWindow(QMainWindow):
         # Light / Dracula switches do not leave stale MetricCard / PageTitle ink.
         for panel in self.findChildren(QWidget, "glassmorphism"):
             apply_glassmorphism(panel)
+        # Table cells carry per-item colours (Enabled column): rebuild with the new tokens.
+        if hasattr(self, "plugins_widget"):
+            self.plugins_widget.refresh()
 
     def _on_theme_changed(self, theme_key):
         """Handle theme change"""
@@ -360,6 +364,17 @@ class MainWindow(QMainWindow):
                 self.connections[i] = connection
                 break
         self.secure_store.save_connections(self.connections)
+        # A pooled session keyed by this id still points at the old settings
+        # (host / database path); drop it so backups and restores hit the new target.
+        try:
+            import asyncio
+            from ..db.factory import DatabaseConnectionFactory
+
+            asyncio.run(
+                DatabaseConnectionFactory.get_pool().discard_key(connection["id"])
+            )
+        except Exception:
+            pass
         if connection.get("ssh_config") and connection["ssh_config"].get("enabled"):
             self.secure_store.upsert_ssh_settings_for_connection(connection)
         else:

@@ -168,6 +168,20 @@ class DashboardWidget(QWidget):
                 object_name=f"dashboardMetric_{key}",
             )
             self._metric_cards[key] = card
+            if key == "total_size":
+                # Users compare this figure with a backup file; say why they differ.
+                card.setToolTip(
+                    t(
+                        "dashboard.total_size_tooltip",
+                        default=(
+                            "Live on-disk size of all user tables plus their "
+                            "indexes and TOAST data. A backup stores a logical "
+                            "dump (no index pages, free space or bloat), often "
+                            "compressed, so it is normally smaller than this "
+                            "number."
+                        ),
+                    )
+                )
             self._metric_labels[key] = value_label
             self.summary_layout.addWidget(card)
         self.summary_layout.addStretch()

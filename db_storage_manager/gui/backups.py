@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -31,18 +32,21 @@ from PyQt6.QtWidgets import (
 
 from ..backups.base import BackupInfo
 from ..backups.local import LocalBackupAdapter
-from ..backups.manager import BackupManager
+from ..backups.manager import ENCRYPTED_ADAPTERS, BackupManager
 from ..backups.protondrive import (
-    ProtonDriveBackupAdapter,
     ProtonDriveNotConfiguredError,
     configuration_status as proton_drive_status,
 )
+from ..backups.s3 import S3NotConfiguredError
+from ..backups.s3 import configuration_status as s3_status
 from ..backups.scheduler import ScheduledBackupManager
 from ..config import BACKUP_DIR
 from ..db.base import ConnectionConfig
+from ..experimental import is_restore_enabled
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
 from .jobs import JobRunner, JobWorker
+from .restore_dialog import RestoreDialog
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -68,6 +72,7 @@ BackupJobWorker = JobWorker
 _GROUP_CREATE = "create"
 _GROUP_LIST = "list"
 _GROUP_VERIFY = "verify"
+_GROUP_RESTORE = "restore"
 
 
 class BackupsWidget(QWidget):
@@ -110,17 +115,29 @@ class BackupsWidget(QWidget):
         busy_create = self._jobs.is_busy(_GROUP_CREATE)
         busy_list = self._jobs.is_busy(_GROUP_LIST)
         busy_verify = self._jobs.is_busy(_GROUP_VERIFY)
+        busy_restore = self._jobs.is_busy(_GROUP_RESTORE)
         self.create_button.setEnabled(can_create and not busy_create)
         self.refresh_button.setEnabled(can_read and not busy_list)
         self.refresh_proton_button.setEnabled(can_read and not busy_list)
+        self.refresh_s3_button.setEnabled(can_read and not busy_list)
         self.verify_selected_button.setEnabled(can_read and not busy_verify)
         self.verify_all_button.setEnabled(can_read and not busy_verify)
         self.dry_run_button.setEnabled(can_restore and not busy_verify)
+        # Full restore is experimental: hidden unless the flag is on, and it
+        # additionally needs backups:restore (the manager re-checks both).
+        self.restore_button.setVisible(is_restore_enabled())
+        self.restore_button.setEnabled(
+            can_restore
+            and is_restore_enabled()
+            and not busy_restore
+            and not busy_verify
+        )
         can_settings = auth.has_permission("settings:write")
-        if hasattr(self, "configure_proton_button"):
-            self.configure_proton_button.setEnabled(
-                can_settings or not auth.is_rbac_active()
-            )
+        for name in ("configure_proton_button", "configure_s3_button"):
+            if hasattr(self, name):
+                getattr(self, name).setEnabled(
+                    can_settings or not auth.is_rbac_active()
+                )
         if hasattr(self, "schedule_add_button"):
             self.schedule_add_button.setEnabled(can_create)
             self.schedule_remove_button.setEnabled(can_create)
@@ -173,7 +190,7 @@ class BackupsWidget(QWidget):
                 t("tabs.backups"),
                 t(
                     "backups.page_subtitle",
-                    default="Create, verify, and restore local or Proton Drive backups",
+                    default="Create, verify, and restore local, Proton Drive or S3 backups",
                 ),
             )
         )
@@ -191,6 +208,9 @@ class BackupsWidget(QWidget):
         self.adapter_combo = QComboBox()
         self.adapter_combo.addItem(t("backups.local"), "local")
         self.adapter_combo.addItem(t("backups.proton_drive"), "protondrive")
+        self.adapter_combo.addItem(
+            t("settings.adapter_s3", default="S3-compatible"), "s3"
+        )
         self.adapter_combo.currentIndexChanged.connect(self._on_adapter_changed)
         create_form.addRow(t("backups.adapter"), self.adapter_combo)
 
@@ -206,7 +226,7 @@ class BackupsWidget(QWidget):
             t(
                 "backups.encryption_tooltip",
                 default="Enterprise default: encrypt before upload (DSMENC1). "
-                "Required for Proton Drive backups.",
+                "Required for Proton Drive and S3 backups.",
             )
         )
         create_form.addRow("", self.encrypt_checkbox)
@@ -234,6 +254,11 @@ class BackupsWidget(QWidget):
         )
         self.configure_proton_button.clicked.connect(self._configure_proton_drive)
         create_actions.addWidget(self.configure_proton_button)
+        self.configure_s3_button = QPushButton(
+            t("settings.configure_s3", default="Configure S3…")
+        )
+        self.configure_s3_button.clicked.connect(self._configure_s3)
+        create_actions.addWidget(self.configure_s3_button)
         create_actions.addStretch()
         create_layout.addLayout(create_actions)
         create_layout.addStretch()
@@ -261,6 +286,14 @@ class BackupsWidget(QWidget):
         )
         actions.addWidget(self.refresh_proton_button)
 
+        self.refresh_s3_button = QPushButton(
+            t("backups.refresh_s3", default="Refresh S3")
+        )
+        self.refresh_s3_button.clicked.connect(
+            lambda _checked=False: self.refresh_remote_backups("s3", queue=True)
+        )
+        actions.addWidget(self.refresh_s3_button)
+
         self.verify_selected_button = QPushButton(t("backups.verify_checksum"))
         self.verify_selected_button.clicked.connect(self.verify_selected)
         actions.addWidget(self.verify_selected_button)
@@ -272,14 +305,46 @@ class BackupsWidget(QWidget):
         self.dry_run_button = QPushButton(t("backups.dry_run_restore"))
         self.dry_run_button.clicked.connect(self.dry_run_selected)
         actions.addWidget(self.dry_run_button)
+
+        self.restore_button = QPushButton(
+            t("backups.restore_full", default="Restore… (experimental)")
+        )
+        self.restore_button.setToolTip(
+            t(
+                "backups.restore_full_tooltip",
+                default=(
+                    "Overwrites the target database. Needs the backups:restore "
+                    "permission; enabled under Settings → Backups & Adapters."
+                ),
+            )
+        )
+        self.restore_button.clicked.connect(self.restore_selected)
+        actions.addWidget(self.restore_button)
         actions.addStretch()
         restore_layout.addLayout(actions)
 
-        self.backups_table = QTableWidget(0, 6)
+        self.size_explainer_label = QLabel(
+            t(
+                "backups.size_explainer",
+                default=(
+                    "Size is the stored file after compression and encryption. "
+                    "“Source DB size” is the live on-disk size when the backup "
+                    "ran (tables + indexes + TOAST). A dump holds only logical "
+                    "data, so a backup is normally much smaller than the "
+                    "Dashboard’s Total size."
+                ),
+            )
+        )
+        self.size_explainer_label.setWordWrap(True)
+        self.size_explainer_label.setObjectName("backupSizeExplainer")
+        restore_layout.addWidget(self.size_explainer_label)
+
+        self.backups_table = QTableWidget(0, 7)
         self.backups_table.setHorizontalHeaderLabels(
             [
                 t("backups.col_name"),
                 t("backups.col_size"),
+                t("backups.col_source_size", default="Source DB size"),
                 t("backups.col_created"),
                 t("backups.col_sha256"),
                 t("backups.col_status"),
@@ -325,6 +390,9 @@ class BackupsWidget(QWidget):
         self.schedule_adapter_combo = QComboBox()
         self.schedule_adapter_combo.addItem(t("backups.local"), "local")
         self.schedule_adapter_combo.addItem(t("backups.proton_drive"), "protondrive")
+        self.schedule_adapter_combo.addItem(
+            t("settings.adapter_s3", default="S3-compatible"), "s3"
+        )
         schedule_form.addRow(t("backups.adapter"), self.schedule_adapter_combo)
         self.schedule_interval_spin = QSpinBox()
         self.schedule_interval_spin.setRange(5, 10080)
@@ -450,9 +518,21 @@ class BackupsWidget(QWidget):
         if open_proton_drive_config(self):
             self._refresh_proton_status()
 
+    def _configure_s3(self) -> None:
+        """Open the SecureStore S3 dialog and refresh status."""
+        from .s3_config import open_s3_config
+
+        if open_s3_config(self):
+            self._refresh_proton_status()
+
+    def refresh_destinations(self) -> None:
+        """Re-evaluate destination status and the experimental Restore button."""
+        self._refresh_proton_status()
+        self._refresh_job_buttons()
+
     def _on_adapter_changed(self) -> None:
-        """Proton Drive backups must encrypt at rest before upload (opsec)."""
-        if self._selected_adapter_type() == "protondrive":
+        """Off-machine backups must encrypt at rest before upload (opsec)."""
+        if self._selected_adapter_type() in ENCRYPTED_ADAPTERS:
             self.encrypt_checkbox.setChecked(True)
             self.encrypt_checkbox.setEnabled(False)
         else:
@@ -515,17 +595,39 @@ class BackupsWidget(QWidget):
 
         Local create/restore must not surface rclone/Proton configuration errors.
         """
+        adapter_type = self._selected_adapter_type()
         if hasattr(self, "configure_proton_button"):
-            self.configure_proton_button.setVisible(
-                self._selected_adapter_type() == "protondrive"
-            )
+            self.configure_proton_button.setVisible(adapter_type == "protondrive")
+        if hasattr(self, "configure_s3_button"):
+            self.configure_s3_button.setVisible(adapter_type == "s3")
 
-        if self._selected_adapter_type() != "protondrive":
+        t = self.i18n.translate
+        if adapter_type == "s3":
+            status = s3_status()
+            if status.get("configured"):
+                text = t(
+                    "backups.s3_ready",
+                    default="S3 ready: bucket {bucket} ({credentials}).",
+                    bucket=status.get("bucket"),
+                    credentials=status.get("credentials"),
+                )
+                color = _STATUS_COLORS["pass"]
+            else:
+                text = t(
+                    "backups.s3_not_configured",
+                    default="S3 is not configured: {error}",
+                    error=status.get("error") or "",
+                )
+                color = _STATUS_COLORS["not_configured"]
+            self.proton_status_label.setText(text)
+            self.proton_status_label.setStyleSheet(f"color: {color.name()};")
+            return
+
+        if adapter_type != "protondrive":
             self.proton_status_label.clear()
             self.proton_status_label.setStyleSheet("")
             return
 
-        t = self.i18n.translate
         status = proton_drive_status()
         if status.get("configured"):
             text = t(
@@ -582,8 +684,12 @@ class BackupsWidget(QWidget):
 
         adapter_type = self.adapter_combo.currentData() or "local"
         compression = self.compression_combo.currentData() or "none"
-        # Opsec: Proton Drive uploads are always DSMENC1-encrypted before rclone.
-        encrypt = True if adapter_type == "protondrive" else self.encrypt_checkbox.isChecked()
+        # Opsec: off-machine uploads are always DSMENC1-encrypted first.
+        encrypt = (
+            True
+            if adapter_type in ENCRYPTED_ADAPTERS
+            else self.encrypt_checkbox.isChecked()
+        )
         enc_key = self.encryption_key_edit.text().strip() or None
         if encrypt and not enc_key:
             self.proton_status_label.setText(t("backups.encryption_key_required"))
@@ -605,6 +711,10 @@ class BackupsWidget(QWidget):
                     raise ProtonDriveNotConfiguredError(
                         "Proton Drive adapter unavailable"
                     )
+            elif adapter_type == "s3":
+                adapter = manager.get_adapter("s3")
+                if adapter is None:
+                    raise S3NotConfiguredError("S3 adapter unavailable")
             else:
                 adapter = LocalBackupAdapter(base_path=local_dir)
             return asyncio.run(
@@ -615,15 +725,21 @@ class BackupsWidget(QWidget):
             self.proton_status_label.setText(
                 t("backups.backup_created_detail", name=info.name, path=info.path)
             )
-            if adapter_type == "protondrive":
-                self.refresh_proton_backups(queue=True)
+            if adapter_type in ("protondrive", "s3"):
+                self.refresh_remote_backups(adapter_type, queue=True)
             else:
                 self.refresh_backups(queue=True)
 
         def on_fail(message: str) -> None:
             if "not configured" in message.lower() or "unavailable" in message.lower():
                 self.proton_status_label.setText(
-                    t("backups.proton_not_configured", error=message)
+                    t(
+                        "backups.s3_not_configured",
+                        default="S3 is not configured: {error}",
+                        error=message,
+                    )
+                    if adapter_type == "s3"
+                    else t("backups.proton_not_configured", error=message)
                 )
             else:
                 self.proton_status_label.setText(
@@ -692,19 +808,30 @@ class BackupsWidget(QWidget):
 
     def refresh_proton_backups(self, *, queue: bool = False) -> None:
         """List backups from Proton Drive when credentials/rclone are available."""
+        self.refresh_remote_backups("protondrive", queue=queue)
+
+    def refresh_remote_backups(self, destination: str, *, queue: bool = False) -> None:
+        """List backups from an off-machine destination (``protondrive`` / ``s3``)."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:read")
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
-        self._list_source = "protondrive"
+        self._list_source = destination
         manager = self.backup_manager
+        is_s3 = destination == "s3"
 
         def job() -> List[BackupInfo]:
-            adapter = manager.get_adapter("protondrive")
+            adapter = manager.get_adapter(destination)
             if adapter is None:
-                raise ProtonDriveNotConfiguredError("Proton Drive adapter unavailable")
+                raise (
+                    S3NotConfiguredError("S3 adapter unavailable")
+                    if is_s3
+                    else ProtonDriveNotConfiguredError(
+                        "Proton Drive adapter unavailable"
+                    )
+                )
             return asyncio.run(adapter.list_backups())
 
         def on_ok(backups: List[BackupInfo]) -> None:
@@ -712,7 +839,13 @@ class BackupsWidget(QWidget):
             self._verify_results.clear()
             self._populate_table()
             self._set_status(
-                t("backups.proton_listed", count=len(self._backups)),
+                t(
+                    "backups.s3_listed",
+                    default="{count} S3 backup(s) listed.",
+                    count=len(self._backups),
+                )
+                if is_s3
+                else t("backups.proton_listed", count=len(self._backups)),
                 "idle",
             )
 
@@ -721,7 +854,13 @@ class BackupsWidget(QWidget):
             self._populate_table()
             if "not configured" in message.lower() or "unavailable" in message.lower():
                 self._set_status(
-                    t("backups.proton_not_configured", error=message),
+                    t(
+                        "backups.s3_not_configured",
+                        default="S3 is not configured: {error}",
+                        error=message,
+                    )
+                    if is_s3
+                    else t("backups.proton_not_configured", error=message),
                     "not_configured",
                 )
             else:
@@ -733,9 +872,13 @@ class BackupsWidget(QWidget):
         self._run_backup_job(
             job,
             group=_GROUP_LIST,
-            busy_message=t(
-                "backups.proton_refresh_in_progress",
-                default="Listing Proton Drive backups…",
+            busy_message=(
+                t("backups.s3_refresh_in_progress", default="Listing S3 backups…")
+                if is_s3
+                else t(
+                    "backups.proton_refresh_in_progress",
+                    default="Listing Proton Drive backups…",
+                )
             ),
             on_ok=on_ok,
             on_fail=on_fail,
@@ -780,9 +923,12 @@ class BackupsWidget(QWidget):
                 status = "unknown"
                 detail = t("backups.status_unchecked")
 
+            meta = backup.metadata or {}
+            live_bytes = self._meta_bytes(meta.get("sourceStorageBytes"))
             values = [
                 backup.name,
                 self._format_size(backup.size),
+                self._format_size(live_bytes) if live_bytes is not None else "—",
                 created_text,
                 sha_short,
                 status.upper(),
@@ -792,12 +938,75 @@ class BackupsWidget(QWidget):
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setData(Qt.ItemDataRole.UserRole, backup.id)
-                if col in (4, 5):
+                if col in (5, 6):
                     item.setForeground(QBrush(color))
+                if col in (1, 2):
+                    item.setToolTip(self._size_tooltip(backup))
                 self.backups_table.setItem(row, col, item)
 
         if restore_row is not None:
             self.backups_table.selectRow(restore_row)
+
+    @staticmethod
+    def _meta_bytes(value: Any) -> Optional[int]:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return None
+        return number if number >= 0 else None
+
+    def _size_tooltip(self, backup: BackupInfo) -> str:
+        """Explain why a backup is smaller than the live database size."""
+        t = self.i18n.translate
+        meta = backup.metadata or {}
+        stored = self._format_size(backup.size)
+        dump = self._meta_bytes(meta.get("dumpSize"))
+        live = self._meta_bytes(meta.get("sourceStorageBytes"))
+        pipeline = []
+        compression = str(meta.get("compression") or "none").lower()
+        if compression != "none":
+            pipeline.append(compression)
+        if meta.get("encryption"):
+            pipeline.append("AES-256-GCM")
+        lines = [
+            t(
+                "backups.size_tip_stored",
+                default="Stored file: {size} ({format}).",
+                size=stored,
+                format="+".join(pipeline)
+                or t("backups.size_tip_raw", default="raw dump"),
+            )
+        ]
+        if dump is not None:
+            lines.append(
+                t(
+                    "backups.size_tip_dump",
+                    default="Dump before compression/encryption: {size}.",
+                    size=self._format_size(dump),
+                )
+            )
+        if live is not None:
+            lines.append(
+                t(
+                    "backups.size_tip_live",
+                    default="Live database when the backup ran: {size} (tables, indexes, TOAST).",
+                    size=self._format_size(live),
+                )
+            )
+        else:
+            lines.append(
+                t(
+                    "backups.size_tip_legacy",
+                    default="No live size was recorded for this backup (created by an older version).",
+                )
+            )
+        lines.append(
+            t(
+                "backups.size_tip_why",
+                default="A dump stores logical data only; indexes, free space and bloat are not exported, so it is normally smaller than the Dashboard’s Total size.",
+            )
+        )
+        return "\n".join(lines)
 
     def _selected_backup(self) -> Optional[BackupInfo]:
         rows = self.backups_table.selectionModel().selectedRows()
@@ -950,12 +1159,14 @@ class BackupsWidget(QWidget):
             temp_download: Optional[Path] = None
             try:
                 if manager.is_remote_backup(backup):
-                    adapter = manager.get_adapter("protondrive")
-                    if not isinstance(adapter, ProtonDriveBackupAdapter):
+                    adapter = manager.get_adapter(
+                        manager.backup_destination(backup) or "protondrive"
+                    )
+                    if adapter is None:
                         return {
                             "ok": False,
                             "status": "not_configured",
-                            "error": "Proton Drive adapter unavailable",
+                            "error": "Backup destination adapter unavailable",
                         }
                     temp_download = Path(asyncio.run(adapter.restore_backup(backup)))
                     local_info = BackupInfo(
@@ -1000,6 +1211,126 @@ class BackupsWidget(QWidget):
                 default="Dry-run restore in progress…",
             ),
             on_ok=on_ok,
+        )
+
+    def _restore_targets(self) -> List[ConnectionConfig]:
+        targets: List[ConnectionConfig] = []
+        for conn in self.connections or []:
+            cfg = self._as_connection_config(conn)
+            if cfg is not None:
+                targets.append(cfg)
+        return targets
+
+    def restore_selected(self) -> None:
+        """Experimental full restore of the selected backup (destructive)."""
+        t = self.i18n.translate
+        if not is_restore_enabled():
+            self._set_status(
+                t(
+                    "backups.restore_disabled",
+                    default="Full restore is experimental and turned off. Enable it under Settings → Backups & Adapters.",
+                ),
+                "not_configured",
+            )
+            return
+        try:
+            get_auth_manager().require("backups:restore")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
+        backup = self._selected_backup()
+        if backup is None:
+            self._set_status(t("backups.no_backup_selected"), "missing_checksum")
+            return
+        targets = self._restore_targets()
+        if not targets:
+            self._set_status(t("backups.no_connection_selected"), "fail")
+            return
+
+        dialog = RestoreDialog(
+            backup,
+            targets,
+            passphrase=self.encryption_key_edit.text().strip(),
+            parent=self,
+        )
+        if dialog.exec() != RestoreDialog.DialogCode.Accepted:
+            return
+        values = dialog.result_values()
+        target: ConnectionConfig = values["target"]
+
+        final = QMessageBox.warning(
+            self,
+            t("restore.final_title", default="Final confirmation"),
+            t(
+                "restore.final_body",
+                default="Overwrite database {database} on {connection} with {backup}? This cannot be undone.",
+                database=BackupManager.restore_confirmation_phrase(target),
+                connection=target.name,
+                backup=backup.name,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if final != QMessageBox.StandardButton.Yes:
+            return
+
+        manager = self.backup_manager
+        local_dir = self.backup_dir
+        destination = manager.backup_destination(backup)
+
+        def job() -> Dict[str, Any]:
+            if destination:
+                adapter = manager.get_adapter(destination)
+                if adapter is None:
+                    raise RuntimeError("Backup destination adapter unavailable")
+            else:
+                adapter = LocalBackupAdapter(base_path=local_dir)
+            return asyncio.run(
+                manager.full_restore(
+                    adapter,
+                    backup,
+                    target,
+                    confirmation=values["confirmation"],
+                    encryption_key=values["passphrase"],
+                    safety_backup_dir=(
+                        Path(local_dir) if values["safety_backup"] else None
+                    ),
+                    safety_passphrase=values["safety_passphrase"],
+                )
+            )
+
+        def on_ok(result: Dict[str, Any]) -> None:
+            safety = result.get("safetyBackup")
+            self._set_status(
+                t(
+                    "backups.restore_done_safety",
+                    default="Restore finished. Safety backup: {name}.",
+                    name=safety,
+                )
+                if safety
+                else t("backups.restore_done", default="Restore finished."),
+                "pass",
+            )
+            self.refresh_backups(queue=True)
+
+        def on_fail(message: str) -> None:
+            self._set_status(
+                t(
+                    "backups.restore_failed",
+                    default="Restore failed: {error}",
+                    error=message,
+                ),
+                "fail",
+            )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_RESTORE,
+            busy_message=t(
+                "backups.restore_in_progress", default="Restoring backup…"
+            ),
+            on_ok=on_ok,
+            on_fail=on_fail,
         )
 
     def _reload_schedules_table(self) -> None:
@@ -1068,7 +1399,11 @@ class BackupsWidget(QWidget):
             return
 
         adapter_type = str(self.schedule_adapter_combo.currentData() or "local")
-        encrypt = True if adapter_type == "protondrive" else self.schedule_encrypt_checkbox.isChecked()
+        encrypt = (
+            True
+            if adapter_type in ENCRYPTED_ADAPTERS
+            else self.schedule_encrypt_checkbox.isChecked()
+        )
         enc_key = self.schedule_passphrase_edit.text().strip() or None
         if encrypt and not enc_key:
             self._set_status(t("backups.encryption_key_required"), "fail")

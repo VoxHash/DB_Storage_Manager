@@ -41,6 +41,7 @@ from ..db.factory import DatabaseConnectionFactory
 from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
+from ..monitoring.notifications import resolve_email_config, validate_email_config
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
 from .jobs import JobRunner
@@ -137,6 +138,7 @@ class MonitoringWidget(QWidget):
         self._tray = None
         self._can_read = True
         self._can_write = True
+        self._email_ready = False
         self._threshold_spins: Dict[str, Dict[str, QDoubleSpinBox]] = {}
         self.setObjectName("glassmorphism")
         self.init_ui()
@@ -360,8 +362,12 @@ class MonitoringWidget(QWidget):
         self.in_app_channel_check = QCheckBox(
             t("monitoring.channel_in_app", default="In-app notification log")
         )
+        self.email_channel_check = QCheckBox(
+            t("monitoring.channel_email", default="Email (SMTP, set up in Settings)")
+        )
         channels_form.addWidget(self.desktop_channel_check)
         channels_form.addWidget(self.in_app_channel_check)
+        channels_form.addWidget(self.email_channel_check)
         channels_layout.addWidget(channels_group)
 
         channel_actions = QHBoxLayout()
@@ -429,11 +435,38 @@ class MonitoringWidget(QWidget):
         self.in_app_channel_check.setChecked(
             master_on and bool(channels.get("in_app", True))
         )
+        self.refresh_email_channel(
+            checked=master_on and bool(channels.get("email", False))
+        )
         self.notification_dispatcher.configure(
             {
                 "desktop": self.desktop_channel_check.isChecked(),
                 "in_app": self.in_app_channel_check.isChecked(),
+                "email": self.email_channel_check.isChecked(),
             }
+        )
+
+    def refresh_email_channel(self, checked: Optional[bool] = None) -> None:
+        """Re-read the SMTP config; the Email channel needs a complete one."""
+        t = self.i18n.translate
+        cfg = resolve_email_config(self.secure_store.get_settings())
+        problems = validate_email_config(cfg)
+        self._email_ready = not problems
+        self.notification_dispatcher.set_email_config(cfg)
+        if checked is None:
+            checked = self.email_channel_check.isChecked()
+        self.email_channel_check.setChecked(bool(checked) and self._email_ready)
+        self.email_channel_check.setToolTip(
+            t("monitoring.email_ready", default="SMTP is configured.")
+            if self._email_ready
+            else t(
+                "monitoring.email_not_ready",
+                default="Configure SMTP under Settings → Notifications first: {problems}",
+                problems="; ".join(problems),
+            )
+        )
+        self.email_channel_check.setEnabled(
+            self._email_ready and getattr(self, "_can_write", True)
         )
 
     def _populate_threshold_spins(
@@ -498,11 +531,12 @@ class MonitoringWidget(QWidget):
         channels = {
             "desktop": self.desktop_channel_check.isChecked(),
             "in_app": self.in_app_channel_check.isChecked(),
+            "email": self.email_channel_check.isChecked(),
         }
         settings = self.secure_store.get_settings()
         settings["alert_channels"] = channels
-        # Keep global notifications flag in sync when either channel is on
-        settings["notifications"] = channels["desktop"] or channels["in_app"]
+        # Keep global notifications flag in sync when any channel is on
+        settings["notifications"] = any(channels.values())
         self.secure_store.set_settings(settings)
         self.notification_dispatcher.configure(channels)
         QMessageBox.information(
@@ -560,6 +594,9 @@ class MonitoringWidget(QWidget):
             self.in_app_channel_check,
         ):
             widget.setEnabled(self._can_write)
+        self.email_channel_check.setEnabled(
+            self._can_write and getattr(self, "_email_ready", False)
+        )
         for spins in self._threshold_spins.values():
             for spin in spins.values():
                 spin.setEnabled(self._can_write)
@@ -599,6 +636,29 @@ class MonitoringWidget(QWidget):
         """Stop timers and wait briefly for in-flight polls (window close)."""
         self.update_timer.stop()
         self._jobs.wait_all(3000)
+        # Let an in-flight alert email finish instead of dropping it on exit.
+        self.notification_dispatcher.wait_email_idle(5.0)
+
+    def autostart_if_configured(self) -> bool:
+        """Start watching the connection chosen in Settings (monitor-role UX).
+
+        Returns True when a start was requested. Honours RBAC: needs
+        ``monitoring:read``; does nothing when monitoring already runs.
+        """
+        if self.monitor is not None or not self._can_read:
+            return False
+        wanted = (self.secure_store.get_settings().get("monitoring") or {}).get(
+            "autostart_connection_id"
+        )
+        if not wanted:
+            return False
+        for index in range(1, self.connection_combo.count()):
+            conn = self.connection_combo.itemData(index)
+            if conn and conn.get("id") == wanted:
+                self.connection_combo.setCurrentIndex(index)
+                self._start_monitoring()
+                return True
+        return False
 
     def _start_monitoring(self):
         """Start monitoring: tunnel + checkout on a worker, then timer-driven polls."""
@@ -713,6 +773,7 @@ class MonitoringWidget(QWidget):
         def on_ok(_result):
             if self.monitor is monitor:
                 self._update_display()
+                self._refresh_notification_log()
 
         def on_fail(message):
             if self.monitor is monitor:

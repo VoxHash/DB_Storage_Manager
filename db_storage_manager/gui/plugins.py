@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -25,6 +25,7 @@ from ..i18n.manager import get_i18n_manager
 from ..plugins.marketplace import LocalPluginMarketplace
 from ..plugins.manifest import ManifestError
 from ..security.auth import PermissionDenied, get_auth_manager
+from ..themes.manager import get_theme_manager
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -161,11 +162,15 @@ class PluginsWidget(QWidget):
             ]
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
+                item.setToolTip(str(value))
                 if col == 5:
+                    # Theme tokens, not fixed dark-on-dark Qt colours.
                     item.setForeground(
-                        Qt.GlobalColor.darkGreen
-                        if enabled
-                        else Qt.GlobalColor.darkRed
+                        QColor(
+                            get_theme_manager().get_color(
+                                "success" if enabled else "error"
+                            )
+                        )
                     )
                 self.table.setItem(row_idx, col, item)
         self.status_label.setText(

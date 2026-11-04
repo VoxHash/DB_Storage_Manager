@@ -14,7 +14,7 @@ class DataComparisonPlugin(Plugin):
         metadata = PluginMetadata(
             name="data_comparison",
             version="1.0.0",
-            author="DB Storage Manager",
+            author="VoxHash",
             description="Compare data between databases",
             plugin_type=PluginType.DATA_COMPARISON,
             plugin_id="data_comparison",

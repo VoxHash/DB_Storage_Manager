@@ -174,15 +174,6 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
             background-color: {selection};
             color: {primary};
         }}
-        QStatusBar {{
-            background-color: {surface};
-            color: {muted};
-            border-top: 1px solid {border};
-            min-height: 22px;
-        }}
-        QStatusBar::item {{
-            border: none;
-        }}
         #ContentShell {{
             background-color: {content_bg};
         }}
@@ -268,6 +259,20 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
             background: transparent;
             border: none;
             padding: 0 0 4px 0;
+        }}
+        #SettingsHint {{
+            color: {muted};
+            font-size: 12px;
+            background: transparent;
+            border: none;
+            padding: 0 0 4px 0;
+        }}
+        QScrollArea {{
+            background: transparent;
+            border: none;
+        }}
+        QScrollArea > QWidget > QWidget {{
+            background: transparent;
         }}
         #MetricCard {{
             background-color: {elevated};
@@ -549,6 +554,17 @@ def apply_glassmorphism(widget: QWidget) -> None:
             color: {muted};
             font-size: 12px;
             font-weight: 500;
+        }}
+        QLabel#SettingsHint {{
+            color: {muted};
+            font-size: 12px;
+        }}
+        QScrollArea {{
+            background: transparent;
+            border: none;
+        }}
+        QScrollArea > QWidget > QWidget {{
+            background: transparent;
         }}
         #MetricCard {{
             background-color: {elevated};

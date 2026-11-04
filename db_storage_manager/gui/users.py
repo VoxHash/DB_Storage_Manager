@@ -29,7 +29,6 @@ from ..security.auth import (
 )
 from ..security.bootstrap import bootstrap_admin
 from ..security.store import SecureStore
-from .utils import apply_glassmorphism
 
 
 def role_label(role: UserRole) -> str:
@@ -100,16 +99,15 @@ class UsersAdminWidget(QWidget):
         self.i18n = get_i18n_manager()
         self.secure_store = SecureStore()
         self._build()
-        self.refresh()
 
     def _build(self) -> None:
-        t = self.i18n.translate
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
-        self.group = QGroupBox(
-            t("auth.users_group", default="Users & RBAC")
-        )
+        # Inherits colours from the active app / Settings stylesheet: a private
+        # stylesheet here would freeze the theme it was built under (dark RBAC
+        # panel on the Light theme).
+        self.group = QGroupBox()
         g_layout = QVBoxLayout(self.group)
 
         self.status_label = QLabel()
@@ -117,15 +115,6 @@ class UsersAdminWidget(QWidget):
         g_layout.addWidget(self.status_label)
 
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(
-            [
-                t("auth.username", default="Username"),
-                t("auth.email"),
-                t("auth.role"),
-                t("auth.col_enabled"),
-                t("auth.col_last_login"),
-            ]
-        )
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch
         )
@@ -136,44 +125,65 @@ class UsersAdminWidget(QWidget):
         g_layout.addWidget(self.table)
 
         actions = QHBoxLayout()
-        self.bootstrap_btn = QPushButton(
-            t("auth.bootstrap", default="Bootstrap first admin…")
-        )
+        self.bootstrap_btn = QPushButton()
         self.bootstrap_btn.clicked.connect(self._bootstrap)
         actions.addWidget(self.bootstrap_btn)
 
-        self.add_btn = QPushButton(t("auth.add_user", default="Add user…"))
+        self.add_btn = QPushButton()
         self.add_btn.clicked.connect(self._add_user)
         actions.addWidget(self.add_btn)
 
-        self.role_btn = QPushButton(
-            t("auth.change_role", default="Change role…")
-        )
+        self.role_btn = QPushButton()
         self.role_btn.clicked.connect(self._change_role)
         actions.addWidget(self.role_btn)
 
-        self.password_btn = QPushButton(
-            t("auth.reset_password", default="Reset password…")
-        )
+        self.password_btn = QPushButton()
         self.password_btn.clicked.connect(self._reset_password)
         actions.addWidget(self.password_btn)
 
-        self.toggle_btn = QPushButton(
-            t("auth.toggle_enabled", default="Enable / Disable")
-        )
+        self.toggle_btn = QPushButton()
         self.toggle_btn.clicked.connect(self._toggle_enabled)
         actions.addWidget(self.toggle_btn)
 
-        self.delete_btn = QPushButton(
-            t("auth.delete_user", default="Delete user")
-        )
+        self.delete_btn = QPushButton()
         self.delete_btn.clicked.connect(self._delete_user)
         actions.addWidget(self.delete_btn)
         actions.addStretch()
         g_layout.addLayout(actions)
 
         layout.addWidget(self.group)
-        apply_glassmorphism(self)
+        self.retranslate()
+
+    def retranslate(self) -> None:
+        """Re-apply every label in the current language (live language switch)."""
+        t = self.i18n.translate
+        # "&" would be eaten as a mnemonic marker ("Users & RBAC" -> "Users_RBAC").
+        self.group.setTitle(
+            t("auth.users_group", default="Users & RBAC").replace("&", "&&")
+        )
+        self.table.setHorizontalHeaderLabels(
+            [
+                t("auth.username", default="Username"),
+                t("auth.email"),
+                t("auth.role"),
+                t("auth.col_enabled"),
+                t("auth.col_last_login"),
+            ]
+        )
+        self.bootstrap_btn.setText(
+            t("auth.bootstrap", default="Bootstrap first admin…")
+        )
+        self.add_btn.setText(t("auth.add_user", default="Add user…"))
+        self.role_btn.setText(t("auth.change_role", default="Change role…"))
+        self.password_btn.setText(
+            t("auth.reset_password", default="Reset password…")
+        )
+        self.toggle_btn.setText(
+            t("auth.toggle_enabled", default="Enable / Disable")
+        )
+        self.delete_btn.setText(t("auth.delete_user", default="Delete user"))
+        if hasattr(self, "table"):
+            self.refresh()
 
     def refresh(self) -> None:
         t = self.i18n.translate

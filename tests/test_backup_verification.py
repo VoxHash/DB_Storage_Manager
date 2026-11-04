@@ -262,7 +262,7 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_se
     )
 
     widget = BackupsWidget([], backup_dir=backup_dir)
-    assert widget.backups_table.columnCount() == 6
+    assert widget.backups_table.columnCount() == 7
     assert widget.backups_table.rowCount() == 1
     assert widget.verify_selected_button.text()
     assert widget.dry_run_button.text()

@@ -14,7 +14,7 @@ class MigrationPlugin(Plugin):
         metadata = PluginMetadata(
             name="migration",
             version="1.0.0",
-            author="DB Storage Manager",
+            author="VoxHash",
             description="Database schema migration tools",
             plugin_type=PluginType.MIGRATION,
             plugin_id="migration",
