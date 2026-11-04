@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -296,7 +297,9 @@ def test_audit_strips_secret_keys(tmp_path, monkeypatch):
     text = audit.audit_log_path().read_text()
     assert "hunter2" not in text and "apiToken" not in text
     assert json.loads(text)["nested"] == {"k": 1}
-    assert (audit.audit_log_path().stat().st_mode & 0o777) == 0o600
+    # 0o600 is applied only where the OS stores Unix mode bits.
+    if os.name != "nt":
+        assert (audit.audit_log_path().stat().st_mode & 0o777) == 0o600
 
 
 def test_backups_in_the_same_second_never_overwrite_each_other(env):

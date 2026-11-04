@@ -145,13 +145,26 @@ def build_alert_message(
     return msg
 
 
-def send_email(cfg: Dict[str, Any], msg: EmailMessage, *, timeout: float = 15.0) -> None:
-    """Deliver ``msg`` over real SMTP. Raises on any failure."""
+def send_email(
+    cfg: Dict[str, Any],
+    msg: EmailMessage,
+    *,
+    timeout: float = 15.0,
+    context: Optional[ssl.SSLContext] = None,
+) -> None:
+    """Deliver ``msg`` over real SMTP. Raises on any failure.
+
+    Pass ``context`` when calling from a worker. On macOS,
+    ``ssl.create_default_context()`` loads the system trust store and
+    waits for the main CFRunLoop. Doing that on a worker while the
+    main thread is blocked in ``Thread.join`` never returns.
+    """
     errors = validate_email_config(cfg)
     if errors:
         raise ValueError("; ".join(errors))
     host, port, security = cfg["host"], int(cfg["port"]), cfg["security"]
-    context = ssl.create_default_context()
+    if security in ("ssl", "starttls") and context is None:
+        context = ssl.create_default_context()
     if security == "ssl":
         client: smtplib.SMTP = smtplib.SMTP_SSL(
             host, port, timeout=timeout, context=context
@@ -287,10 +300,20 @@ class NotificationDispatcher:
             alert.timestamp,
         )
         self.delivered.append(entry)
+        # Trust store on this thread, before the worker. See send_email.
+        security = str(cfg.get("security") or "")
+        if security in ("ssl", "starttls"):
+            context: Optional[ssl.SSLContext] = ssl.create_default_context()
+        else:
+            context = None
+        sender = self._email_sender
 
         def worker() -> None:
             try:
-                self._email_sender(cfg, msg)
+                if sender is send_email:
+                    send_email(cfg, msg, context=context)
+                else:
+                    sender(cfg, msg)
                 entry["delivered"] = True
             except Exception as exc:  # noqa: BLE001 - surfaced in the log
                 entry["error"] = f"{type(exc).__name__}: {exc}"

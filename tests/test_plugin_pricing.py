@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -128,6 +129,39 @@ def test_product_bodies_match_licensechain_products_api():
     json.dumps(bodies)
 
 
+def _dry_run_env() -> dict:
+    """Child env that can start CPython without a real API key.
+
+    A replacement env of only PATH plus the key cannot boot Python on
+    Windows (needs SYSTEMROOT) and cannot resolve a home directory
+    (needs USERPROFILE). Dry-run does not open a socket.
+    """
+    keep = (
+        "SYSTEMROOT",
+        "SYSTEMDRIVE",
+        "WINDIR",
+        "COMSPEC",
+        "PATH",
+        "PATHEXT",
+        "USERPROFILE",
+        "HOMEDRIVE",
+        "HOMEPATH",
+        "HOME",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "LANG",
+        "LC_ALL",
+        "PYTHONUTF8",
+        "PYTHONIOENCODING",
+    )
+    env = {key: os.environ[key] for key in keep if os.environ.get(key)}
+    env["LICENSECHAIN_API_KEY"] = "secret-should-not-appear"
+    return env
+
+
 def test_script_dry_run_prints_bodies_and_never_calls_network(tmp_path):
     plugin = tmp_path / "pro_report"
     plugin.mkdir()
@@ -138,7 +172,7 @@ def test_script_dry_run_prints_bodies_and_never_calls_network(tmp_path):
         [sys.executable, str(ROOT / "scripts" / "licensechain_products.py"), str(plugin)],
         capture_output=True,
         text=True,
-        env={"PATH": "", "LICENSECHAIN_API_KEY": "secret-should-not-appear"},
+        env=_dry_run_env(),
         cwd=ROOT,
     )
     assert result.returncode == 0, result.stderr

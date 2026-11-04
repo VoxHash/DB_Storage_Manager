@@ -7,6 +7,7 @@ import base64
 import json
 import os
 import stat
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -351,7 +352,7 @@ def test_create_list_verify_delete_with_encryption(
     runner = FakeRcloneRunner(remotes=["protondrive"])
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,
@@ -460,7 +461,7 @@ def test_copyto_retries_after_draft_conflict(
     runner = DraftThenOkRunner()
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,
@@ -488,7 +489,7 @@ def test_prefer_encryption_requires_key(source_dump: Path):
     runner = FakeRcloneRunner()
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "username": "u",
             "password": "p",
             "prefer_encryption": True,
@@ -559,7 +560,7 @@ def test_manager_registers_protondrive_adapter():
         {
             "username": "u",
             "password": "p",
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
         },
     )
     assert isinstance(adapter, ProtonDriveBackupAdapter)
@@ -576,7 +577,7 @@ def test_create_backup_sanitizes_unsafe_connection_name(
     runner = FakeRcloneRunner(remotes=["protondrive"])
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,
@@ -634,7 +635,7 @@ def test_create_backup_sanitizes_ssh_mysql_connection_name(
     runner = FakeRcloneRunner(remotes=["protondrive"])
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,
@@ -685,7 +686,7 @@ def test_manager_proton_encrypt_unsafe_connection_name(
     runner = FakeRcloneRunner(remotes=["protondrive"])
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,
@@ -758,7 +759,7 @@ def test_ephemeral_rclone_config_when_creds_present_and_conf_missing(
     spaced_folder = "DB Storage Manager"
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": spaced_folder,
             "prefer_encryption": True,
@@ -828,8 +829,10 @@ def test_write_ephemeral_protondrive_rclone_config_mode_600(tmp_path: Path):
         two_fa="123456",
     )
     try:
-        mode = conf.stat().st_mode
-        assert stat.S_IMODE(mode) == 0o600
+        mode = stat.S_IMODE(conf.stat().st_mode)
+        # Windows stat() reports 0o666; chmod cannot store Unix bits.
+        if os.name != "nt":
+            assert mode == 0o600
         text = conf.read_text(encoding="utf-8")
         assert "[protondrive]" in text
         assert "type = protondrive" in text
@@ -853,7 +856,7 @@ def test_existing_rclone_conf_skips_ephemeral_config(
     runner = FakeRcloneRunner(remotes=["protondrive"])
     adapter = ProtonDriveBackupAdapter(
         {
-            "rclone_bin": "/usr/bin/env",
+            "rclone_bin": sys.executable,
             "remote": "protondrive",
             "path": "db-storage-manager-backups",
             "prefer_encryption": True,

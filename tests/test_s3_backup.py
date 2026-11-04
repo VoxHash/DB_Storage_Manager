@@ -32,9 +32,13 @@ BUCKET = "dsm-backups"
 
 @pytest.fixture(scope="module")
 def s3_endpoint():
-    server = ThreadedMotoServer(port=0)
+    # moto binds 0.0.0.0 by default. Linux accepts that as a destination;
+    # Windows rejects it (WinError 10049).
+    server = ThreadedMotoServer(ip_address="127.0.0.1", port=0)
     server.start()
     host, port = server.get_host_and_port()
+    if host in ("0.0.0.0", "::", ""):
+        host = "127.0.0.1"
     url = f"http://{host}:{port}"
     client = boto3.client(
         "s3",

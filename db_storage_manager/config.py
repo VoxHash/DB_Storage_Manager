@@ -10,14 +10,38 @@ from typing import Optional
 # Application paths
 APP_NAME = "DB Storage Manager"
 APP_VERSION = "1.0.7"
+# Same leaf on every OS. The display name is not a stable directory id;
+# Linux already used this slug, and desktop-identity tests require it.
+_DATA_DIR_NAME = "db-storage-manager"
+
+
+def _user_data_dir() -> Path:
+    """Per-user config directory.
+
+    ``Path.home()`` runs only when the platform directory is missing.
+    Using it as a ``getenv`` default evaluates it even when ``APPDATA``
+    is set, and a Windows child with no ``USERPROFILE`` then crashes
+    (there is no passwd fallback).
+    """
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            base = Path(appdata)
+        else:
+            base = Path.home() / "AppData" / "Roaming"
+        preferred = base / _DATA_DIR_NAME
+        legacy = base / APP_NAME
+        if not preferred.exists() and legacy.is_dir():
+            try:
+                legacy.rename(preferred)
+            except OSError:
+                return legacy
+        return preferred
+    return Path.home() / ".config" / _DATA_DIR_NAME
+
 
 # User data directory
-if os.name == "nt":  # Windows
-    USER_DATA_DIR = (
-        Path(os.getenv("APPDATA", Path.home() / "AppData" / "Roaming")) / APP_NAME
-    )
-else:  # macOS/Linux
-    USER_DATA_DIR = Path.home() / ".config" / APP_NAME.lower().replace(" ", "-")
+USER_DATA_DIR = _user_data_dir()
 
 # Ensure user data directory exists
 USER_DATA_DIR.mkdir(parents=True, exist_ok=True)
