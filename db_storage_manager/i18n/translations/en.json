@@ -272,7 +272,7 @@
     "scratch_done": "Scratch restore finished in {name}. Production was not modified.",
     "backup_failed": "Backup failed",
     "restore_success": "Restore completed successfully",
-    "restore_failed": "Restore failed",
+    "restore_failed": "Restore failed: {error}",
     "refresh": "Refresh",
     "verify_checksum": "Verify Checksum",
     "verify_all": "Verify All",

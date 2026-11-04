@@ -162,7 +162,7 @@
     "scratch_done": "Pemulihan latihan selesai di {name}. Produksi tidak diubah.",
     "backup_failed": "Pembuatan cadangan gagal",
     "restore_success": "Pemulihan berhasil diselesaikan",
-    "restore_failed": "Pemulihan gagal",
+    "restore_failed": "Pemulihan gagal: {error}",
     "page_subtitle": "Buat, verifikasi, dan pulihkan cadangan lokal, Proton Drive, atau S3",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

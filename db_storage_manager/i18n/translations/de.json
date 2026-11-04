@@ -162,7 +162,7 @@
     "scratch_done": "Die Probewiederherstellung in {name} ist abgeschlossen. Die Produktion wurde nicht geändert.",
     "backup_failed": "Backup-Erstellung fehlgeschlagen",
     "restore_success": "Wiederherstellung erfolgreich abgeschlossen",
-    "restore_failed": "Wiederherstellung fehlgeschlagen",
+    "restore_failed": "Wiederherstellung fehlgeschlagen: {error}",
     "page_subtitle": "Lokale, Proton-Drive- oder S3-Backups erstellen, prüfen und wiederherstellen",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

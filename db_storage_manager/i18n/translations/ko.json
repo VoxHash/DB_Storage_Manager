@@ -162,7 +162,7 @@
     "scratch_done": "리허설 복원이 {name}에서 끝났습니다. 운영 환경은 변경되지 않았습니다.",
     "backup_failed": "백업 생성 실패",
     "restore_success": "복원이 성공적으로 완료되었습니다",
-    "restore_failed": "복원 실패",
+    "restore_failed": "복원 실패: {error}",
     "page_subtitle": "로컬, Proton Drive 또는 S3 백업 생성, 검증 및 복원",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

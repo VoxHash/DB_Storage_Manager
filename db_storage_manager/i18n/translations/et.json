@@ -162,7 +162,7 @@
     "scratch_done": "Proovitaaste lõppes andmebaasis {name}. Tootmist ei muudetud.",
     "backup_failed": "Varukoopia loomine ebaõnnestus",
     "restore_success": "Taastamine lõpetatud edukalt",
-    "restore_failed": "Taastamine ebaõnnestus",
+    "restore_failed": "Taastamine ebaõnnestus: {error}",
     "page_subtitle": "Loo, kontrolli ja taasta kohalikke, Proton Drive'i või S3 varukoopiaid",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

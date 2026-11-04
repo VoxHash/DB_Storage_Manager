@@ -162,7 +162,7 @@
     "scratch_done": "リハーサル復元が {name} で完了しました。本番は変更されていません。",
     "backup_failed": "バックアップ作成に失敗しました",
     "restore_success": "復元が正常に完了しました",
-    "restore_failed": "復元に失敗しました",
+    "restore_failed": "復元に失敗しました: {error}",
     "page_subtitle": "ローカル、Proton Drive、S3 のバックアップを作成、検証、復元",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

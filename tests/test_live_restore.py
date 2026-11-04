@@ -525,3 +525,138 @@ def test_pg_restore_real_errors_are_not_treated_as_version_skew(stderr):
     from db_storage_manager.db.postgres import pg_restore_only_version_skew
 
     assert pg_restore_only_version_skew(stderr) is False
+
+
+def test_restore_skips_schemas_and_tables_the_role_does_not_own(tmp_path):
+    """A non-owner session restores its own tables and leaves the rest.
+
+    Mirrors a hosted Postgres dump (Supabase ``auth.audit_log_entries``):
+    the backup lists tables the connecting role can read but cannot drop.
+    ``DROP TABLE`` on those used to abort the restore before ``pg_restore``.
+    """
+    import subprocess
+
+    env = _live_env("DSM_LIVE_PG")
+    if env is None:
+        pytest.skip("DSM_LIVE_PG_HOST / DSM_LIVE_PG_USER not set")
+    if not shutil.which("pg_dump") or not shutil.which("pg_restore"):
+        pytest.skip("pg_dump / pg_restore are not on PATH")
+
+    from db_storage_manager.db.postgres import PostgreSQLConnection
+
+    driver = _Postgres(env)
+    stamp = uuid.uuid4().hex[:10]
+    app = f"dsm_app_{stamp}"
+    owner = f"dsm_auth_{stamp}"
+    database = f"dsm_owned_{stamp}"
+    app_password = "app-pass"
+    admin = driver._connect("postgres")
+    try:
+        admin.cursor().execute(
+            f"CREATE ROLE {app} NOSUPERUSER NOCREATEDB NOCREATEROLE "
+            f"LOGIN PASSWORD '{app_password}'"
+        )
+        admin.cursor().execute(
+            f"CREATE ROLE {owner} NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN"
+        )
+        admin.cursor().execute(f'CREATE DATABASE "{database}" OWNER {app}')
+    finally:
+        admin.close()
+
+    try:
+        driver.execute(
+            database,
+            [
+                "REVOKE ALL ON SCHEMA public FROM PUBLIC",
+                f"GRANT ALL ON SCHEMA public TO {app}",
+                f"ALTER SCHEMA public OWNER TO {app}",
+                f"CREATE SCHEMA auth AUTHORIZATION {owner}",
+                "REVOKE ALL ON SCHEMA auth FROM PUBLIC",
+                f"GRANT USAGE ON SCHEMA auth TO {app}",
+                "CREATE TABLE auth.audit_log_entries ("
+                "id uuid PRIMARY KEY, payload jsonb)",
+                f"ALTER TABLE auth.audit_log_entries OWNER TO {owner}",
+                f"GRANT SELECT ON auth.audit_log_entries TO {app}",
+                "INSERT INTO auth.audit_log_entries (id, payload) VALUES "
+                "('11111111-1111-1111-1111-111111111111', '{\"event\":\"login\"}')",
+                "CREATE TABLE public.customers ("
+                "id integer PRIMARY KEY, name text NOT NULL)",
+                f"ALTER TABLE public.customers OWNER TO {app}",
+                "INSERT INTO public.customers VALUES "
+                "(1, 'before-backup'), (2, 'kept')",
+                "CREATE TABLE public.owned_by_platform (id integer PRIMARY KEY)",
+                f"ALTER TABLE public.owned_by_platform OWNER TO {owner}",
+                f"GRANT SELECT ON public.owned_by_platform TO {app}",
+                "INSERT INTO public.owned_by_platform VALUES (7)",
+            ],
+        )
+        dump = tmp_path / "hosted.dump"
+        dump_env = os.environ.copy()
+        dump_env["PGPASSWORD"] = app_password
+        subprocess.run(
+            [
+                "pg_dump",
+                "--host",
+                env["host"],
+                "--port",
+                str(env["port"]),
+                "--username",
+                app,
+                "--dbname",
+                database,
+                "--format",
+                "c",
+                "--file",
+                str(dump),
+            ],
+            check=True,
+            env=dump_env,
+            capture_output=True,
+        )
+        driver.execute(
+            database, ["UPDATE public.customers SET name = 'drifted' WHERE id = 1"]
+        )
+
+        conn = PostgreSQLConnection(
+            ConnectionConfig(
+                id=f"owned-{stamp}",
+                name="owned",
+                type="postgresql",
+                host=env["host"],
+                port=env["port"],
+                database=database,
+                username=app,
+                password=app_password,
+            )
+        )
+        asyncio.run(conn.restore_backup(str(dump)))
+
+        assert driver.fetch(
+            database, "SELECT id, name FROM public.customers ORDER BY id"
+        ) == [(1, "before-backup"), (2, "kept")]
+        assert driver.fetch(
+            database, "SELECT id::text FROM auth.audit_log_entries"
+        ) == [("11111111-1111-1111-1111-111111111111",)]
+        assert driver.fetch(
+            database, "SELECT id FROM public.owned_by_platform"
+        ) == [(7,)]
+    finally:
+        try:
+            from db_storage_manager.db.pool import close_sql_engine_pool_blocking
+
+            close_sql_engine_pool_blocking()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            driver.drop_database(database)
+        except Exception:  # noqa: BLE001
+            pass
+        cleanup = driver._connect("postgres")
+        try:
+            cur = cleanup.cursor()
+            cur.execute(f"DROP OWNED BY {app} CASCADE")
+            cur.execute(f"DROP OWNED BY {owner} CASCADE")
+            cur.execute(f"DROP ROLE IF EXISTS {app}")
+            cur.execute(f"DROP ROLE IF EXISTS {owner}")
+        finally:
+            cleanup.close()

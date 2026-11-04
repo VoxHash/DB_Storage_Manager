@@ -1341,11 +1341,12 @@ class BackupsWidget(QWidget):
             self.refresh_backups(queue=True)
 
         def on_fail(message: str) -> None:
+            detail = (message or "").strip().replace("{", "{{").replace("}", "}}")
             self._set_status(
                 t(
                     "backups.restore_failed",
                     default="Restore failed: {error}",
-                    error=message,
+                    error=detail or "unknown error",
                 ),
                 "fail",
             )

@@ -3,9 +3,11 @@ PostgreSQL database connection
 """
 
 import asyncio
+import os
 import subprocess
+import tempfile
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -116,6 +118,176 @@ def pg_restore_only_version_skew(stderr: str) -> bool:
     return all(
         "unrecognized configuration parameter" in line for line in error_lines
     ) and all(line[len("Command was:") :].lstrip().startswith("SET ") for line in commands)
+
+
+# Longest descriptions first so "TABLE DATA" is not parsed as "TABLE".
+_TOC_DESCRIPTIONS: tuple[str, ...] = (
+    "MATERIALIZED VIEW DATA",
+    "TEXT SEARCH CONFIGURATION",
+    "TEXT SEARCH DICTIONARY",
+    "TEXT SEARCH TEMPLATE",
+    "TEXT SEARCH PARSER",
+    "FOREIGN DATA WRAPPER",
+    "SEQUENCE OWNED BY",
+    "PROCEDURAL LANGUAGE",
+    "DATABASE PROPERTIES",
+    "PUBLICATION TABLES",
+    "MATERIALIZED VIEW",
+    "CHECK CONSTRAINT",
+    "OPERATOR FAMILY",
+    "OPERATOR CLASS",
+    "FK CONSTRAINT",
+    "EVENT TRIGGER",
+    "ACCESS METHOD",
+    "BLOB COMMENTS",
+    "ACL LANGUAGE",
+    "USER MAPPING",
+    "ROW SECURITY",
+    "INDEX ATTACH",
+    "DEFAULT ACL",
+    "SEQUENCE SET",
+    "LARGE OBJECT",
+    "TABLE DATA",
+    "CONSTRAINT",
+    "PUBLICATION",
+    "SUBSCRIPTION",
+    "AGGREGATE",
+    "PROCEDURE",
+    "EXTENSION",
+    "COLLATION",
+    "CONVERSION",
+    "SHELL TYPE",
+    "FUNCTION",
+    "SEQUENCE",
+    "TRIGGER",
+    "COMMENT",
+    "LANGUAGE",
+    "OPERATOR",
+    "DATABASE",
+    "STATISTICS",
+    "TRANSFORM",
+    "SCHEMA",
+    "POLICY",
+    "DOMAIN",
+    "SERVER",
+    "TABLE",
+    "INDEX",
+    "RULE",
+    "VIEW",
+    "TYPE",
+    "CAST",
+    "BLOB",
+    "BLOBS",
+    "GRANT",
+    "DEFAULT",
+    "ACL",
+)
+
+# TOC lines whose schema field is "-" carry the real name in the tag:
+# "EXTENSION pg_trgm", "SCHEMA auth".
+_DASH_TAG_KINDS = {"SCHEMA", "EXTENSION", "LANGUAGE", "DATABASE"}
+
+
+def parse_pg_restore_toc_entry(line: str) -> Optional[dict]:
+    """One ``pg_restore --list`` entry, or None for a header / comment.
+
+    ``tag`` is the object name split on whitespace after the schema. A
+    constraint tag is ``table constraint`` on pg_dump 17+ and only the
+    constraint name on older archives. An empty owner (a trailing space in
+    the listing) leaves the name as the last token.
+    """
+    stripped = line.strip()
+    if not stripped or stripped.startswith(";"):
+        return None
+    dump_id, sep, rest = stripped.partition(";")
+    if not sep or not dump_id.strip().isdigit():
+        return None
+    tokens = _pg_toc_tokens(rest.strip())
+    if len(tokens) < 4:
+        return None
+    body = tokens[2:]
+    for desc in _TOC_DESCRIPTIONS:
+        desc_tokens = desc.split(" ")
+        width = len(desc_tokens)
+        if body[:width] != desc_tokens:
+            continue
+        tail = body[width:]
+        if len(tail) < 2:
+            return None
+        schema = tail[0]
+        payload = tail[1:]
+        if len(payload) >= 2:
+            tag = payload[:-1]
+            if (
+                schema == "-"
+                and len(tag) == 1
+                and tag[0] in _DASH_TAG_KINDS
+            ):
+                tag = payload
+        else:
+            tag = payload
+        if not tag:
+            return None
+        return {"description": desc, "schema": schema, "tag": tag}
+    return None
+
+
+def _toc_line_blocked(
+    line: str,
+    blocked_schemas: set[str],
+    blocked_names: Dict[str, set],
+    blocked_extensions: set[str],
+) -> bool:
+    entry = parse_pg_restore_toc_entry(line)
+    if entry is None:
+        return False
+    schema = entry["schema"]
+    tag: List[str] = entry["tag"]
+    if schema in blocked_schemas:
+        return True
+    if entry["description"] == "SCHEMA" and tag[0] in blocked_schemas:
+        return True
+    if entry["description"] == "EXTENSION" and tag[0] in blocked_extensions:
+        return True
+    if schema == "-" and len(tag) >= 2:
+        if tag[0] == "SCHEMA" and tag[1] in blocked_schemas:
+            return True
+        if tag[0] == "EXTENSION" and tag[1] in blocked_extensions:
+            return True
+    names = blocked_names.get(schema)
+    if names and any(token in names for token in tag):
+        return True
+    return False
+
+
+def filter_pg_restore_list(
+    listing: str,
+    blocked_schemas: set[str],
+    blocked_names: Dict[str, set],
+    blocked_extensions: set[str],
+) -> str:
+    """Comment out TOC entries the session must not drop or replace.
+
+    ``pg_restore --use-list`` skips lines that start with ``;``. Schemas the
+    session cannot create in (hosted ``auth``, ``storage``, and the same
+    pattern elsewhere) are removed whole. Individual relations the session
+    cannot drop, and extensions it cannot drop, are removed too. Everything
+    else is unchanged.
+    """
+    if not blocked_schemas and not blocked_names and not blocked_extensions:
+        return listing
+    lines = []
+    for raw in listing.splitlines():
+        if _toc_line_blocked(
+            raw, blocked_schemas, blocked_names, blocked_extensions
+        ):
+            lines.append(";" + raw)
+        else:
+            lines.append(raw)
+    text = "\n".join(lines)
+    if listing.endswith("\n"):
+        text += "\n"
+    return text
 
 
 class PostgreSQLConnection(DatabaseConnection):
@@ -450,6 +622,100 @@ class PostgreSQLConnection(DatabaseConnection):
             raise RuntimeError(detail)
         return stdout.decode(errors="replace")
 
+    def _session_restore_blocks(
+        self,
+    ) -> tuple[set[str], set[tuple[str, str]], Dict[str, set], set[str]]:
+        """Schemas, tables, TOC names and extensions this session cannot drop.
+
+        A schema is blocked when it already exists, the session is not a
+        member of the owning role, and it cannot ``CREATE`` there. That is
+        how hosted Postgres (Supabase ``auth`` / ``storage``, and the same
+        pattern elsewhere) rejects ``DROP TABLE audit_log_entries``. Tables
+        the session does own are not blocked, so ``CASCADE`` still runs for
+        them. Names include indexes, constraints and triggers of blocked
+        relations so both old and pg_dump 17+ TOC tags match.
+        """
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT n.nspname
+                FROM pg_namespace n
+                WHERE n.nspname NOT IN (
+                    'pg_catalog', 'information_schema', 'pg_toast'
+                )
+                  AND n.nspname NOT LIKE 'pg_temp_%'
+                  AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                  AND NOT pg_has_role(current_user, n.nspowner, 'MEMBER')
+                  AND NOT has_schema_privilege(n.oid, 'CREATE')
+                """
+            )
+            schemas = {row[0] for row in cursor.fetchall()}
+
+            cursor.execute(
+                """
+                SELECT n.nspname, c.relname, c.relkind
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r', 'p', 'v', 'm', 'S', 'i', 'I', 'f')
+                  AND n.nspname NOT IN (
+                      'pg_catalog', 'information_schema', 'pg_toast'
+                  )
+                  AND n.nspname NOT LIKE 'pg_temp_%'
+                  AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                  AND NOT pg_has_role(current_user, c.relowner, 'MEMBER')
+                """
+            )
+            tables: set[tuple[str, str]] = set()
+            names: Dict[str, set] = {}
+            for schema, name, relkind in cursor.fetchall():
+                names.setdefault(schema, set()).add(name)
+                if relkind in ("r", "p"):
+                    tables.add((schema, name))
+
+            cursor.execute(
+                """
+                SELECT n.nspname, con.conname
+                FROM pg_constraint con
+                JOIN pg_class c ON c.oid = con.conrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname NOT IN (
+                    'pg_catalog', 'information_schema', 'pg_toast'
+                )
+                  AND NOT pg_has_role(current_user, c.relowner, 'MEMBER')
+                """
+            )
+            for schema, name in cursor.fetchall():
+                names.setdefault(schema, set()).add(name)
+
+            cursor.execute(
+                """
+                SELECT n.nspname, t.tgname
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid = t.tgrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE NOT t.tgisinternal
+                  AND n.nspname NOT IN (
+                      'pg_catalog', 'information_schema', 'pg_toast'
+                  )
+                  AND NOT pg_has_role(current_user, c.relowner, 'MEMBER')
+                """
+            )
+            for schema, name in cursor.fetchall():
+                names.setdefault(schema, set()).add(name)
+
+            cursor.execute(
+                """
+                SELECT extname
+                FROM pg_extension
+                WHERE NOT pg_has_role(current_user, extowner, 'MEMBER')
+                """
+            )
+            extensions = {row[0] for row in cursor.fetchall()}
+        finally:
+            cursor.close()
+        return schemas, tables, names, extensions
+
     async def restore_backup(self, backup_path: str) -> None:
         """Restore PostgreSQL backup using pg_restore"""
         if not self.connection:
@@ -461,15 +727,23 @@ class PostgreSQLConnection(DatabaseConnection):
 
         # pg_restore --clean cannot DROP a backed-up table while a table that
         # exists only on the target still references it. Drop each archived
-        # table with CASCADE first: the foreign key goes away, the target-only
-        # table stays. Views that depend on an archived table are dropped and
-        # come back only when the backup contains them.
+        # table the session owns with CASCADE first: the foreign key goes
+        # away, the target-only table stays. Views that depend on an archived
+        # table are dropped and come back only when the backup contains them.
+        # Tables in a schema the session cannot create in (and any other
+        # table it does not own) are left untouched. Dropping them is what
+        # raises "must be owner of table ...".
         listing = await self._pg_restore_list(backup_file)
+        blocked_schemas, blocked_tables, blocked_names, blocked_extensions = (
+            self._session_restore_blocks()
+        )
         from psycopg2 import sql as pg_sql
 
         cursor = self.connection.cursor()
         try:
             for schema, table in pg_restore_table_idents(listing):
+                if schema in blocked_schemas or (schema, table) in blocked_tables:
+                    continue
                 cursor.execute(
                     pg_sql.SQL("DROP TABLE IF EXISTS {}.{} CASCADE").format(
                         pg_sql.Identifier(schema), pg_sql.Identifier(table)
@@ -478,6 +752,16 @@ class PostgreSQLConnection(DatabaseConnection):
             self.connection.commit()
         finally:
             cursor.close()
+
+        filtered = filter_pg_restore_list(
+            listing, blocked_schemas, blocked_names, blocked_extensions
+        )
+        list_path: Optional[Path] = None
+        if filtered != listing:
+            fd, name = tempfile.mkstemp(prefix="dsm-pg-restore-", suffix=".list")
+            os.close(fd)
+            list_path = Path(name)
+            list_path.write_text(filtered, encoding="utf-8")
 
         # Build pg_restore command
         cmd = [
@@ -492,27 +776,37 @@ class PostgreSQLConnection(DatabaseConnection):
             self.config.database,
             "--clean",
             "--if-exists",
-            str(backup_file),
         ]
+        if list_path is not None:
+            # The archive still says OWNER TO for roles this session cannot
+            # become (supabase_admin and the same pattern). Skipping those
+            # commands keeps the tables we do restore from failing the run.
+            cmd.append("--no-owner")
+            cmd.extend(["--use-list", str(list_path)])
+        cmd.append(str(backup_file))
 
         # Set password via environment variable
-        env = __import__("os").environ.copy()
+        env = os.environ.copy()
         if self.config.password:
             env["PGPASSWORD"] = self.config.password
         # Error text is parsed below; keep it in English.
         env["LC_MESSAGES"] = "C"
 
-        # Run pg_restore
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        try:
+            # Run pg_restore
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                env=env,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
 
-        stdout, stderr = await process.communicate()
+            stdout, stderr = await process.communicate()
 
-        if process.returncode != 0:
-            message = stderr.decode(errors="replace")
-            if not pg_restore_only_version_skew(message):
-                raise RuntimeError(f"pg_restore failed: {message}")
+            if process.returncode != 0:
+                message = stderr.decode(errors="replace")
+                if not pg_restore_only_version_skew(message):
+                    raise RuntimeError(f"pg_restore failed: {message}")
+        finally:
+            if list_path is not None:
+                list_path.unlink(missing_ok=True)

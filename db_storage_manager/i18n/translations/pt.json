@@ -162,7 +162,7 @@
     "scratch_done": "A restauração de ensaio terminou em {name}. A produção não foi alterada.",
     "backup_failed": "Falha ao criar backup",
     "restore_success": "Restauração concluída com sucesso",
-    "restore_failed": "Falha ao restaurar",
+    "restore_failed": "Falha ao restaurar: {error}",
     "page_subtitle": "Crie, verifique e restaure backups locais, do Proton Drive ou do S3",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

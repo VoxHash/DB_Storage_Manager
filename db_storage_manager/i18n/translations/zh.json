@@ -162,7 +162,7 @@
     "scratch_done": "演练还原已在 {name} 中完成。生产库未被修改。",
     "backup_failed": "备份创建失败",
     "restore_success": "恢复完成成功",
-    "restore_failed": "恢复失败",
+    "restore_failed": "恢复失败: {error}",
     "page_subtitle": "创建、验证和恢复本地、Proton Drive 或 S3 备份",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",

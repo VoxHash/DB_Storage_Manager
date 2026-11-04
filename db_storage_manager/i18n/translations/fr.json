@@ -162,7 +162,7 @@
     "scratch_done": "La restauration d’essai s’est terminée dans {name}. La production n’a pas été modifiée.",
     "backup_failed": "Échec de la création de la sauvegarde",
     "restore_success": "Restauration terminée avec succès",
-    "restore_failed": "Échec de la restauration",
+    "restore_failed": "Échec de la restauration : {error}",
     "page_subtitle": "Créer, vérifier et restaurer des sauvegardes locales, Proton Drive ou S3",
     "proton_drive": "Proton Drive",
     "zstd": "Zstd",
