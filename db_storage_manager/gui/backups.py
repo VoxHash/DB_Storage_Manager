@@ -1316,29 +1316,33 @@ class BackupsWidget(QWidget):
             )
 
         def on_ok(result: Dict[str, Any]) -> None:
+            notice = (result.get("restoreNotice") or "").strip()
+
+            def finish(text: str) -> None:
+                if notice:
+                    text = f"{text} {notice}"
+                self._set_status(text, "pass")
+                self.refresh_backups(queue=True)
+
             if result.get("scratch"):
-                self._set_status(
+                finish(
                     t(
                         "backups.scratch_done",
                         default="Scratch restore finished in {name}. Production was not modified.",
                         name=result.get("scratchDatabase") or "",
-                    ),
-                    "pass",
+                    )
                 )
-                self.refresh_backups(queue=True)
                 return
             safety = result.get("safetyBackup")
-            self._set_status(
+            finish(
                 t(
                     "backups.restore_done_safety",
                     default="Restore finished. Safety backup: {name}.",
                     name=safety,
                 )
                 if safety
-                else t("backups.restore_done", default="Restore finished."),
-                "pass",
+                else t("backups.restore_done", default="Restore finished.")
             )
-            self.refresh_backups(queue=True)
 
         def on_fail(message: str) -> None:
             detail = (message or "").strip().replace("{", "{{").replace("}", "}}")

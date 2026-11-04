@@ -4,7 +4,9 @@ from db_storage_manager.db.postgres import (
     drop_table_cascade_sql,
     filter_pg_restore_list,
     parse_pg_restore_toc_entry,
+    pg_restore_errors_tolerated,
     pg_restore_table_idents,
+    platform_skip_notice,
 )
 
 
@@ -109,3 +111,130 @@ def test_filter_leaves_owned_tables_and_comments_out_the_rest():
     assert any("EXTENSION - pg_trgm" in line for line in commented)
     assert any("SCHEMA - auth " in line for line in commented)
     assert filter_pg_restore_list(HOSTED_LISTING, set(), {}, set()) == HOSTED_LISTING
+
+
+# pg_restore 18 --list of a PostgreSQL 16 dump. The extensions schema is
+# visible to the session (it has CREATE there) but the session does not own
+# the schema, its event-trigger functions, or the event triggers.
+PLATFORM_LISTING = """\
+;
+; Selected TOC Entries:
+;
+6; 2615 16387 SCHEMA - extensions dsm_platform
+3421; 0 0 ACL - SCHEMA extensions dsm_platform
+218; 1255 16388 FUNCTION extensions grant_pg_cron_access() dsm_platform
+3422; 0 0 COMMENT extensions FUNCTION grant_pg_cron_access() dsm_platform
+3423; 0 0 ACL extensions FUNCTION grant_pg_cron_access() dsm_platform
+219; 1255 16389 FUNCTION extensions set_graphql_placeholder() dsm_platform
+217; 1255 16392 FUNCTION public app_label() dsm_app
+216; 1259 16393 TABLE public customers dsm_app
+3414; 0 16393 TABLE DATA public customers dsm_app
+3270; 2606 16399 CONSTRAINT public customers customers_pkey dsm_app
+3268; 3466 16391 EVENT TRIGGER - issue_graphql_placeholder postgres
+3267; 3466 16390 EVENT TRIGGER - issue_pg_cron_access postgres
+3425; 0 0 COMMENT - EVENT TRIGGER issue_pg_cron_access postgres
+"""
+
+
+def test_filter_skips_event_triggers_extensions_schema_and_functions():
+    event_triggers = {"issue_pg_cron_access", "issue_graphql_placeholder"}
+    routines = {
+        "extensions": {"grant_pg_cron_access", "set_graphql_placeholder"}
+    }
+    schema_defs = {"extensions"}
+    filtered = filter_pg_restore_list(
+        PLATFORM_LISTING,
+        set(),
+        {},
+        set(),
+        event_triggers,
+        routines,
+        schema_defs,
+    )
+    kept = [
+        line
+        for line in filtered.splitlines()
+        if line.strip() and not line.startswith(";")
+    ]
+    commented = [line for line in filtered.splitlines() if line.startswith(";")]
+    assert any("FUNCTION public app_label()" in line for line in kept)
+    assert any("TABLE public customers " in line for line in kept)
+    assert any("TABLE DATA public customers " in line for line in kept)
+    assert any("CONSTRAINT public customers " in line for line in kept)
+    assert any("EVENT TRIGGER - issue_pg_cron_access" in line for line in commented)
+    assert any(
+        "EVENT TRIGGER - issue_graphql_placeholder" in line for line in commented
+    )
+    assert any("COMMENT - EVENT TRIGGER issue_pg_cron_access" in line for line in commented)
+    assert any("SCHEMA - extensions " in line for line in commented)
+    assert any("ACL - SCHEMA extensions " in line for line in commented)
+    assert any(
+        "FUNCTION extensions grant_pg_cron_access()" in line for line in commented
+    )
+    assert any(
+        "FUNCTION extensions set_graphql_placeholder()" in line for line in commented
+    )
+    assert any(
+        "COMMENT extensions FUNCTION grant_pg_cron_access()" in line
+        for line in commented
+    )
+    notice = platform_skip_notice(
+        PLATFORM_LISTING,
+        set(),
+        {},
+        set(),
+        event_triggers,
+        routines,
+        schema_defs,
+    )
+    assert notice is not None
+    assert "issue_graphql_placeholder" in notice
+    assert "issue_pg_cron_access" in notice
+    assert "schemas extensions" in notice
+    assert "extensions.grant_pg_cron_access" in notice
+    assert "extensions.set_graphql_placeholder" in notice
+    assert "app_label" not in notice
+    assert "customers" not in notice
+
+
+_PLATFORM_STDERR = """\
+pg_restore: error: could not execute query: ERROR:  must be owner of event trigger issue_pg_cron_access
+Command was: DROP EVENT TRIGGER IF EXISTS issue_pg_cron_access;
+pg_restore: error: could not execute query: ERROR:  cannot drop function extensions.grant_pg_cron_access() because other objects depend on it
+Command was: DROP FUNCTION extensions.grant_pg_cron_access();
+pg_restore: error: could not execute query: ERROR:  cannot drop schema extensions because other objects depend on it
+Command was: DROP SCHEMA extensions;
+pg_restore: error: could not execute query: ERROR:  schema "extensions" already exists
+Command was: CREATE SCHEMA extensions;
+pg_restore: error: could not execute query: ERROR:  function "grant_pg_cron_access" already exists with same argument types
+Command was: CREATE FUNCTION extensions.grant_pg_cron_access() RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN END $$;
+"""
+
+
+def test_platform_object_errors_are_not_a_hard_failure():
+    assert pg_restore_errors_tolerated(_PLATFORM_STDERR) is True
+
+
+def test_table_and_permission_errors_still_fail_the_restore():
+    assert (
+        pg_restore_errors_tolerated(
+            "pg_restore: error: could not execute query: ERROR:  must be owner of table audit_log_entries\n"
+            "Command was: DROP TABLE public.audit_log_entries;\n"
+        )
+        is False
+    )
+    assert (
+        pg_restore_errors_tolerated(
+            'pg_restore: error: could not execute query: ERROR:  relation "customers" already exists\n'
+            "Command was: CREATE TABLE public.customers (id integer);\n"
+        )
+        is False
+    )
+    assert (
+        pg_restore_errors_tolerated(
+            _PLATFORM_STDERR
+            + "pg_restore: error: could not execute query: ERROR:  permission denied for table customers\n"
+            "Command was: COPY public.customers (id, name) FROM stdin;\n"
+        )
+        is False
+    )

@@ -660,3 +660,185 @@ def test_restore_skips_schemas_and_tables_the_role_does_not_own(tmp_path):
             cur.execute(f"DROP ROLE IF EXISTS {owner}")
         finally:
             cleanup.close()
+
+
+def test_restore_skips_event_triggers_and_extensions_schema(tmp_path):
+    """A session with CREATE on ``extensions`` still cannot replace platform objects.
+
+    Mirrors hosted Postgres (Supabase): event triggers such as
+    ``issue_pg_cron_access`` and functions in ``extensions`` are owned by
+    another role. ``pg_restore --clean`` used to abort on ``must be owner of
+    event trigger`` and ``schema "extensions" already exists`` even though
+    the application tables restored. Those objects stay; owned tables and
+    functions are replaced. Nothing is dropped with CASCADE.
+    """
+    import subprocess
+
+    env = _live_env("DSM_LIVE_PG")
+    if env is None:
+        pytest.skip("DSM_LIVE_PG_HOST / DSM_LIVE_PG_USER not set")
+    if not shutil.which("pg_dump") or not shutil.which("pg_restore"):
+        pytest.skip("pg_dump / pg_restore are not on PATH")
+
+    from db_storage_manager.db.postgres import PostgreSQLConnection
+
+    driver = _Postgres(env)
+    stamp = uuid.uuid4().hex[:10]
+    app = f"dsm_app_{stamp}"
+    platform = f"dsm_plat_{stamp}"
+    database = f"dsm_evt_{stamp}"
+    app_password = "app-pass"
+    admin = driver._connect("postgres")
+    try:
+        admin.cursor().execute(
+            f"CREATE ROLE {app} NOSUPERUSER NOCREATEDB NOCREATEROLE "
+            f"LOGIN PASSWORD '{app_password}'"
+        )
+        admin.cursor().execute(
+            f"CREATE ROLE {platform} NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN"
+        )
+        admin.cursor().execute(f'CREATE DATABASE "{database}" OWNER {app}')
+    finally:
+        admin.close()
+
+    try:
+        driver.execute(
+            database,
+            [
+                "REVOKE ALL ON SCHEMA public FROM PUBLIC",
+                f"GRANT ALL ON SCHEMA public TO {app}",
+                f"ALTER SCHEMA public OWNER TO {app}",
+                f"CREATE SCHEMA extensions AUTHORIZATION {platform}",
+                "REVOKE ALL ON SCHEMA extensions FROM PUBLIC",
+                f"GRANT USAGE, CREATE ON SCHEMA extensions TO {app}",
+                "CREATE FUNCTION extensions.grant_pg_cron_access() "
+                "RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN END $$",
+                f"ALTER FUNCTION extensions.grant_pg_cron_access() OWNER TO {platform}",
+                "CREATE FUNCTION extensions.set_graphql_placeholder() "
+                "RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN END $$",
+                "ALTER FUNCTION extensions.set_graphql_placeholder() "
+                f"OWNER TO {platform}",
+                "CREATE EVENT TRIGGER issue_pg_cron_access ON ddl_command_end "
+                "WHEN TAG IN ('CREATE EXTENSION') "
+                "EXECUTE FUNCTION extensions.grant_pg_cron_access()",
+                "CREATE EVENT TRIGGER issue_graphql_placeholder ON ddl_command_end "
+                "WHEN TAG IN ('CREATE FUNCTION') "
+                "EXECUTE FUNCTION extensions.set_graphql_placeholder()",
+                "COMMENT ON EVENT TRIGGER issue_pg_cron_access IS 'platform'",
+                f"GRANT EXECUTE ON FUNCTION extensions.grant_pg_cron_access() TO {app}",
+                "GRANT EXECUTE ON FUNCTION "
+                f"extensions.set_graphql_placeholder() TO {app}",
+                "CREATE FUNCTION public.app_label() RETURNS text "
+                "LANGUAGE sql AS $$ SELECT 'backup' $$",
+                f"ALTER FUNCTION public.app_label() OWNER TO {app}",
+                "CREATE TABLE public.customers ("
+                "id integer PRIMARY KEY, name text NOT NULL)",
+                f"ALTER TABLE public.customers OWNER TO {app}",
+                "INSERT INTO public.customers VALUES (1, 'before-backup')",
+            ],
+        )
+        dump = tmp_path / "hosted.dump"
+        dump_env = os.environ.copy()
+        dump_env["PGPASSWORD"] = app_password
+        subprocess.run(
+            [
+                "pg_dump",
+                "--host",
+                env["host"],
+                "--port",
+                str(env["port"]),
+                "--username",
+                app,
+                "--dbname",
+                database,
+                "--format",
+                "c",
+                "--file",
+                str(dump),
+            ],
+            check=True,
+            env=dump_env,
+            capture_output=True,
+        )
+        listing = subprocess.run(
+            ["pg_restore", "--list", str(dump)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "EVENT TRIGGER - issue_pg_cron_access" in listing
+        assert "SCHEMA - extensions " in listing
+        assert "FUNCTION extensions grant_pg_cron_access()" in listing
+
+        driver.execute(
+            database,
+            [
+                "UPDATE public.customers SET name = 'drifted' WHERE id = 1",
+                "CREATE OR REPLACE FUNCTION public.app_label() RETURNS text "
+                "LANGUAGE sql AS $$ SELECT 'drifted' $$",
+                "CREATE OR REPLACE FUNCTION extensions.grant_pg_cron_access() "
+                "RETURNS event_trigger LANGUAGE plpgsql AS $$ BEGIN "
+                "RAISE NOTICE 'drifted'; END $$",
+            ],
+        )
+
+        conn = PostgreSQLConnection(
+            ConnectionConfig(
+                id=f"evt-{stamp}",
+                name="evt",
+                type="postgresql",
+                host=env["host"],
+                port=env["port"],
+                database=database,
+                username=app,
+                password=app_password,
+            )
+        )
+        asyncio.run(conn.restore_backup(str(dump)))
+
+        notice = conn.restore_notice or ""
+        assert "issue_pg_cron_access" in notice
+        assert "extensions" in notice
+        assert "grant_pg_cron_access" in notice
+        assert "were left in place" in notice
+
+        assert driver.fetch(
+            database, "SELECT id, name FROM public.customers ORDER BY id"
+        ) == [(1, "before-backup")]
+        assert driver.fetch(database, "SELECT public.app_label()") == [("backup",)]
+        body = driver.fetch(
+            database,
+            "SELECT pg_get_functiondef("
+            "'extensions.grant_pg_cron_access()'::regprocedure)",
+        )[0][0]
+        assert "drifted" in body
+        assert driver.fetch(
+            database,
+            "SELECT evtname FROM pg_event_trigger ORDER BY evtname",
+        ) == [("issue_graphql_placeholder",), ("issue_pg_cron_access",)]
+        assert driver.fetch(
+            database,
+            "SELECT r.rolname FROM pg_namespace n "
+            "JOIN pg_roles r ON r.oid = n.nspowner "
+            "WHERE n.nspname = 'extensions'",
+        ) == [(platform,)]
+    finally:
+        try:
+            from db_storage_manager.db.pool import close_sql_engine_pool_blocking
+
+            close_sql_engine_pool_blocking()
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            driver.drop_database(database)
+        except Exception:  # noqa: BLE001
+            pass
+        cleanup = driver._connect("postgres")
+        try:
+            cur = cleanup.cursor()
+            cur.execute(f"DROP OWNED BY {app} CASCADE")
+            cur.execute(f"DROP OWNED BY {platform} CASCADE")
+            cur.execute(f"DROP ROLE IF EXISTS {app}")
+            cur.execute(f"DROP ROLE IF EXISTS {platform}")
+        finally:
+            cleanup.close()

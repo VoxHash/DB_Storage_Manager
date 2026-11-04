@@ -120,6 +120,92 @@ def pg_restore_only_version_skew(stderr: str) -> bool:
     ) and all(line[len("Command was:") :].lstrip().startswith("SET ") for line in commands)
 
 
+# pg_restore keeps going after a statement fails, then exits non-zero.
+# These are the failures a hosted target (Supabase and the same pattern)
+# raises for event triggers, the extensions schema, and the functions those
+# triggers depend on. A table, row, or permission error is not in this set.
+_PLATFORM_OWNER_PHRASES = (
+    "must be owner of event trigger",
+    "must be owner of function",
+    "must be owner of procedure",
+    "must be owner of aggregate",
+    "must be owner of schema",
+    "must be owner of extension",
+)
+_PLATFORM_DEPEND_PHRASES = (
+    "cannot drop function ",
+    "cannot drop procedure ",
+    "cannot drop aggregate ",
+    "cannot drop schema ",
+    "cannot drop extension ",
+    "cannot drop event trigger ",
+)
+_PLATFORM_EXISTS_KINDS = (
+    'schema "',
+    'function "',
+    'procedure "',
+    'aggregate "',
+    'event trigger "',
+    'extension "',
+)
+
+
+def _is_version_skew_error(error_line: str, command_line: Optional[str]) -> bool:
+    if "unrecognized configuration parameter" not in error_line:
+        return False
+    if not command_line:
+        return False
+    return command_line[len("Command was:") :].lstrip().startswith("SET ")
+
+
+def _is_platform_restore_error(line: str) -> bool:
+    """True for one ``pg_restore: error:`` line about an unowned platform object."""
+    text = line.lower()
+    if any(phrase in text for phrase in _PLATFORM_OWNER_PHRASES):
+        return True
+    if "because other objects depend on it" in text and any(
+        phrase in text for phrase in _PLATFORM_DEPEND_PHRASES
+    ):
+        return True
+    if "already exists" in text and any(kind in text for kind in _PLATFORM_EXISTS_KINDS):
+        return True
+    return False
+
+
+def pg_restore_errors_tolerated(stderr: str) -> bool:
+    """True when every pg_restore error is version skew or an unowned platform object.
+
+    ``pg_restore`` applies the rest of the archive after these statements fail.
+    ``must be owner of table`` and ``relation already exists`` still fail the
+    restore: those mean application data was not replaced.
+    """
+    error_lines = [
+        line for line in stderr.splitlines() if line.startswith("pg_restore: error:")
+    ]
+    if not error_lines:
+        return False
+    commands = [
+        line for line in stderr.splitlines() if line.startswith("Command was:")
+    ]
+    paired = len(commands) == len(error_lines)
+    for index, line in enumerate(error_lines):
+        command = commands[index] if paired else None
+        if _is_platform_restore_error(line):
+            continue
+        if _is_version_skew_error(line, command):
+            continue
+        return False
+    return True
+
+
+def pg_restore_stderr_has_platform_object_errors(stderr: str) -> bool:
+    return any(
+        _is_platform_restore_error(line)
+        for line in stderr.splitlines()
+        if line.startswith("pg_restore: error:")
+    )
+
+
 # Longest descriptions first so "TABLE DATA" is not parsed as "TABLE".
 _TOC_DESCRIPTIONS: tuple[str, ...] = (
     "MATERIALIZED VIEW DATA",
@@ -232,27 +318,60 @@ def parse_pg_restore_toc_entry(line: str) -> Optional[dict]:
     return None
 
 
+def _token_is_routine(token: str, names: set) -> bool:
+    """True when ``token`` is ``name`` or ``name(arg types)`` for a blocked routine."""
+    if "(" not in token:
+        return False
+    return token.split("(", 1)[0] in names
+
+
 def _toc_line_blocked(
     line: str,
     blocked_schemas: set[str],
     blocked_names: Dict[str, set],
     blocked_extensions: set[str],
+    blocked_event_triggers: Optional[set[str]] = None,
+    blocked_routines: Optional[Dict[str, set]] = None,
+    blocked_schema_defs: Optional[set[str]] = None,
 ) -> bool:
     entry = parse_pg_restore_toc_entry(line)
     if entry is None:
         return False
     schema = entry["schema"]
     tag: List[str] = entry["tag"]
+    description = entry["description"]
+    event_triggers = blocked_event_triggers or set()
+    routines = blocked_routines or {}
+    schema_defs = blocked_schema_defs or set()
     if schema in blocked_schemas:
         return True
-    if entry["description"] == "SCHEMA" and tag[0] in blocked_schemas:
+    if description == "SCHEMA" and tag[0] in blocked_schemas:
         return True
-    if entry["description"] == "EXTENSION" and tag[0] in blocked_extensions:
+    if description == "SCHEMA" and tag[0] in schema_defs:
+        return True
+    if description == "EXTENSION" and tag[0] in blocked_extensions:
+        return True
+    if description == "EVENT TRIGGER" and tag[0] in event_triggers:
         return True
     if schema == "-" and len(tag) >= 2:
-        if tag[0] == "SCHEMA" and tag[1] in blocked_schemas:
+        if tag[0] == "SCHEMA" and (
+            tag[1] in blocked_schemas or tag[1] in schema_defs
+        ):
             return True
         if tag[0] == "EXTENSION" and tag[1] in blocked_extensions:
+            return True
+    if (
+        event_triggers
+        and schema == "-"
+        and description in {"COMMENT", "ACL"}
+        and "EVENT" in tag
+        and "TRIGGER" in tag
+        and any(token in event_triggers for token in tag)
+    ):
+        return True
+    routine_names = routines.get(schema)
+    if routine_names and description in {"FUNCTION", "PROCEDURE", "AGGREGATE", "COMMENT", "ACL"}:
+        if any(_token_is_routine(token, routine_names) for token in tag):
             return True
     names = blocked_names.get(schema)
     if names and any(token in names for token in tag):
@@ -265,21 +384,42 @@ def filter_pg_restore_list(
     blocked_schemas: set[str],
     blocked_names: Dict[str, set],
     blocked_extensions: set[str],
+    blocked_event_triggers: Optional[set[str]] = None,
+    blocked_routines: Optional[Dict[str, set]] = None,
+    blocked_schema_defs: Optional[set[str]] = None,
 ) -> str:
     """Comment out TOC entries the session must not drop or replace.
 
     ``pg_restore --use-list`` skips lines that start with ``;``. Schemas the
     session cannot create in (hosted ``auth``, ``storage``, and the same
     pattern elsewhere) are removed whole. Individual relations the session
-    cannot drop, and extensions it cannot drop, are removed too. Everything
-    else is unchanged.
+    cannot drop, and extensions it cannot drop, are removed too. Event
+    triggers, functions, and ``CREATE/DROP SCHEMA`` for schemas the session
+    does not own are removed as well. Their dependents are not dropped with
+    ``CASCADE``. Everything else is unchanged.
     """
-    if not blocked_schemas and not blocked_names and not blocked_extensions:
+    event_triggers = blocked_event_triggers or set()
+    routines = blocked_routines or {}
+    schema_defs = blocked_schema_defs or set()
+    if (
+        not blocked_schemas
+        and not blocked_names
+        and not blocked_extensions
+        and not event_triggers
+        and not any(routines.values())
+        and not schema_defs
+    ):
         return listing
     lines = []
     for raw in listing.splitlines():
         if _toc_line_blocked(
-            raw, blocked_schemas, blocked_names, blocked_extensions
+            raw,
+            blocked_schemas,
+            blocked_names,
+            blocked_extensions,
+            event_triggers,
+            routines,
+            schema_defs,
         ):
             lines.append(";" + raw)
         else:
@@ -290,12 +430,92 @@ def filter_pg_restore_list(
     return text
 
 
+def platform_skip_notice(
+    listing: str,
+    blocked_schemas: set[str],
+    blocked_names: Dict[str, set],
+    blocked_extensions: set[str],
+    blocked_event_triggers: Optional[set[str]] = None,
+    blocked_routines: Optional[Dict[str, set]] = None,
+    blocked_schema_defs: Optional[set[str]] = None,
+) -> Optional[str]:
+    """One sentence naming platform objects removed from this restore list."""
+    event_triggers = blocked_event_triggers or set()
+    routines = blocked_routines or {}
+    schema_defs = blocked_schema_defs or set()
+    events: list[str] = []
+    schemas: list[str] = []
+    functions: list[str] = []
+    extensions: list[str] = []
+    for raw in listing.splitlines():
+        entry = parse_pg_restore_toc_entry(raw)
+        if entry is None:
+            continue
+        if not _toc_line_blocked(
+            raw,
+            blocked_schemas,
+            blocked_names,
+            blocked_extensions,
+            event_triggers,
+            routines,
+            schema_defs,
+        ):
+            continue
+        description = entry["description"]
+        schema = entry["schema"]
+        tag: List[str] = entry["tag"]
+        if not tag:
+            continue
+        if description == "EVENT TRIGGER":
+            events.append(tag[0])
+        elif description == "SCHEMA":
+            schemas.append(tag[0])
+        elif description == "EXTENSION":
+            extensions.append(tag[0])
+        elif description in {"FUNCTION", "PROCEDURE", "AGGREGATE"}:
+            if schema in blocked_schemas:
+                continue
+            functions.append(
+                f"{schema}.{tag[0].split('(', 1)[0]}"
+                if schema != "-"
+                else tag[0].split("(", 1)[0]
+            )
+
+    def clause(label: str, names: list[str]) -> Optional[str]:
+        unique = sorted(dict.fromkeys(names))
+        if not unique:
+            return None
+        if len(unique) <= 4:
+            return label + " " + ", ".join(unique)
+        head = ", ".join(unique[:3])
+        return f"{label} ({len(unique)}) {head}, …"
+
+    parts = [
+        part
+        for part in (
+            clause("event triggers", events),
+            clause("schemas", schemas),
+            clause("functions", functions),
+            clause("extensions", extensions),
+        )
+        if part
+    ]
+    if not parts:
+        return None
+    return (
+        "Platform objects this session cannot replace were left in place: "
+        + "; ".join(parts)
+        + "."
+    )
+
+
 class PostgreSQLConnection(DatabaseConnection):
     """PostgreSQL database connection"""
 
     def __init__(self, config: ConnectionConfig):
         super().__init__(config)
         self.connection = None
+        self.restore_notice: Optional[str] = None
 
     async def connect(self) -> None:
         """Connect to PostgreSQL database"""
@@ -622,24 +842,29 @@ class PostgreSQLConnection(DatabaseConnection):
             raise RuntimeError(detail)
         return stdout.decode(errors="replace")
 
-    def _session_restore_blocks(
-        self,
-    ) -> tuple[set[str], set[tuple[str, str]], Dict[str, set], set[str]]:
-        """Schemas, tables, TOC names and extensions this session cannot drop.
+    def _session_restore_blocks(self) -> dict:
+        """Objects this session must not drop or replace during restore.
 
-        A schema is blocked when it already exists, the session is not a
-        member of the owning role, and it cannot ``CREATE`` there. That is
+        A schema is blocked whole when it already exists, the session is not
+        a member of the owning role, and it cannot ``CREATE`` there. That is
         how hosted Postgres (Supabase ``auth`` / ``storage``, and the same
         pattern elsewhere) rejects ``DROP TABLE audit_log_entries``. Tables
         the session does own are not blocked, so ``CASCADE`` still runs for
         them. Names include indexes, constraints and triggers of blocked
         relations so both old and pg_dump 17+ TOC tags match.
+
+        Event triggers, functions, and the schema entry itself are separate.
+        On a hosted database the connecting role often has ``CREATE`` on
+        ``extensions`` (so the schema is not blocked whole) and still cannot
+        own the event triggers or the functions they call. Those statements
+        are omitted. Nothing here is dropped with ``CASCADE``.
         """
         cursor = self.connection.cursor()
         try:
             cursor.execute(
                 """
-                SELECT n.nspname
+                SELECT n.nspname,
+                       has_schema_privilege(n.oid, 'CREATE')
                 FROM pg_namespace n
                 WHERE n.nspname NOT IN (
                     'pg_catalog', 'information_schema', 'pg_toast'
@@ -647,10 +872,14 @@ class PostgreSQLConnection(DatabaseConnection):
                   AND n.nspname NOT LIKE 'pg_temp_%'
                   AND n.nspname NOT LIKE 'pg_toast_temp_%'
                   AND NOT pg_has_role(current_user, n.nspowner, 'MEMBER')
-                  AND NOT has_schema_privilege(n.oid, 'CREATE')
                 """
             )
-            schemas = {row[0] for row in cursor.fetchall()}
+            unowned_schemas: set[str] = set()
+            schemas: set[str] = set()
+            for name, can_create in cursor.fetchall():
+                unowned_schemas.add(name)
+                if not can_create:
+                    schemas.add(name)
 
             cursor.execute(
                 """
@@ -712,14 +941,63 @@ class PostgreSQLConnection(DatabaseConnection):
                 """
             )
             extensions = {row[0] for row in cursor.fetchall()}
+
+            cursor.execute(
+                """
+                SELECT evtname
+                FROM pg_event_trigger
+                WHERE NOT pg_has_role(current_user, evtowner, 'MEMBER')
+                """
+            )
+            event_triggers = {row[0] for row in cursor.fetchall()}
+
+            cursor.execute(
+                """
+                SELECT n.nspname, p.proname
+                FROM pg_proc p
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE n.nspname NOT IN (
+                    'pg_catalog', 'information_schema', 'pg_toast'
+                )
+                  AND n.nspname NOT LIKE 'pg_temp_%'
+                  AND n.nspname NOT LIKE 'pg_toast_temp_%'
+                  AND (
+                    NOT pg_has_role(current_user, p.proowner, 'MEMBER')
+                    OR EXISTS (
+                        SELECT 1
+                        FROM pg_depend d
+                        JOIN pg_event_trigger e ON e.oid = d.objid
+                        WHERE d.classid = 'pg_event_trigger'::regclass
+                          AND d.refclassid = 'pg_proc'::regclass
+                          AND d.refobjid = p.oid
+                          AND d.deptype = 'n'
+                          AND NOT pg_has_role(current_user, e.evtowner, 'MEMBER')
+                    )
+                  )
+                """
+            )
+            routines: Dict[str, set] = {}
+            for schema, name in cursor.fetchall():
+                routines.setdefault(schema, set()).add(name)
         finally:
             cursor.close()
-        return schemas, tables, names, extensions
+        stuck = set(names) | set(routines)
+        schema_defs = (unowned_schemas - schemas) | (stuck - schemas)
+        return {
+            "schemas": schemas,
+            "tables": tables,
+            "names": names,
+            "extensions": extensions,
+            "event_triggers": event_triggers,
+            "routines": routines,
+            "schema_defs": schema_defs,
+        }
 
     async def restore_backup(self, backup_path: str) -> None:
         """Restore PostgreSQL backup using pg_restore"""
         if not self.connection:
             await self.connect()
+        self.restore_notice = None
 
         backup_file = Path(backup_path)
         if not backup_file.exists():
@@ -734,9 +1012,14 @@ class PostgreSQLConnection(DatabaseConnection):
         # table it does not own) are left untouched. Dropping them is what
         # raises "must be owner of table ...".
         listing = await self._pg_restore_list(backup_file)
-        blocked_schemas, blocked_tables, blocked_names, blocked_extensions = (
-            self._session_restore_blocks()
-        )
+        blocks = self._session_restore_blocks()
+        blocked_schemas = blocks["schemas"]
+        blocked_tables = blocks["tables"]
+        blocked_names = blocks["names"]
+        blocked_extensions = blocks["extensions"]
+        blocked_event_triggers = blocks["event_triggers"]
+        blocked_routines = blocks["routines"]
+        blocked_schema_defs = blocks["schema_defs"]
         from psycopg2 import sql as pg_sql
 
         cursor = self.connection.cursor()
@@ -754,7 +1037,22 @@ class PostgreSQLConnection(DatabaseConnection):
             cursor.close()
 
         filtered = filter_pg_restore_list(
-            listing, blocked_schemas, blocked_names, blocked_extensions
+            listing,
+            blocked_schemas,
+            blocked_names,
+            blocked_extensions,
+            blocked_event_triggers,
+            blocked_routines,
+            blocked_schema_defs,
+        )
+        self.restore_notice = platform_skip_notice(
+            listing,
+            blocked_schemas,
+            blocked_names,
+            blocked_extensions,
+            blocked_event_triggers,
+            blocked_routines,
+            blocked_schema_defs,
         )
         list_path: Optional[Path] = None
         if filtered != listing:
@@ -805,8 +1103,16 @@ class PostgreSQLConnection(DatabaseConnection):
 
             if process.returncode != 0:
                 message = stderr.decode(errors="replace")
-                if not pg_restore_only_version_skew(message):
+                if not pg_restore_errors_tolerated(message):
                     raise RuntimeError(f"pg_restore failed: {message}")
+                if (
+                    not self.restore_notice
+                    and pg_restore_stderr_has_platform_object_errors(message)
+                ):
+                    self.restore_notice = (
+                        "Platform objects this session cannot replace "
+                        "were left in place."
+                    )
         finally:
             if list_path is not None:
                 list_path.unlink(missing_ok=True)

@@ -262,7 +262,7 @@ class BackupManager:
         backup_info: BackupInfo,
         connection_config: ConnectionConfig,
         encryption_key: Optional[str] = None,
-    ) -> None:
+    ) -> Optional[str]:
         """Low-level restore of ``backup_info`` into a database connection.
 
         This performs no safety checks; the GUI / API use :meth:`full_restore`,
@@ -271,20 +271,27 @@ class BackupManager:
         payload = await self._materialize_payload(
             adapter, backup_info, encryption_key
         )
-        await self._apply_payload(payload, backup_info, connection_config)
+        return await self._apply_payload(payload, backup_info, connection_config)
 
     async def _apply_payload(
         self,
         payload: str,
         backup_info: BackupInfo,
         connection_config: ConnectionConfig,
-    ) -> None:
-        """Restore the unpacked ``payload`` into the target, then remove temp files."""
+    ) -> Optional[str]:
+        """Restore the unpacked ``payload`` into the target, then remove temp files.
+
+        The return value is a short note when the engine left platform objects
+        in place (PostgreSQL event triggers, unowned schemas, and the same
+        pattern). Other engines return None.
+        """
+        notice: Optional[str] = None
         try:
             effective = self._effective_connection_config(connection_config)
             db_connection = await DatabaseConnectionFactory.acquire(effective)
             try:
                 await db_connection.restore_backup(payload)
+                notice = getattr(db_connection, "restore_notice", None)
             finally:
                 await DatabaseConnectionFactory.release(db_connection)
         finally:
@@ -293,6 +300,7 @@ class BackupManager:
             # file itself.
             if payload != backup_info.path:
                 Path(payload).unlink(missing_ok=True)
+        return notice
 
     @staticmethod
     def restore_confirmation_phrase(connection_config: ConnectionConfig) -> str:
@@ -350,6 +358,7 @@ class BackupManager:
         }
         current_stage = "gate"
         remote_payload: Optional[str] = None
+        notice: Optional[str] = None
         try:
             stage("gate")
             require_restore_enabled()
@@ -428,11 +437,11 @@ class BackupManager:
             stage("restore")
             if remote_payload is not None:
                 payload_to_apply, remote_payload = remote_payload, None
-                await self._apply_payload(
+                notice = await self._apply_payload(
                     payload_to_apply, backup_info, connection_config
                 )
             else:
-                await self.restore_backup(
+                notice = await self.restore_backup(
                     adapter, backup_info, connection_config, passphrase
                 )
         except Exception as exc:
@@ -452,15 +461,16 @@ class BackupManager:
             )
             raise
 
-        write_audit(
-            "backup.restore",
-            "completed",
-            stage="restore",
-            safetyBackup=safety_name,
+        completed = {
+            "stage": "restore",
+            "safetyBackup": safety_name,
             **audit_base,
-        )
+        }
+        if notice:
+            completed["restoreNotice"] = notice
+        write_audit("backup.restore", "completed", **completed)
         stage("done")
-        return {"ok": True, "safetyBackup": safety_name}
+        return {"ok": True, "safetyBackup": safety_name, "restoreNotice": notice}
 
     async def scratch_restore(
         self,
@@ -509,6 +519,7 @@ class BackupManager:
         current_stage = "gate"
         remote_payload: Optional[str] = None
         scratch_cfg: Optional[ConnectionConfig] = None
+        notice: Optional[str] = None
         try:
             stage("gate")
             require_restore_enabled()
@@ -589,11 +600,11 @@ class BackupManager:
             stage("restore")
             if remote_payload is not None:
                 payload_to_apply, remote_payload = remote_payload, None
-                await self._apply_payload(
+                notice = await self._apply_payload(
                     payload_to_apply, backup_info, scratch_cfg
                 )
             else:
-                await self.restore_backup(
+                notice = await self.restore_backup(
                     adapter, backup_info, scratch_cfg, passphrase
                 )
         except Exception as exc:
@@ -616,19 +627,21 @@ class BackupManager:
             raise exc
 
         scratch_name = scratch_cfg.database if scratch_cfg is not None else None
-        write_audit(
-            "backup.scratch_restore",
-            "completed",
-            stage="restore",
-            scratchDatabase=scratch_name,
+        completed = {
+            "stage": "restore",
+            "scratchDatabase": scratch_name,
             **audit_base,
-        )
+        }
+        if notice:
+            completed["restoreNotice"] = notice
+        write_audit("backup.scratch_restore", "completed", **completed)
         stage("done")
         return {
             "ok": True,
             "scratch": True,
             "scratchDatabase": scratch_name,
             "productionDatabase": connection_config.database,
+            "restoreNotice": notice,
         }
 
     async def create_batch_backups(
