@@ -10,6 +10,7 @@ so a slow mail server never blocks the GUI or the monitoring poll.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import smtplib
 import socket
@@ -145,19 +146,120 @@ def build_alert_message(
     return msg
 
 
+def _is_ip_literal(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def _connect_ip(
+    host: str,
+    port: int,
+    timeout: Any,
+    source_address: Any,
+) -> socket.socket:
+    """TCP connect that does not call getaddrinfo.
+
+    ``socket.connect((ip, port))`` parses the address with inet_pton.
+    ``socket.create_connection`` always calls getaddrinfo. On macOS that
+    waits for the main CFRunLoop, so a worker the main thread is joining
+    never finishes — including a connect to 127.0.0.1.
+    """
+    ip = ipaddress.ip_address(host)
+    family = socket.AF_INET6 if ip.version == 6 else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    try:
+        if (
+            timeout is not None
+            and timeout is not socket._GLOBAL_DEFAULT_TIMEOUT
+        ):
+            sock.settimeout(timeout)
+        if source_address:
+            sock.bind(source_address)
+        sock.connect((str(ip), int(port)))
+        return sock
+    except Exception:
+        sock.close()
+        raise
+
+
+def _resolve_peer_ip(host: str, port: int) -> str:
+    """Numeric address, resolved on the caller (not the SMTP worker)."""
+    host = host.strip()
+    if _is_ip_literal(host):
+        return host
+    infos = socket.getaddrinfo(host, int(port), type=socket.SOCK_STREAM)
+    return str(infos[0][4][0])
+
+
+def _local_smtp_hostname() -> str:
+    """EHLO name. ``SMTP()`` would call ``getfqdn()`` (getaddrinfo)."""
+    try:
+        name = socket.getfqdn()
+    except OSError:
+        return "localhost"
+    return name or "localhost"
+
+
+class _DirectSMTP(smtplib.SMTP):
+    """SMTP client that connects to numeric addresses without getaddrinfo."""
+
+    def __init__(
+        self, *args: Any, peer_ip: Optional[str] = None, **kwargs: Any
+    ):
+        self._peer_ip = peer_ip
+        super().__init__(*args, **kwargs)
+
+    def _get_socket(
+        self, host: str, port: int, timeout: Any
+    ) -> socket.socket:
+        target = self._peer_ip or host
+        if _is_ip_literal(str(target)):
+            return _connect_ip(
+                str(target), int(port), timeout, self.source_address
+            )
+        return super()._get_socket(host, port, timeout)
+
+
+class _DirectSMTPSSL(smtplib.SMTP_SSL):
+    """Implicit-TLS SMTP client with the same numeric connect path."""
+
+    def __init__(
+        self, *args: Any, peer_ip: Optional[str] = None, **kwargs: Any
+    ):
+        self._peer_ip = peer_ip
+        super().__init__(*args, **kwargs)
+
+    def _get_socket(
+        self, host: str, port: int, timeout: Any
+    ) -> socket.socket:
+        target = self._peer_ip or host
+        if not _is_ip_literal(str(target)):
+            return super()._get_socket(host, port, timeout)
+        raw = _connect_ip(
+            str(target), int(port), timeout, self.source_address
+        )
+        return self.context.wrap_socket(raw, server_hostname=self._host)
+
+
 def send_email(
     cfg: Dict[str, Any],
     msg: EmailMessage,
     *,
     timeout: float = 15.0,
     context: Optional[ssl.SSLContext] = None,
+    peer_ip: Optional[str] = None,
+    local_hostname: Optional[str] = None,
 ) -> None:
     """Deliver ``msg`` over real SMTP. Raises on any failure.
 
-    Pass ``context`` when calling from a worker. On macOS,
-    ``ssl.create_default_context()`` loads the system trust store and
-    waits for the main CFRunLoop. Doing that on a worker while the
-    main thread is blocked in ``Thread.join`` never returns.
+    Build ``context`` and ``local_hostname`` on the calling thread when
+    this runs on a worker. On macOS, ``ssl.create_default_context()`` and
+    ``getaddrinfo`` (including via ``SMTP``'s default EHLO name) wait for
+    the main CFRunLoop and never return if that thread is blocked in
+    ``Thread.join``.
     """
     errors = validate_email_config(cfg)
     if errors:
@@ -165,12 +267,15 @@ def send_email(
     host, port, security = cfg["host"], int(cfg["port"]), cfg["security"]
     if security in ("ssl", "starttls") and context is None:
         context = ssl.create_default_context()
+    common: Dict[str, Any] = {"timeout": timeout, "peer_ip": peer_ip}
+    if local_hostname:
+        common["local_hostname"] = local_hostname
     if security == "ssl":
-        client: smtplib.SMTP = smtplib.SMTP_SSL(
-            host, port, timeout=timeout, context=context
+        client: smtplib.SMTP = _DirectSMTPSSL(
+            host, port, context=context, **common
         )
     else:
-        client = smtplib.SMTP(host, port, timeout=timeout)
+        client = _DirectSMTP(host, port, **common)
     with client:
         client.ehlo()
         if security == "starttls":
@@ -300,18 +405,34 @@ class NotificationDispatcher:
             alert.timestamp,
         )
         self.delivered.append(entry)
-        # Trust store on this thread, before the worker. See send_email.
+        # Resolver, EHLO name and trust store on this thread. See send_email.
         security = str(cfg.get("security") or "")
+        context: Optional[ssl.SSLContext] = None
         if security in ("ssl", "starttls"):
-            context: Optional[ssl.SSLContext] = ssl.create_default_context()
-        else:
-            context = None
+            context = ssl.create_default_context()
+        try:
+            peer_ip: Optional[str] = _resolve_peer_ip(
+                str(cfg.get("host") or ""), int(cfg.get("port") or 0)
+            )
+            resolve_error: Optional[OSError] = None
+        except OSError as exc:
+            peer_ip = None
+            resolve_error = exc
+        local_hostname = _local_smtp_hostname()
         sender = self._email_sender
 
         def worker() -> None:
             try:
+                if resolve_error is not None:
+                    raise resolve_error
                 if sender is send_email:
-                    send_email(cfg, msg, context=context)
+                    send_email(
+                        cfg,
+                        msg,
+                        context=context,
+                        peer_ip=peer_ip,
+                        local_hostname=local_hostname,
+                    )
                 else:
                     sender(cfg, msg)
                 entry["delivered"] = True
