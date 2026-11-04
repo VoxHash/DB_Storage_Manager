@@ -77,12 +77,16 @@ def accepted_product_ids(product_id: str) -> frozenset:
     """Product ids whose licence unlocks a plugin that requires ``product_id``.
 
     Always the plugin's own product. For first-party premium plugins (the id is
-    listed in ``PREMIUM_PRODUCT_IDS``) every bundle product is accepted as well.
-    Third-party plugins are never unlocked by a bundle.
+    listed in ``PREMIUM_PRODUCT_IDS``) every product of that plugin (monthly,
+    yearly and one-time) and every bundle product is accepted, so any SKU the
+    customer bought unlocks it whichever one the manifest lists. Third-party
+    plugins are never unlocked by a bundle or by another SKU: exact match only.
     """
     accepted = {product_id}
-    if product_id in FIRST_PARTY_PLUGIN_PRODUCT_IDS or product_id in BUNDLE_PRODUCT_IDS:
-        accepted |= BUNDLE_PRODUCT_IDS
+    for plugin, options in PREMIUM_PRODUCT_IDS.items():
+        if product_id in options.values():
+            accepted |= set(options.values())
+            accepted |= BUNDLE_PRODUCT_IDS
     return frozenset(accepted)
 
 

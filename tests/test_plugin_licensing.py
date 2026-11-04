@@ -665,9 +665,54 @@ def _add_license(stub, key, product_id, **extra):
 
 
 def test_accepted_product_ids_policy():
-    assert accepted_product_ids(PLUGIN_ONLY_ID) == {PLUGIN_ONLY_ID} | BUNDLE_PRODUCT_IDS
+    family = frozenset(PREMIUM_PRODUCT_IDS["pitr-verify"].values())
+    assert accepted_product_ids(PLUGIN_ONLY_ID) == family | BUNDLE_PRODUCT_IDS
     assert accepted_product_ids(PRODUCT_ID) == {PRODUCT_ID}  # third party: own id only
     assert len(BUNDLE_PRODUCT_IDS) == 3
+
+
+def test_accepted_product_ids_covers_all_skus_of_the_plugin_family():
+    for plugin, options in PREMIUM_PRODUCT_IDS.items():
+        if plugin == "bundle":
+            continue
+        family = frozenset(options.values())
+        for pid in family:
+            assert accepted_product_ids(pid) == family | BUNDLE_PRODUCT_IDS
+    # other plugins' SKUs are never accepted
+    drift = frozenset(PREMIUM_PRODUCT_IDS["schema-drift"].values())
+    assert not (accepted_product_ids(PLUGIN_ONLY_ID) & drift)
+
+
+@pytest.mark.parametrize("held", ["monthly", "yearly", "one_time"])
+@pytest.mark.parametrize("listed", ["monthly", "yearly", "one_time"])
+def test_any_sku_of_a_plugin_unlocks_that_plugin(gate, stub, held, listed):
+    g, _ = gate
+    _add_license(stub, "LC-TEST-SKU-KEY1", PREMIUM_PRODUCT_IDS["pitr-verify"][held])
+    req = LicenseRequirement(product_id=PREMIUM_PRODUCT_IDS["pitr-verify"][listed])
+    result = g.activate("pitr-verify", req, "LC-TEST-SKU-KEY1")
+    assert result.allowed and result.state == "licensed"
+    assert g.status("pitr-verify", req, network=False).allowed
+    saved = g.store.get_plugin_licenses()["pitr-verify"]
+    assert saved["product_id"] == PREMIUM_PRODUCT_IDS["pitr-verify"][held]
+
+
+@pytest.mark.parametrize("held", ["monthly", "yearly", "one_time"])
+def test_other_plugins_sku_is_still_a_mismatch(gate, stub, held):
+    g, _ = gate
+    _add_license(stub, "LC-TEST-SKU-KEY2", PREMIUM_PRODUCT_IDS["schema-drift"][held])
+    for listed in ("monthly", "yearly", "one_time"):
+        req = LicenseRequirement(product_id=PREMIUM_PRODUCT_IDS["pitr-verify"][listed])
+        with pytest.raises(PluginLicenseError) as exc:
+            g.activate("pitr-verify", req, "LC-TEST-SKU-KEY2")
+        assert exc.value.code == "mismatch"
+
+
+def test_third_party_plugin_rejects_sibling_skus_of_first_party(gate, stub):
+    g, _ = gate
+    _add_license(stub, "LC-TEST-SKU-KEY3", PREMIUM_PRODUCT_IDS["pitr-verify"]["yearly"])
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pro_report", _requirement(), "LC-TEST-SKU-KEY3")
+    assert exc.value.code == "mismatch"
 
 
 def test_plugin_only_key_unlocks_just_that_plugin(gate, stub):
