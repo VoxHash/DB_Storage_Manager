@@ -13,6 +13,8 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       RELEASE_TAG: ${{ github.ref_name }}
     strategy:
+      # One hosted runner stall (macOS capacity) must not cancel the other OS builds.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12"]
@@ -104,6 +106,9 @@ jobs:
   publish:
     name: Publish Release
     runs-on: ubuntu-latest
+    # Attach whatever platform artifacts exist. A failed or cancelled macOS leg
+    # must not skip Ubuntu and Windows files (hosted macOS queue stalls).
+    if: always() && !cancelled()
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: build
@@ -118,6 +123,7 @@ jobs:
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: dist/
         env:
@@ -132,6 +138,7 @@ jobs:
             dist/dist-ubuntu-latest/release/*.AppImage
             dist/dist-windows-latest/release/*.exe
             dist/dist-macos-latest/release/DB_Storage_Manager-*
+          fail_on_unmatched_files: false
           generate_release_notes: false
           draft: false
           prerelease: false
