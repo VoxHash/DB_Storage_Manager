@@ -124,8 +124,8 @@ class BackupsWidget(QWidget):
         self.verify_selected_button.setEnabled(can_read and not busy_verify)
         self.verify_all_button.setEnabled(can_read and not busy_verify)
         self.dry_run_button.setEnabled(can_restore and not busy_verify)
-        # Full restore is experimental: hidden unless the flag is on, and it
-        # additionally needs backups:restore (the manager re-checks both).
+        # Full restore is stable. It still needs backups:restore (the manager
+        # re-checks the permission, confirmation, and safety backup).
         self.restore_button.setVisible(is_restore_enabled())
         self.restore_button.setEnabled(
             can_restore
@@ -308,14 +308,14 @@ class BackupsWidget(QWidget):
         actions.addWidget(self.dry_run_button)
 
         self.restore_button = QPushButton(
-            t("backups.restore_full", default="Restore… (experimental)")
+            t("backups.restore_full", default="Restore…")
         )
         self.restore_button.setToolTip(
             t(
                 "backups.restore_full_tooltip",
                 default=(
                     "Overwrites the target database. Needs the backups:restore "
-                    "permission; enabled under Settings → Backups & Adapters."
+                    "permission, a typed confirmation, and a safety backup."
                 ),
             )
         )
@@ -532,7 +532,7 @@ class BackupsWidget(QWidget):
             self._refresh_proton_status()
 
     def refresh_destinations(self) -> None:
-        """Re-evaluate destination status and the experimental Restore button."""
+        """Re-evaluate destination status and the Restore button."""
         self._refresh_proton_status()
         self._refresh_job_buttons()
 
@@ -1228,13 +1228,13 @@ class BackupsWidget(QWidget):
         return targets
 
     def restore_selected(self) -> None:
-        """Experimental full restore of the selected backup (destructive)."""
+        """Full restore of the selected backup (destructive)."""
         t = self.i18n.translate
         if not is_restore_enabled():
             self._set_status(
                 t(
                     "backups.restore_disabled",
-                    default="Full restore is experimental and turned off. Enable it under Settings → Backups & Adapters.",
+                    default="Full restore is turned off. Enable it under Settings → Backups & Adapters.",
                 ),
                 "not_configured",
             )

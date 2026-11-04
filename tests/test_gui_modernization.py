@@ -219,7 +219,9 @@ def test_critical_actions_keep_text_labels(window):
     )
     for button in critical:
         assert button.text().strip(), f"{button.objectName() or button} lost its label"
-    assert "experimental" in window.backups_widget.restore_button.text().lower()
+    label = window.backups_widget.restore_button.text().lower()
+    assert "restore" in label or "restaur" in label
+    assert "experimental" not in label
 
 
 def test_theme_switch_repaints_icons_and_restyles(window):

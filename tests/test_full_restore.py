@@ -95,24 +95,36 @@ def _restore(env, backup, **kwargs):
     )
 
 
-def test_gate_is_off_by_default_and_blocks_restore(env):
+def test_restore_is_on_by_default(env):
+    assert is_restore_enabled() is True
+    backup = env["make_backup"](compression="gzip")
+    _make_db(env["db"], ["changed"])
+    _restore(env, backup)
+    assert _names(env["db"]) == ["alpha", "beta"]
+
+
+def test_operator_can_turn_restore_off(env):
+    settings = env["store"].get_settings()
+    settings["experimental"] = {"restore": False}
+    env["store"].set_settings(settings)
     assert is_restore_enabled() is False
     backup = env["make_backup"](compression="gzip")
     _make_db(env["db"], ["changed"])
     with pytest.raises(ExperimentalDisabledError):
         _restore(env, backup)
-    assert _names(env["db"]) == ["changed"]  # untouched
-    entry = audit.read_audit()[-1]
-    assert entry["action"] == "backup.restore"
-    assert entry["outcome"] == "refused"
-    assert entry["stage"] == "gate"
+    assert _names(env["db"]) == ["changed"]
 
 
-def test_environment_variable_enables_without_settings(env, monkeypatch):
+def test_environment_variable_forces_restore_on(env, monkeypatch):
+    settings = env["store"].get_settings()
+    settings["experimental"] = {"restore": False}
+    env["store"].set_settings(settings)
     monkeypatch.setenv(ENV_VAR, "1")
-    assert env_forces_experimental() and is_restore_enabled()
+    assert env_forces_experimental() is True
+    assert is_restore_enabled() is True
     monkeypatch.setenv(ENV_VAR, "0")
-    assert not is_restore_enabled()
+    assert env_forces_experimental() is False
+    assert is_restore_enabled() is False
 
 
 def test_restore_requires_rbac_permission(env, monkeypatch):

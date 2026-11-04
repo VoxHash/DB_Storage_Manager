@@ -37,6 +37,7 @@ from .licensing import (
 from .manifest import (
     LicenseRequirement,
     ManifestError,
+    discover_plugin_roots,
     find_plugin_root,
     load_manifest,
     parse_license_requirement,
@@ -335,14 +336,75 @@ class LocalPluginMarketplace:
     ) -> Dict[str, Any]:
         """Copy a plugin directory into the local installed store and register it.
 
-        Premium plugins (``plugin.json`` has a ``license`` block) are verified
-        against LicenseChain *before* any plugin code is imported: pass
-        ``license_key`` (and ``license_email`` if the license has none), or have
-        a valid license already stored. Otherwise ``PluginLicenseRequired`` /
-        ``PluginLicenseError`` is raised and nothing is installed.
+        A directory with its own ``plugin.json`` installs that plugin. A parent
+        directory installs every child that has ``plugin.json``. Premium plugins
+        (``plugin.json`` has a ``license`` block) are verified against
+        LicenseChain *before* any plugin code is imported: pass ``license_key``
+        (and ``license_email`` if the license has none), or have a valid license
+        already stored. Otherwise ``PluginLicenseRequired`` /
+        ``PluginLicenseError`` is raised and that plugin is not installed.
+
+        One licence key is only applied when a single plugin directory was
+        selected. A parent folder does not reuse one key across every product.
         """
         source_path = Path(source_path).resolve()
-        root = find_plugin_root(source_path)
+        roots = discover_plugin_roots(source_path)
+        if len(roots) == 1:
+            return self._install_plugin_directory(
+                roots[0],
+                replace=replace,
+                license_key=license_key,
+                license_email=license_email,
+            )
+        installed: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, str]] = []
+        license_holds: List[PluginLicenseRequired] = []
+        for root in roots:
+            try:
+                installed.append(
+                    self._install_plugin_directory(
+                        root,
+                        replace=replace,
+                        license_key=None,
+                        license_email=None,
+                    )
+                )
+            except PluginLicenseRequired as exc:
+                license_holds.append(exc)
+                skipped.append({"id": root.name, "reason": "license_required"})
+            except (ManifestError, PluginLicenseError, OSError, RuntimeError) as exc:
+                skipped.append({"id": root.name, "reason": str(exc)})
+        if not installed:
+            if license_holds and len(license_holds) == len(roots):
+                names = ", ".join(item["id"] for item in skipped)
+                raise ManifestError(
+                    f"no plugin could be installed under {source_path}. "
+                    f"Each of these needs its own licence: {names}. "
+                    "Select one plugin directory and activate that licence, "
+                    "or install the parent again after the licences are stored."
+                )
+            detail = "; ".join(
+                f"{item['id']}: {item['reason']}" for item in skipped
+            ) or "no plugin.json"
+            raise ManifestError(
+                f"no plugin could be installed under {source_path}. {detail}"
+            )
+        summary = dict(installed[0])
+        summary["installed"] = installed
+        summary["skipped"] = skipped
+        summary["multiple"] = True
+        return summary
+
+    def _install_plugin_directory(
+        self,
+        root: Path,
+        *,
+        replace: bool = False,
+        license_key: Optional[str] = None,
+        license_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Install one directory that already contains ``plugin.json``."""
+        root = Path(root).resolve()
         manifest = load_manifest(root)
         if manifest.license is not None:
             if license_key:

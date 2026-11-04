@@ -418,28 +418,14 @@ def test_safety_backup_holds_the_pre_restore_state(live):
         drifted_customers
     )
 
-    restored_customers = driver.fetch(database, driver.SNAPSHOT_QUERIES["customers"])
     listed = asyncio.run(live["adapter"].list_backups())
     safety_info = next(b for b in listed if b.name == result["safetyBackup"])
 
-    if driver.type == "postgresql":
-        # The safety backup has no ``orders`` table, but the restore above
-        # recreated it with a foreign key to ``customers``. pg_restore --clean
-        # cannot drop ``customers`` while that dependent object exists, so the
-        # roll-back fails loudly instead of replacing anything. Rehearsing
-        # into a scratch database (ROADMAP) is the supported way around this.
-        with pytest.raises(RuntimeError, match="pg_restore failed"):
-            live["restore"](safety_info, encryption_key=SAFETY_PASSPHRASE)
-        assert audit.read_audit()[-1]["outcome"] == "failed"
-        assert audit.read_audit()[-1]["stage"] == "restore"
-        assert (
-            driver.fetch(database, driver.SNAPSHOT_QUERIES["customers"])
-            == restored_customers
-        )
-        return
-
-    # MySQL dumps drop and recreate each table with foreign key checks off, so
-    # rolling forward from the safety backup returns the drifted customers.
+    # PostgreSQL drops archived tables with CASCADE before pg_restore, so a
+    # foreign key from a target-only table no longer blocks the rollback.
+    # MySQL dumps drop and recreate each table with foreign key checks off.
+    # Either way the safety backup returns the drifted customers. The
+    # target-only ``orders`` table is kept.
     live["restore"](safety_info, encryption_key=SAFETY_PASSPHRASE)
     assert (
         driver.fetch(database, driver.SNAPSHOT_QUERIES["customers"])

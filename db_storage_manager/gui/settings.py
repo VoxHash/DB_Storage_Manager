@@ -37,8 +37,10 @@ from ..i18n.languages import SUPPORTED_LANGUAGES
 from ..i18n.manager import get_i18n_manager
 from ..monitoring.notifications import (
     EMAIL_SECURITY_MODES,
+    resolve_discord_config,
     resolve_email_config,
     resolve_slack_config,
+    resolve_telegram_config,
     resolve_webhook_config,
     send_test_email,
     validate_email_config,
@@ -267,7 +269,7 @@ class SettingsWidget(QWidget):
         self.experimental_restore_check = QCheckBox()
         experimental = dict(self.settings.get("experimental") or {})
         self.experimental_restore_check.setChecked(
-            bool(experimental.get("restore", False))
+            bool(experimental.get("restore", True))
         )
         e.addWidget(self.experimental_restore_check)
         self.experimental_hint = _hint_label()
@@ -468,6 +470,56 @@ class SettingsWidget(QWidget):
         slack_form.addRow(self.slack_cooldown_label, self.slack_cooldown_spin)
         outer.addWidget(self.slack_group)
 
+        discord = resolve_discord_config(self.settings)
+        self.discord_group = QGroupBox()
+        discord_form = QFormLayout(self.discord_group)
+        self.discord_hint = _hint_label()
+        discord_form.addRow(self.discord_hint)
+        self.discord_url_label = QLabel()
+        self.discord_url_edit = QLineEdit(str(discord.get("url") or ""))
+        self.discord_url_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.discord_url_edit.setPlaceholderText("https://discord.com/api/webhooks/…")
+        discord_form.addRow(self.discord_url_label, self.discord_url_edit)
+        self.discord_severity_label = QLabel()
+        self.discord_severity_combo = QComboBox()
+        self.discord_severity_combo.addItem("", "critical")
+        self.discord_severity_combo.addItem("", "warning")
+        idx = self.discord_severity_combo.findData(discord.get("min_severity"))
+        self.discord_severity_combo.setCurrentIndex(max(idx, 0))
+        discord_form.addRow(self.discord_severity_label, self.discord_severity_combo)
+        self.discord_cooldown_label = QLabel()
+        self.discord_cooldown_spin = QSpinBox()
+        self.discord_cooldown_spin.setRange(1, 24 * 60)
+        self.discord_cooldown_spin.setValue(int(discord.get("cooldown_minutes") or 30))
+        discord_form.addRow(self.discord_cooldown_label, self.discord_cooldown_spin)
+        outer.addWidget(self.discord_group)
+
+        telegram = resolve_telegram_config(self.settings)
+        self.telegram_group = QGroupBox()
+        telegram_form = QFormLayout(self.telegram_group)
+        self.telegram_hint = _hint_label()
+        telegram_form.addRow(self.telegram_hint)
+        self.telegram_token_label = QLabel()
+        self.telegram_token_edit = QLineEdit(str(telegram.get("bot_token") or ""))
+        self.telegram_token_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        telegram_form.addRow(self.telegram_token_label, self.telegram_token_edit)
+        self.telegram_chat_label = QLabel()
+        self.telegram_chat_edit = QLineEdit(str(telegram.get("chat_id") or ""))
+        telegram_form.addRow(self.telegram_chat_label, self.telegram_chat_edit)
+        self.telegram_severity_label = QLabel()
+        self.telegram_severity_combo = QComboBox()
+        self.telegram_severity_combo.addItem("", "critical")
+        self.telegram_severity_combo.addItem("", "warning")
+        idx = self.telegram_severity_combo.findData(telegram.get("min_severity"))
+        self.telegram_severity_combo.setCurrentIndex(max(idx, 0))
+        telegram_form.addRow(self.telegram_severity_label, self.telegram_severity_combo)
+        self.telegram_cooldown_label = QLabel()
+        self.telegram_cooldown_spin = QSpinBox()
+        self.telegram_cooldown_spin.setRange(1, 24 * 60)
+        self.telegram_cooldown_spin.setValue(int(telegram.get("cooldown_minutes") or 30))
+        telegram_form.addRow(self.telegram_cooldown_label, self.telegram_cooldown_spin)
+        outer.addWidget(self.telegram_group)
+
         outer.addStretch()
         return page
 
@@ -526,6 +578,13 @@ class SettingsWidget(QWidget):
             self.slack_url_edit,
             self.slack_severity_combo,
             self.slack_cooldown_spin,
+            self.discord_url_edit,
+            self.discord_severity_combo,
+            self.discord_cooldown_spin,
+            self.telegram_token_edit,
+            self.telegram_chat_edit,
+            self.telegram_severity_combo,
+            self.telegram_cooldown_spin,
         ):
             widget.setEnabled(editable)
         self.updates_panel.set_editable(editable)
@@ -808,21 +867,21 @@ class SettingsWidget(QWidget):
             t("settings.configure_s3", default="Configure S3…")
         )
         self.experimental_group.setTitle(
-            t("settings.experimental_title", default="Experimental")
+            t("settings.experimental_title", default="Full restore")
         )
         self.experimental_restore_check.setText(
             t(
                 "settings.experimental_restore",
-                default="Enable full Restore Backup (experimental)",
+                default="Show Restore Backup on the Backups tab",
             )
         )
         hint = t(
             "settings.experimental_restore_hint",
             default=(
-                "Adds a Restore button on the Backups tab. A restore "
-                "overwrites the target database, so it needs the "
-                "backups:restore permission, a typed confirmation, and "
-                "(by default) a safety backup first. Off on stable builds."
+                "Full restore is stable and on by default. Uncheck to hide "
+                "the Restore button. A restore still overwrites the target "
+                "database, so it needs the backups:restore permission, a "
+                "typed confirmation, and a safety backup."
             ),
         )
         if env_forces_experimental():
@@ -991,6 +1050,74 @@ class SettingsWidget(QWidget):
             _colon(t("settings.email_cooldown", default="Repeat cooldown"))
         )
         self.slack_cooldown_spin.setSuffix(
+            f" {t('settings.minutes_suffix', default='min')}"
+        )
+        self.discord_group.setTitle(
+            t("settings.discord_title", default="Discord alerts")
+        )
+        self.discord_hint.setText(
+            t(
+                "settings.discord_hint",
+                default=(
+                    "Posts to a Discord incoming webhook "
+                    "(https://discord.com/api/webhooks/…). The URL contains a "
+                    "secret and stays in SecureStore. Off until you enable "
+                    "Discord on the Monitoring tab. Same severity and cooldown "
+                    "rules as email."
+                ),
+            )
+        )
+        self.discord_url_label.setText(
+            _colon(t("settings.discord_url", default="Discord webhook URL"))
+        )
+        self.discord_severity_label.setText(
+            _colon(t("settings.email_min_severity", default="Minimum severity"))
+        )
+        self.discord_severity_combo.setItemText(
+            0, t("settings.severity_critical", default="Critical only")
+        )
+        self.discord_severity_combo.setItemText(
+            1, t("settings.severity_warning", default="Warning and critical")
+        )
+        self.discord_cooldown_label.setText(
+            _colon(t("settings.email_cooldown", default="Repeat cooldown"))
+        )
+        self.discord_cooldown_spin.setSuffix(
+            f" {t('settings.minutes_suffix', default='min')}"
+        )
+        self.telegram_group.setTitle(
+            t("settings.telegram_title", default="Telegram alerts")
+        )
+        self.telegram_hint.setText(
+            t(
+                "settings.telegram_hint",
+                default=(
+                    "Posts through the official Bot API (api.telegram.org only). "
+                    "The bot token and chat id stay in SecureStore and are not "
+                    "written to the notification log. Off until you enable "
+                    "Telegram on the Monitoring tab."
+                ),
+            )
+        )
+        self.telegram_token_label.setText(
+            _colon(t("settings.telegram_token", default="Bot token"))
+        )
+        self.telegram_chat_label.setText(
+            _colon(t("settings.telegram_chat_id", default="Chat id"))
+        )
+        self.telegram_severity_label.setText(
+            _colon(t("settings.email_min_severity", default="Minimum severity"))
+        )
+        self.telegram_severity_combo.setItemText(
+            0, t("settings.severity_critical", default="Critical only")
+        )
+        self.telegram_severity_combo.setItemText(
+            1, t("settings.severity_warning", default="Warning and critical")
+        )
+        self.telegram_cooldown_label.setText(
+            _colon(t("settings.email_cooldown", default="Repeat cooldown"))
+        )
+        self.telegram_cooldown_spin.setSuffix(
             f" {t('settings.minutes_suffix', default='min')}"
         )
 
@@ -1245,6 +1372,25 @@ class SettingsWidget(QWidget):
                 "cooldown_minutes": int(self.slack_cooldown_spin.value()),
             }
         )
+        discord = dict(existing.get("discord_alerts") or {})
+        discord.update(
+            {
+                "url": self.discord_url_edit.text().strip(),
+                "min_severity": self.discord_severity_combo.currentData() or "critical",
+                "cooldown_minutes": int(self.discord_cooldown_spin.value()),
+            }
+        )
+        telegram = dict(existing.get("telegram_alerts") or {})
+        telegram.update(
+            {
+                "bot_token": self.telegram_token_edit.text().strip(),
+                "chat_id": self.telegram_chat_edit.text().strip(),
+                "min_severity": self.telegram_severity_combo.currentData()
+                or "critical",
+                "cooldown_minutes": int(self.telegram_cooldown_spin.value()),
+            }
+        )
+        telegram.pop("url", None)
 
         experimental = dict(existing.get("experimental") or {})
         if not env_forces_experimental():
@@ -1275,6 +1421,8 @@ class SettingsWidget(QWidget):
             "email_alerts": email,
             "webhook_alerts": webhook,
             "slack_alerts": slack,
+            "discord_alerts": discord,
+            "telegram_alerts": telegram,
             "monitoring": monitoring,
         }
         self.secure_store.set_settings(self.settings)

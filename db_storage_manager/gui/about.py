@@ -148,9 +148,6 @@ class AboutDialog(QDialog):
         self.copy_button.setObjectName("PrimaryButton")
         self.copy_button.clicked.connect(self._copy)
         buttons.addWidget(self.copy_button)
-        self.close_button = QPushButton(t("common.ok", default="OK"))
-        self.close_button.clicked.connect(self.accept)
-        buttons.addWidget(self.close_button)
         buttons.addStretch(1)
         layout.addLayout(buttons)
 

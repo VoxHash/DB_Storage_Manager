@@ -7,7 +7,9 @@ delivery appends to a durable in-memory log the Monitoring UI can display;
 email delivery speaks real SMTP (STARTTLS / implicit TLS) from a worker thread
 so a slow mail server never blocks the GUI or the monitoring poll. Webhook and
 Slack use the same minimum severity and cooldown, and post JSON from a worker
-thread. Slack URLs are only sent to hooks.slack.com.
+thread. Slack URLs are only sent to hooks.slack.com. Discord URLs are only
+sent to discord.com (or discordapp.com) webhook paths. Telegram is only
+``api.telegram.org`` and the bot token never appears in the notification log.
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
+import re
 import smtplib
 import socket
 import ssl
@@ -36,6 +39,8 @@ DEFAULT_ALERT_CHANNELS: Dict[str, bool] = {
     "email": False,
     "webhook": False,
     "slack": False,
+    "discord": False,
+    "telegram": False,
 }
 
 DesktopHandler = Callable[[str, str, str], None]
@@ -357,8 +362,19 @@ def resolve_slack_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str,
     )
 
 
-def validate_alert_url(url: str, *, slack: bool = False) -> List[str]:
+_DISCORD_HOSTS = frozenset(
+    {"discord.com", "discordapp.com", "canary.discord.com", "ptb.discord.com"}
+)
+_TELEGRAM_TOKEN = re.compile(r"\d+:[A-Za-z0-9_-]{20,}")
+_TELEGRAM_CHAT = re.compile(r"(@[A-Za-z][A-Za-z0-9_]{4,}|-?\d{1,20})")
+
+
+def validate_alert_url(
+    url: str, *, slack: bool = False, kind: Optional[str] = None
+) -> List[str]:
     """Problems with a webhook URL. The URL itself is not repeated in errors."""
+    if kind is None:
+        kind = "slack" if slack else "webhook"
     errors: List[str] = []
     parsed = urlparse(str(url or "").strip())
     if parsed.username or parsed.password:
@@ -376,11 +392,25 @@ def validate_alert_url(url: str, *, slack: bool = False) -> List[str]:
     if ip is not None and (ip.is_link_local or ip.is_multicast or ip.is_unspecified):
         errors.append("That address is not allowed")
     loopback = host in _LOOPBACK_HOSTS or (ip is not None and ip.is_loopback)
-    if slack:
+    path = parsed.path or ""
+    if kind == "slack":
         if parsed.scheme != "https" or host != "hooks.slack.com":
             errors.append("Slack webhooks must use https://hooks.slack.com")
-        elif not (parsed.path or "").startswith("/services/"):
+        elif not path.startswith("/services/"):
             errors.append("Slack webhook path must start with /services/")
+    elif kind == "discord":
+        if parsed.scheme != "https" or host not in _DISCORD_HOSTS:
+            errors.append(
+                "Discord webhooks must use https://discord.com/api/webhooks/…"
+            )
+        else:
+            parts = [part for part in path.split("/") if part]
+            if len(parts) < 4 or parts[0] != "api" or parts[1] != "webhooks":
+                errors.append(
+                    "Discord webhook path must be /api/webhooks/<id>/<token>"
+                )
+    elif kind == "telegram":
+        errors.append("Telegram is not configured with a URL")
     elif parsed.scheme == "https":
         pass
     elif parsed.scheme == "http" and loopback:
@@ -390,11 +420,36 @@ def validate_alert_url(url: str, *, slack: bool = False) -> List[str]:
     return errors
 
 
-def validate_webhook_config(cfg: Dict[str, Any], *, slack: bool = False) -> List[str]:
-    errors = validate_alert_url(str(cfg.get("url") or ""), slack=slack)
+def validate_webhook_config(
+    cfg: Dict[str, Any], *, slack: bool = False, kind: Optional[str] = None
+) -> List[str]:
+    if kind is None:
+        kind = "slack" if slack else "webhook"
+    if kind == "telegram":
+        errors = _telegram_problems(cfg)
+    else:
+        errors = validate_alert_url(str(cfg.get("url") or ""), kind=kind)
     if cfg.get("min_severity") not in ("warning", "critical"):
         errors.append("Minimum severity must be warning or critical")
     return errors
+
+
+def _telegram_problems(cfg: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    token = str(cfg.get("bot_token") or "").strip()
+    if not _TELEGRAM_TOKEN.fullmatch(token):
+        errors.append("Telegram bot token is not a bot token")
+    chat = str(cfg.get("chat_id") or "").strip()
+    if not chat:
+        errors.append("Telegram chat id is required")
+    elif not _TELEGRAM_CHAT.fullmatch(chat):
+        errors.append("Telegram chat id must be a number or a public @channel")
+    return errors
+
+
+def telegram_send_url(bot_token: str) -> str:
+    """Official Bot API endpoint. The token is not accepted from a URL."""
+    return f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
 
 def build_webhook_payload(alert: Alert) -> Dict[str, Any]:
@@ -411,13 +466,62 @@ def build_webhook_payload(alert: Alert) -> Dict[str, Any]:
 
 def build_slack_payload(alert: Alert) -> Dict[str, Any]:
     """Incoming-webhook body. Slack documents ``text`` as the message."""
-    return {
-        "text": (
-            f"[{alert.severity.value.upper()}] {alert.title}\n"
-            f"{alert.message}\n"
-            f"Source: {alert.source}"
-        )
-    }
+    return {"text": _chat_text(alert)}
+
+
+def build_discord_payload(alert: Alert) -> Dict[str, Any]:
+    """Discord documents ``content`` as the message (2000 characters)."""
+    return {"content": _chat_text(alert)[:2000]}
+
+
+def build_telegram_payload(alert: Alert, chat_id: str) -> Dict[str, Any]:
+    """Bot API ``sendMessage``. ``text`` is limited to 4096 characters."""
+    return {"chat_id": chat_id, "text": _chat_text(alert)[:4096]}
+
+
+def _chat_text(alert: Alert) -> str:
+    return (
+        f"[{alert.severity.value.upper()}] {alert.title}\n"
+        f"{alert.message}\n"
+        f"Source: {alert.source}"
+    )
+
+
+def resolve_discord_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    from ..config import DEFAULT_DISCORD_ALERTS
+
+    return _channel_config(
+        settings, "discord_alerts", DEFAULT_DISCORD_ALERTS, "DSM_DISCORD_WEBHOOK_URL"
+    )
+
+
+def resolve_telegram_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    from ..config import DEFAULT_TELEGRAM_ALERTS
+
+    if settings is None:
+        from ..security.store import SecureStore
+
+        settings = SecureStore().get_settings()
+    cfg = dict(DEFAULT_TELEGRAM_ALERTS)
+    cfg.update(settings.get("telegram_alerts") or {})
+    token = os.environ.get("DSM_TELEGRAM_BOT_TOKEN", "").strip()
+    if token:
+        cfg["bot_token"] = token
+    chat = os.environ.get("DSM_TELEGRAM_CHAT_ID", "").strip()
+    if chat:
+        cfg["chat_id"] = chat
+    cfg["bot_token"] = str(cfg.get("bot_token") or "").strip()
+    cfg["chat_id"] = str(cfg.get("chat_id") or "").strip()
+    # Never honour a stored or env URL. The token would otherwise be posted
+    # wherever that URL points.
+    cfg.pop("url", None)
+    cfg["url"] = telegram_send_url(cfg["bot_token"]) if cfg["bot_token"] else ""
+    cfg["min_severity"] = str(cfg.get("min_severity") or "critical").lower()
+    try:
+        cfg["cooldown_minutes"] = max(0, int(cfg.get("cooldown_minutes") or 0))
+    except (TypeError, ValueError):
+        cfg["cooldown_minutes"] = 30
+    return cfg
 
 
 def post_json(url: str, payload: Dict[str, Any], *, timeout: float = 15.0) -> None:
@@ -450,6 +554,8 @@ class NotificationDispatcher:
         email_sender: Optional[Callable[[Dict[str, Any], EmailMessage], None]] = None,
         webhook_sender: Optional[HttpSender] = None,
         slack_sender: Optional[HttpSender] = None,
+        discord_sender: Optional[HttpSender] = None,
+        telegram_sender: Optional[HttpSender] = None,
         clock: Callable[[], float] = time.monotonic,
     ):
         self.channels: Dict[str, bool] = dict(DEFAULT_ALERT_CHANNELS)
@@ -461,13 +567,19 @@ class NotificationDispatcher:
         self._email_config: Dict[str, Any] = {}
         self._webhook_config: Dict[str, Any] = {}
         self._slack_config: Dict[str, Any] = {}
+        self._discord_config: Dict[str, Any] = {}
+        self._telegram_config: Dict[str, Any] = {}
         self._email_sender = email_sender or send_email
         self._webhook_sender = webhook_sender or post_json
         self._slack_sender = slack_sender or post_json
+        self._discord_sender = discord_sender or post_json
+        self._telegram_sender = telegram_sender or post_json
         self._clock = clock
         self._email_last_sent: Dict[Tuple[str, str], float] = {}
         self._webhook_last_sent: Dict[Tuple[str, str], float] = {}
         self._slack_last_sent: Dict[Tuple[str, str], float] = {}
+        self._discord_last_sent: Dict[Tuple[str, str], float] = {}
+        self._telegram_last_sent: Dict[Tuple[str, str], float] = {}
         self._email_threads: List[threading.Thread] = []
         self._email_lock = threading.Lock()
 
@@ -490,6 +602,12 @@ class NotificationDispatcher:
 
     def set_slack_config(self, cfg: Optional[Dict[str, Any]]) -> None:
         self._slack_config = dict(cfg or {})
+
+    def set_discord_config(self, cfg: Optional[Dict[str, Any]]) -> None:
+        self._discord_config = dict(cfg or {})
+
+    def set_telegram_config(self, cfg: Optional[Dict[str, Any]]) -> None:
+        self._telegram_config = dict(cfg or {})
 
     def get_channels(self) -> Dict[str, bool]:
         return dict(self.channels)
@@ -666,11 +784,81 @@ class NotificationDispatcher:
                 last_sent=self._slack_last_sent,
                 sender=self._slack_sender,
                 payload=build_slack_payload(alert),
-                slack=True,
+                kind="slack",
             ):
                 fired.append("slack")
 
+        if self.channels.get("discord", False):
+            if self._queue_http(
+                alert,
+                record_base,
+                channel="discord",
+                cfg=self._discord_config,
+                last_sent=self._discord_last_sent,
+                sender=self._discord_sender,
+                payload=build_discord_payload(alert),
+                kind="discord",
+            ):
+                fired.append("discord")
+
+        if self.channels.get("telegram", False):
+            token = str(self._telegram_config.get("bot_token") or "")
+            telegram_cfg = dict(self._telegram_config)
+            telegram_cfg["url"] = telegram_send_url(token) if token else ""
+            if self._queue_http(
+                alert,
+                record_base,
+                channel="telegram",
+                cfg=telegram_cfg,
+                last_sent=self._telegram_last_sent,
+                sender=self._telegram_sender,
+                payload=build_telegram_payload(
+                    alert, str(self._telegram_config.get("chat_id") or "")
+                ),
+                kind="telegram",
+            ):
+                fired.append("telegram")
+
+        if getattr(alert, "connection_id", None):
+            if self._queue_connection_email(alert, record_base):
+                fired.append("connection_email")
+
         return fired
+
+    def _queue_connection_email(
+        self, alert: Alert, record_base: Dict[str, Any]
+    ) -> bool:
+        from .connection_email import plan_send, send_plan
+
+        plan = plan_send(alert, clock=self._clock, require_installed=True)
+        if plan is None:
+            return False
+        entry = {**record_base, "channel": "connection_email", "delivered": False}
+        self.delivered.append(entry)
+
+        def worker() -> None:
+            try:
+                send_plan(plan)
+                entry["delivered"] = True
+            except Exception as exc:  # noqa: BLE001 - no password, host, or URL
+                entry["error"] = type(exc).__name__
+                self.in_app_log.append(
+                    {
+                        **record_base,
+                        "channel": "connection_email",
+                        "severity": "warning",
+                        "title": "Connection email failed",
+                        "message": f"{alert.title}: {type(exc).__name__}",
+                    }
+                )
+
+        thread = threading.Thread(
+            target=worker, name="dsm-alert-connection-email", daemon=True
+        )
+        with self._email_lock:
+            self._email_threads.append(thread)
+        thread.start()
+        return True
 
     def _http_due(
         self,
@@ -678,9 +866,12 @@ class NotificationDispatcher:
         cfg: Dict[str, Any],
         last_sent: Dict[Tuple[str, str], float],
         *,
-        slack: bool,
+        slack: bool = False,
+        kind: Optional[str] = None,
     ) -> Optional[str]:
-        if validate_webhook_config(cfg, slack=slack):
+        if kind is None:
+            kind = "slack" if slack else "webhook"
+        if validate_webhook_config(cfg, kind=kind):
             return "not_configured"
         if SEVERITY_RANK.get(alert.severity.value, 0) < SEVERITY_RANK.get(
             cfg.get("min_severity"), 2
@@ -706,10 +897,11 @@ class NotificationDispatcher:
         last_sent: Dict[Tuple[str, str], float],
         sender: HttpSender,
         payload: Dict[str, Any],
-        slack: bool,
+        slack: bool = False,
+        kind: Optional[str] = None,
     ) -> bool:
         entry = {**record_base, "channel": channel, "delivered": False}
-        skip = self._http_due(alert, cfg, last_sent, slack=slack)
+        skip = self._http_due(alert, cfg, last_sent, slack=slack, kind=kind)
         if skip is not None:
             entry["skipped"] = skip
             self.delivered.append(entry)

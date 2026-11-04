@@ -31,7 +31,7 @@ The dashboard shows how much space the database occupies on disk (tables, indexe
 
 ## Can I restore a backup from the app?
 
-Yes, as an experimental opt-in feature: enable it in Settings → Backups & Adapters (or `DSM_EXPERIMENTAL=1`). It needs the `backups:restore` permission, a typed confirmation, passphrase for encrypted backups, and writes an audit log. It is off on stable by default. Automatic restore on a critical alert is intentionally not implemented; see [ROADMAP.md](../ROADMAP.md).
+Yes. **Restore…** is on unless you uncheck it under Settings → Backups & Adapters. `DSM_EXPERIMENTAL=1` forces it on. It needs the `backups:restore` permission, a typed confirmation, a passphrase for encrypted backups, and writes an audit log. Automatic restore on a critical alert is intentionally not implemented; see [ROADMAP.md](../ROADMAP.md).
 
 ## Why is Google Drive not in the Backups adapter list?
 

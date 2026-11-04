@@ -82,6 +82,10 @@ DEFAULT_ALERT_CHANNELS = {
     "in_app": True,
     # SMTP mail; off until Settings > Notifications has a working server
     "email": False,
+    "webhook": False,
+    "slack": False,
+    "discord": False,
+    "telegram": False,
 }
 
 # Dashboard customization (watched summary metrics + table columns)
@@ -134,10 +138,11 @@ DEFAULT_PROTON_DRIVE = {
     # .env.protondrive.local or SecureStore settings["proton_drive"]
 }
 
-# Experimental features (default OFF on stable). ``DSM_EXPERIMENTAL=1`` forces them on.
+# Full restore is stable and on by default. Uncheck Settings → Backups to hide
+# the Restore button. ``DSM_EXPERIMENTAL=1`` still forces it on.
 DEFAULT_EXPERIMENTAL = {
     # Full Restore Backup (destructive: replaces objects in the target database)
-    "restore": False,
+    "restore": True,
 }
 
 # S3-compatible backup destination (AWS S3, MinIO, Cloudflare R2, Backblaze B2, ...).
@@ -178,6 +183,32 @@ DEFAULT_SLACK_ALERTS = {
     "url": "",
     "min_severity": "critical",
     "cooldown_minutes": 30,
+}
+# Discord incoming webhook. The URL contains the token and lives in SecureStore.
+# Off until the operator opts in on the Monitoring tab.
+DEFAULT_DISCORD_ALERTS = {
+    "url": "",
+    "min_severity": "critical",
+    "cooldown_minutes": 30,
+}
+# Telegram bot token and chat id. They live in SecureStore or
+# DSM_TELEGRAM_BOT_TOKEN / DSM_TELEGRAM_CHAT_ID. Nothing here is a token.
+# The app posts only to api.telegram.org.
+DEFAULT_TELEGRAM_ALERTS = {
+    "bot_token": "",
+    "chat_id": "",
+    "min_severity": "critical",
+    "cooldown_minutes": 30,
+}
+# Per-connection SMTP. ``connections`` maps a saved connection id to a profile
+# with the same fields as email alerts, plus ``enabled``. The password stays
+# in SecureStore.
+DEFAULT_CONNECTION_EMAIL_ALERTS = {"connections": {}}
+# Extra health checks. Off until connection ids are saved and the plugin is
+# installed. Credentials are the ones already stored for those connections.
+DEFAULT_MULTI_CONNECTION_MONITOR = {
+    "connection_ids": [],
+    "min_interval_seconds": 60,
 }
 
 # Monitoring preferences (non-secret)
@@ -237,6 +268,10 @@ DEFAULT_SETTINGS = {
     "email_alerts": copy.deepcopy(DEFAULT_EMAIL_ALERTS),
     "webhook_alerts": copy.deepcopy(DEFAULT_WEBHOOK_ALERTS),
     "slack_alerts": copy.deepcopy(DEFAULT_SLACK_ALERTS),
+    "discord_alerts": copy.deepcopy(DEFAULT_DISCORD_ALERTS),
+    "telegram_alerts": copy.deepcopy(DEFAULT_TELEGRAM_ALERTS),
+    "connection_email_alerts": copy.deepcopy(DEFAULT_CONNECTION_EMAIL_ALERTS),
+    "multi_connection_monitor": copy.deepcopy(DEFAULT_MULTI_CONNECTION_MONITOR),
     "monitoring": copy.deepcopy(DEFAULT_MONITORING_PREFS),
 }
 

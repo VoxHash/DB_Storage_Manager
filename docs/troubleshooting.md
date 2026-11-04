@@ -61,7 +61,7 @@ Expected for writes. Disable Safe Mode only when intentional. Error text resembl
 - For S3/Google Drive, validate credentials, bucket/folder, and network access
 - Ensure the source database connection still works
 - **Backup is smaller than the Dashboard total size**: expected — the dashboard reports on-disk size (tables, indexes, free space), the backup is a compressed logical dump. See *Sizes* in [usage.md](usage.md#backups)
-- **Restore… button missing**: full restore is experimental and off by default; enable it in Settings → Backups & Adapters or set `DSM_EXPERIMENTAL=1`
+- **Restore… stays disabled**: the signed-in role needs `backups:restore`. `monitor`, `viewer`, and `guest` cannot restore
 - **Restore stops at pre-flight**: wrong passphrase, checksum mismatch or a different database engine than the target; nothing was changed
 - **Email alert checkbox disabled**: complete the SMTP settings in Settings → Notifications (host, sender, at least one recipient)
 

@@ -92,3 +92,71 @@ def test_slack_body_is_the_incoming_webhook_text():
     assert "secret" not in json.dumps(dispatcher.delivered)
     warning = Alert("Warm", "slow", AlertSeverity.WARNING, "health_monitor")
     assert dispatcher.notify(warning) == []
+
+
+def test_discord_and_telegram_stay_on_their_hosts_and_off_by_default():
+    from db_storage_manager.monitoring.notifications import (
+        build_discord_payload,
+        build_telegram_payload,
+        telegram_send_url,
+        validate_webhook_config,
+    )
+
+    assert validate_webhook_config(
+        {"url": "https://discord.com/api/webhooks/123/abc", "min_severity": "critical"},
+        kind="discord",
+    ) == []
+    assert validate_webhook_config(
+        {"url": "https://evil.example/api/webhooks/1/t", "min_severity": "critical"},
+        kind="discord",
+    )
+    token = "123456789:AAHxxxxxxxxxxxxxxxxxXXXX"
+    assert validate_webhook_config(
+        {"bot_token": token, "chat_id": "-100123", "min_severity": "warning"},
+        kind="telegram",
+    ) == []
+    assert validate_webhook_config(
+        {"bot_token": "not-a-token", "chat_id": "-100123", "min_severity": "warning"},
+        kind="telegram",
+    )
+    assert telegram_send_url(token).startswith("https://api.telegram.org/bot")
+
+    seen = []
+
+    def sender(url, payload):
+        seen.append((url, payload))
+
+    dispatcher = NotificationDispatcher(
+        {
+            "in_app": False,
+            "desktop": False,
+            "email": False,
+            "discord": True,
+            "telegram": True,
+        },
+        discord_sender=sender,
+        telegram_sender=sender,
+    )
+    dispatcher.set_discord_config(
+        {
+            "url": "https://discord.com/api/webhooks/123/secret",
+            "min_severity": "critical",
+            "cooldown_minutes": 0,
+        }
+    )
+    dispatcher.set_telegram_config(
+        {
+            "bot_token": token,
+            "chat_id": "4242",
+            "min_severity": "critical",
+            "cooldown_minutes": 0,
+        }
+    )
+    alert = Alert("Down", "unhealthy", AlertSeverity.CRITICAL, "health_monitor")
+    assert dispatcher.notify(alert) == ["discord", "telegram"]
+    assert dispatcher.wait_email_idle(2)
+    assert seen[0][1] == build_discord_payload(alert)
+    assert seen[1][0] == telegram_send_url(token)
+    assert seen[1][1] == build_telegram_payload(alert, "4242")
+    blob = json.dumps(dispatcher.delivered)
+    assert "secret" not in blob and token not in blob

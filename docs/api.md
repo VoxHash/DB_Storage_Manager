@@ -233,6 +233,12 @@ A third-party plugin is a directory containing `plugin.json` plus an entry modul
 
 `entry` is `module:ClassName` relative to the plugin root. The class must subclass `Plugin`. See `examples/plugins/hello_echo/`.
 
+Catalog and provider plugins stay on this API. They are opt-in (install and enable; a folder on disk does not run). Data comes from a real catalog or the operator's provider API. No credentials are bundled. When the engine, plan or role cannot answer, return `plugins.sdk.not_available(reason)` (`status` `not_available`). Do not guess a pass or a failure. `CATALOG_PLUGIN_RULES` is the same contract.
+
+`LocalPluginMarketplace.install_from_path` installs one directory when it contains `plugin.json`. When the selected folder does not, and its immediate subfolders do, it installs those children. A licence key applies only when a single directory was selected. A parent install does not reuse one key. The GUI asks before installing several and prompts for each premium licence.
+
+Plugins are opt-in. They call real catalogs or provider APIs with credentials the operator supplies; none are bundled. When a plan, role, engine, or provider call cannot answer the question, return `plugins.sdk.not_available(reason)` (`status` is `not_available`). Do not guess pass or fail. Installing a parent folder (`discover_plugin_roots`) installs each child that has `plugin.json`. A single plugin directory still installs that one plugin. A premium child needs its own licence; one key is not applied to every product in the parent.
+
 ### Premium plugins (optional `license` block)
 
 A plugin without a `license` block is free. To sell a plugin through [LicenseChain](https://licensechain.app), create a product in the LicenseChain dashboard (or run `python scripts/licensechain_products.py path/to/plugin --apply`) and add its id:

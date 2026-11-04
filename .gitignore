@@ -79,7 +79,13 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
 demo-data/
+
+# Desktop runtime data (SQLite, logs). Leave it untracked.
+app_data/
 
 # App user data (encrypted settings)
 userData/

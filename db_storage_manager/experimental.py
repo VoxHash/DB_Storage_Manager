@@ -1,4 +1,4 @@
-"""Experimental feature gate (default OFF on stable builds).
+"""Feature gate. Full restore is stable and on unless Settings turns it off.
 
 A feature is enabled when either ``DSM_EXPERIMENTAL`` is truthy in the process
 environment or the matching flag is set in SecureStore ``settings["experimental"]``.
@@ -41,12 +41,27 @@ def is_enabled(
 
 
 def is_restore_enabled(settings: Optional[Dict[str, Any]] = None) -> bool:
-    return is_enabled(FEATURE_RESTORE, settings)
+    """Full restore is stable and on unless Settings turns it off.
+
+    ``DSM_EXPERIMENTAL=1`` forces it on. A missing flag is on. An explicit
+    ``experimental.restore: false`` hides Restore. It still needs
+    ``backups:restore``, a typed confirmation, and a safety backup.
+    """
+    if env_forces_experimental():
+        return True
+    if settings is None:
+        from .security.store import SecureStore
+
+        settings = SecureStore().get_settings()
+    flags = settings.get("experimental")
+    if not isinstance(flags, dict) or FEATURE_RESTORE not in flags:
+        return True
+    return bool(flags.get(FEATURE_RESTORE))
 
 
 def require_restore_enabled(settings: Optional[Dict[str, Any]] = None) -> None:
+    """Raise when the operator has turned full restore off."""
     if not is_restore_enabled(settings):
         raise ExperimentalDisabledError(
-            "Full restore is an experimental feature and is off. Enable it in "
-            f"Settings > Backups & Adapters or set {ENV_VAR}=1."
+            "Full restore is turned off. Enable it under Settings → Backups & Adapters."
         )

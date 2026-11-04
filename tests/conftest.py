@@ -57,6 +57,19 @@ def isolated_secure_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return SecureStore(), data_dir
 
 
+@pytest.fixture
+def marketplace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, isolated_secure_store):
+    """Marketplace rooted under tmp + SecureStore isolated via this module."""
+    store, data_dir = isolated_secure_store
+    plugins_dir = data_dir / "plugins"
+    plugins_dir.mkdir(exist_ok=True)
+    import db_storage_manager.config as config_mod
+    from db_storage_manager.plugins.marketplace import LocalPluginMarketplace
+
+    monkeypatch.setattr(config_mod, "PLUGINS_DIR", plugins_dir)
+    return LocalPluginMarketplace(plugins_dir=plugins_dir), store, plugins_dir
+
+
 def pytest_sessionfinish(session, exitstatus):  # noqa: ARG001
     """Close pooled SQL engine threads so the interpreter can exit promptly."""
     try:

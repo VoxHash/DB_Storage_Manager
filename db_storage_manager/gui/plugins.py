@@ -28,7 +28,9 @@ from ..config import SPONSORS_URL
 from ..plugins.licensing import PluginLicenseError, PluginLicenseRequired
 from ..plugins.pricing import format_pricing
 from ..plugins.marketplace import LocalPluginMarketplace
-from ..plugins.manifest import ManifestError
+from ..plugins.manifest import ManifestError, discover_plugin_roots, load_manifest
+from ..premium_plugins import bundled_plugins_parent, list_bundled_premium_plugins
+from ..bundled_plugins import list_bundled_plugins
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..themes.manager import get_theme_manager
 from .icons import set_icon_only, set_icon_with_text
@@ -62,6 +64,7 @@ class PluginsWidget(QWidget):
             self.enable_btn,
             self.disable_btn,
             self.install_path_btn,
+            self.install_bundled_btn,
             self.install_url_btn,
             self.uninstall_btn,
             self.activate_license_btn,
@@ -84,10 +87,12 @@ class PluginsWidget(QWidget):
                 t(
                     "plugins.hint",
                     default=(
-                        "Built-in plugins are free. Third-party plugins install from a "
-                        "folder with plugin.json or an http(s) zip/tar.gz URL; premium "
-                        "plugins also need a LicenseChain license key. Enable/disable "
-                        "is saved locally. No remote catalog is shipped yet."
+                        "Built-in plugins are free. Install from Path accepts one plugin "
+                        "directory or a parent folder whose subfolders each contain "
+                        "plugin.json (the bundled premium plugins live in that parent). "
+                        "Install bundled… registers the plugins shipped with this app. "
+                        "Premium plugins also need a LicenseChain licence. "
+                        "Enable/disable is saved locally. No remote catalog is shipped yet."
                     ),
                 ),
             )
@@ -134,8 +139,32 @@ class PluginsWidget(QWidget):
         self.install_path_btn = QPushButton(
             t("plugins.install_path", default="Install from Path…")
         )
+        self.install_path_btn.setToolTip(
+            t(
+                "plugins.pick_dir_tip",
+                default=(
+                    "Select a plugin directory, or the premium_plugins parent "
+                    "so every subdirectory with plugin.json is installed."
+                ),
+            )
+        )
         self.install_path_btn.clicked.connect(self._install_from_path)
         actions.addWidget(self.install_path_btn)
+
+        self.install_bundled_btn = QPushButton(
+            t("plugins.install_bundled", default="Install bundled…")
+        )
+        self.install_bundled_btn.setToolTip(
+            t(
+                "plugins.install_bundled_tip",
+                default=(
+                    "Installs the free bundled plugins and the premium plugins "
+                    "shipped with this app. Premium plugins still ask for a licence."
+                ),
+            )
+        )
+        self.install_bundled_btn.clicked.connect(self._install_bundled)
+        actions.addWidget(self.install_bundled_btn)
 
         self.install_url_btn = QPushButton(
             t("plugins.install_url", default="Install from URL…")
@@ -513,35 +542,136 @@ class PluginsWidget(QWidget):
         t = self.i18n.translate
         path = QFileDialog.getExistingDirectory(
             self,
-            t("plugins.pick_dir", default="Select plugin directory (with plugin.json)"),
+            t(
+                "plugins.pick_dir",
+                default=(
+                    "Select a plugin directory, or a parent whose subfolders "
+                    "each contain plugin.json"
+                ),
+            ),
+            str(bundled_plugins_parent()),
         )
         if not path:
             return
         try:
-            installed = self._install_with_license(
-                lambda **kw: self.marketplace.install_from_path(
-                    Path(path), replace=True, **kw
-                )
-            )
-        except (ManifestError, OSError, RuntimeError) as exc:
+            roots = discover_plugin_roots(Path(path))
+        except ManifestError as exc:
             QMessageBox.critical(
                 self,
                 t("plugins.install_failed", default="Install failed"),
                 str(exc),
             )
             return
-        if installed is None:
+        if len(roots) > 1:
+            labels = []
+            for root in roots:
+                try:
+                    manifest = load_manifest(root)
+                    labels.append(f"{manifest.name} ({manifest.id})")
+                except ManifestError:
+                    labels.append(root.name)
+            answer = QMessageBox.question(
+                self,
+                t(
+                    "plugins.install_parent_title",
+                    default="Install plugins in this folder",
+                ),
+                t(
+                    "plugins.install_parent_prompt",
+                    default=(
+                        "This folder has no plugin.json at its root. "
+                        "It contains {count} plugin folder(s):\n{names}\n\n"
+                        "Install each of them? Premium plugins ask for a licence one at a time."
+                    ),
+                    count=len(roots),
+                    names="\n".join(labels),
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        self._install_roots(roots)
+
+    def _install_bundled(self) -> None:
+        try:
+            get_auth_manager().require("plugins:manage")
+        except PermissionDenied as exc:
+            self._deny(exc)
             return
+        roots = list(list_bundled_plugins()) + list(list_bundled_premium_plugins())
+        self._install_roots(roots)
+
+    def _install_roots(self, roots: list[Path]) -> None:
+        t = self.i18n.translate
+        installed: list[dict] = []
+        skipped: list[str] = []
+        for root in roots:
+            try:
+                row = self._install_with_license(
+                    lambda root=root, **kw: self.marketplace.install_from_path(
+                        root, replace=True, **kw
+                    )
+                )
+            except (ManifestError, OSError, RuntimeError) as exc:
+                skipped.append(f"{root.name}: {exc}")
+                continue
+            if row is None:
+                skipped.append(root.name)
+                continue
+            if row.get("multiple") and isinstance(row.get("installed"), list):
+                installed.extend(row["installed"])
+                for item in row.get("skipped") or []:
+                    skipped.append(f"{item.get('id')}: {item.get('reason')}")
+            else:
+                installed.append(row)
+        if not installed:
+            detail = t(
+                "plugins.install_none",
+                default=(
+                    "Nothing was installed. Choose a folder that contains "
+                    "plugin.json, or a parent folder whose subfolders each "
+                    "contain plugin.json."
+                ),
+            )
+            if skipped:
+                detail = detail + "\n" + "\n".join(skipped)
+            QMessageBox.critical(
+                self,
+                t("plugins.install_failed", default="Install failed"),
+                detail,
+            )
+            return
+        if len(installed) == 1 and not skipped:
+            row = installed[0]
+            message = t(
+                "plugins.install_ok_msg",
+                default="Installed {name} ({id}) v{version}",
+                name=row.get("name"),
+                id=row.get("id"),
+                version=row.get("version"),
+            )
+        else:
+            names = ", ".join(
+                f"{row.get('name')} ({row.get('id')}) v{row.get('version')}"
+                for row in installed
+            )
+            message = t(
+                "plugins.install_ok_many",
+                default="Installed {count}: {names}.",
+                count=len(installed),
+                names=names,
+            )
+            if skipped:
+                message += "\n" + t(
+                    "plugins.install_skipped",
+                    default="Skipped: {names}.",
+                    names=", ".join(skipped),
+                )
         QMessageBox.information(
             self,
             t("plugins.install_ok", default="Plugin installed"),
-            t(
-                "plugins.install_ok_msg",
-                default="Installed {name} ({id}) v{version}",
-                name=installed.get("name"),
-                id=installed.get("id"),
-                version=installed.get("version"),
-            ),
+            message,
         )
         self.refresh()
 

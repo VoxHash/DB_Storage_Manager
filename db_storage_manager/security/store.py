@@ -132,6 +132,10 @@ class SecureStore:
                 "email_alerts",
                 "webhook_alerts",
                 "slack_alerts",
+                "discord_alerts",
+                "telegram_alerts",
+                "connection_email_alerts",
+                "multi_connection_monitor",
                 "monitoring",
             ):
                 if isinstance(loaded.get(key), dict):

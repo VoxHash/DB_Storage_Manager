@@ -19,7 +19,7 @@
 - **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh; desktop, in-app and real SMTP email channels; dedicated `monitor` role; optional watch-on-launch
 - **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL. The core and built-in plugins are free; optional premium plugins are licensed through [LicenseChain](https://licensechain.app) from US$1.99/month (updates included) and you can support the project at [GitHub Sponsors](https://github.com/sponsors/VoxHash)
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
-- **Backup & Restore** — Local, Proton Drive (rclone) and S3-compatible adapters with scheduling, SHA-256 verification, dry-run, and an opt-in experimental full restore (RBAC-gated, audited)
+- **Backup & Restore** — Local, Proton Drive (rclone) and S3-compatible adapters with scheduling, SHA-256 verification, dry-run, and full restore (`backups:restore`, typed confirmation, safety backup, audited)
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
 - **Optional Rust acceleration** — PyO3 helpers for backup gzip, SHA-256 verification, and parallel hashing (pure-Python fallback)
 
@@ -110,7 +110,7 @@ Details: [docs/usage.md](docs/usage.md)
 | Notifications | Desktop notifications | Enabled |
 | Notification auto-dismiss | Seconds before a notification closes (clamped 2–60) | `5` |
 | Telemetry | Anonymous telemetry | Disabled |
-| Experimental full restore | Settings → Backups & Adapters, or `DSM_EXPERIMENTAL=1` | Off |
+| Full restore | Backups → Restore… (`backups:restore`, typed confirmation, safety backup) | On |
 | Email alerts | SMTP host / security / recipients / minimum severity / cooldown (Settings → Notifications) | Off |
 
 User data: `~/.config/db-storage-manager/` (Linux/macOS) or `%APPDATA%\DB Storage Manager\` (Windows).  

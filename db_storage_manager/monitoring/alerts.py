@@ -35,13 +35,19 @@ class Alert:
     """Database alert"""
 
     def __init__(
-        self, title: str, message: str, severity: AlertSeverity, source: str = "system"
+        self,
+        title: str,
+        message: str,
+        severity: AlertSeverity,
+        source: str = "system",
+        connection_id: Optional[str] = None,
     ):
         self.id = str(uuid.uuid4())
         self.title = title
         self.message = message
         self.severity = severity
         self.source = source
+        self.connection_id = connection_id
         self.timestamp = datetime.now().isoformat()
         self.acknowledged = False
 
@@ -53,6 +59,7 @@ class Alert:
             "message": self.message,
             "severity": self.severity.value,
             "source": self.source,
+            "connection_id": self.connection_id,
             "timestamp": self.timestamp,
             "acknowledged": self.acknowledged,
         }

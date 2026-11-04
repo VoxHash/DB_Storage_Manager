@@ -200,6 +200,35 @@ def load_manifest(path: Path) -> PluginManifest:
     return validate_manifest(raw)
 
 
+def discover_plugin_roots(path: Path) -> List[Path]:
+    """Plugin directories under ``path``.
+
+    A directory that itself contains ``plugin.json`` is that one plugin.
+    A parent directory (for example ``premium_plugins/``) whose subfolders
+    each contain ``plugin.json`` returns every such subfolder. Anything else
+    raises :class:`ManifestError` naming the path the operator selected.
+    """
+    path = Path(path).resolve()
+    if path.is_file() and path.name == MANIFEST_FILENAME:
+        return [path.parent]
+    if path.is_dir() and (path / MANIFEST_FILENAME).is_file():
+        return [path]
+    if path.is_dir():
+        children: List[Path] = []
+        for child in sorted(path.iterdir(), key=lambda item: item.name.lower()):
+            if not child.is_dir() or child.name.startswith(".") or child.name == "__pycache__":
+                continue
+            if (child / MANIFEST_FILENAME).is_file():
+                children.append(child)
+        if children:
+            return children
+    raise ManifestError(
+        f"no {MANIFEST_FILENAME} found under {path}. "
+        "Select a plugin directory that contains plugin.json, or a parent "
+        "folder whose subfolders each contain plugin.json."
+    )
+
+
 def find_plugin_root(path: Path) -> Path:
     """Return the directory that contains ``plugin.json`` (root or one child)."""
     path = Path(path).resolve()
@@ -208,10 +237,20 @@ def find_plugin_root(path: Path) -> Path:
     if path.is_file() and path.name == MANIFEST_FILENAME:
         return path.parent
     if path.is_dir():
-        children = [p for p in path.iterdir() if p.is_dir()]
+        children = [p for p in path.iterdir() if p.is_dir() and not p.name.startswith(".")]
         if len(children) == 1 and (children[0] / MANIFEST_FILENAME).is_file():
             return children[0]
-    raise ManifestError(f"no {MANIFEST_FILENAME} found under {path}")
+        if len(children) > 1 and any((child / MANIFEST_FILENAME).is_file() for child in children):
+            raise ManifestError(
+                f"no single {MANIFEST_FILENAME} under {path}. "
+                "This folder holds several plugins; install the folder itself "
+                "so each subdirectory with plugin.json is installed."
+            )
+    raise ManifestError(
+        f"no {MANIFEST_FILENAME} found under {path}. "
+        "Select a plugin directory that contains plugin.json, or a parent "
+        "folder whose subfolders each contain plugin.json."
+    )
 
 
 def parse_entry(entry: str) -> tuple[str, str]:

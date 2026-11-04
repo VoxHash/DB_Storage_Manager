@@ -1,0 +1,11 @@
+{
+  "id": "connection-email-alerts",
+  "name": "Connection email alerts",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Opt-in SMTP alerts for one saved connection. The password stays in SecureStore.",
+  "plugin_type": "custom",
+  "api_version": "1.0",
+  "entry": "plugin:ConnectionEmailAlertsPlugin",
+  "dependencies": []
+}

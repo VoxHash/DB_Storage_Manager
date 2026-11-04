@@ -1,0 +1,11 @@
+{
+  "id": "multi-connection-monitor",
+  "name": "Multi-connection monitor",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Opt-in health checks for several saved connections. No arbitrary SQL.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:MultiConnectionMonitorPlugin",
+  "dependencies": []
+}

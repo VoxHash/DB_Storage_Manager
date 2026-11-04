@@ -43,7 +43,9 @@ from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
 from ..monitoring.notifications import (
     resolve_email_config,
+    resolve_discord_config,
     resolve_slack_config,
+    resolve_telegram_config,
     resolve_webhook_config,
     validate_email_config,
     validate_webhook_config,
@@ -384,11 +386,19 @@ class MonitoringWidget(QWidget):
         self.slack_channel_check = QCheckBox(
             t("monitoring.channel_slack", default="Slack (set up in Settings)")
         )
+        self.discord_channel_check = QCheckBox(
+            t("monitoring.channel_discord", default="Discord (set up in Settings)")
+        )
+        self.telegram_channel_check = QCheckBox(
+            t("monitoring.channel_telegram", default="Telegram (set up in Settings)")
+        )
         channels_form.addWidget(self.desktop_channel_check)
         channels_form.addWidget(self.in_app_channel_check)
         channels_form.addWidget(self.email_channel_check)
         channels_form.addWidget(self.webhook_channel_check)
         channels_form.addWidget(self.slack_channel_check)
+        channels_form.addWidget(self.discord_channel_check)
+        channels_form.addWidget(self.telegram_channel_check)
         channels_layout.addWidget(channels_group)
 
         channel_actions = QHBoxLayout()
@@ -462,6 +472,8 @@ class MonitoringWidget(QWidget):
         self.refresh_http_channels(
             webhook=master_on and bool(channels.get("webhook", False)),
             slack=master_on and bool(channels.get("slack", False)),
+            discord=master_on and bool(channels.get("discord", False)),
+            telegram=master_on and bool(channels.get("telegram", False)),
         )
         self.notification_dispatcher.configure(self._channel_flags())
 
@@ -495,30 +507,48 @@ class MonitoringWidget(QWidget):
             "email": self.email_channel_check.isChecked(),
             "webhook": self.webhook_channel_check.isChecked(),
             "slack": self.slack_channel_check.isChecked(),
+            "discord": self.discord_channel_check.isChecked(),
+            "telegram": self.telegram_channel_check.isChecked(),
         }
 
     def refresh_http_channels(
         self,
         webhook: Optional[bool] = None,
         slack: Optional[bool] = None,
+        discord: Optional[bool] = None,
+        telegram: Optional[bool] = None,
     ) -> None:
-        """Enable Webhook and Slack only when the saved URL passes the same rules."""
+        """Enable HTTP channels only when the saved secret passes the same rules."""
         t = self.i18n.translate
         settings = self.secure_store.get_settings()
         webhook_cfg = resolve_webhook_config(settings)
         slack_cfg = resolve_slack_config(settings)
-        webhook_problems = validate_webhook_config(webhook_cfg, slack=False)
-        slack_problems = validate_webhook_config(slack_cfg, slack=True)
+        discord_cfg = resolve_discord_config(settings)
+        telegram_cfg = resolve_telegram_config(settings)
+        webhook_problems = validate_webhook_config(webhook_cfg, kind="webhook")
+        slack_problems = validate_webhook_config(slack_cfg, kind="slack")
+        discord_problems = validate_webhook_config(discord_cfg, kind="discord")
+        telegram_problems = validate_webhook_config(telegram_cfg, kind="telegram")
         self._webhook_ready = not webhook_problems
         self._slack_ready = not slack_problems
+        self._discord_ready = not discord_problems
+        self._telegram_ready = not telegram_problems
         self.notification_dispatcher.set_webhook_config(webhook_cfg)
         self.notification_dispatcher.set_slack_config(slack_cfg)
+        self.notification_dispatcher.set_discord_config(discord_cfg)
+        self.notification_dispatcher.set_telegram_config(telegram_cfg)
         if webhook is None:
             webhook = self.webhook_channel_check.isChecked()
         if slack is None:
             slack = self.slack_channel_check.isChecked()
+        if discord is None:
+            discord = self.discord_channel_check.isChecked()
+        if telegram is None:
+            telegram = self.telegram_channel_check.isChecked()
         self.webhook_channel_check.setChecked(bool(webhook) and self._webhook_ready)
         self.slack_channel_check.setChecked(bool(slack) and self._slack_ready)
+        self.discord_channel_check.setChecked(bool(discord) and self._discord_ready)
+        self.telegram_channel_check.setChecked(bool(telegram) and self._telegram_ready)
         self.webhook_channel_check.setToolTip(
             t("monitoring.webhook_ready", default="Webhook URL is configured.")
             if self._webhook_ready
@@ -537,9 +567,29 @@ class MonitoringWidget(QWidget):
                 problems="; ".join(slack_problems),
             )
         )
+        self.discord_channel_check.setToolTip(
+            t("monitoring.discord_ready", default="Discord webhook is configured.")
+            if self._discord_ready
+            else t(
+                "monitoring.discord_not_ready",
+                default="Configure the Discord webhook under Settings → Notifications first: {problems}",
+                problems="; ".join(discord_problems),
+            )
+        )
+        self.telegram_channel_check.setToolTip(
+            t("monitoring.telegram_ready", default="Telegram bot is configured.")
+            if self._telegram_ready
+            else t(
+                "monitoring.telegram_not_ready",
+                default="Configure the Telegram bot under Settings → Notifications first: {problems}",
+                problems="; ".join(telegram_problems),
+            )
+        )
         can_write = getattr(self, "_can_write", True)
         self.webhook_channel_check.setEnabled(self._webhook_ready and can_write)
         self.slack_channel_check.setEnabled(self._slack_ready and can_write)
+        self.discord_channel_check.setEnabled(self._discord_ready and can_write)
+        self.telegram_channel_check.setEnabled(self._telegram_ready and can_write)
 
     def _populate_threshold_spins(
         self, thresholds: Dict[str, Dict[str, float]]
@@ -671,6 +721,12 @@ class MonitoringWidget(QWidget):
         self.slack_channel_check.setEnabled(
             self._can_write and getattr(self, "_slack_ready", False)
         )
+        self.discord_channel_check.setEnabled(
+            self._can_write and getattr(self, "_discord_ready", False)
+        )
+        self.telegram_channel_check.setEnabled(
+            self._can_write and getattr(self, "_telegram_ready", False)
+        )
         for spins in self._threshold_spins.values():
             for spin in spins.values():
                 spin.setEnabled(self._can_write)
@@ -718,21 +774,32 @@ class MonitoringWidget(QWidget):
 
         Returns True when a start was requested. Honours RBAC: needs
         ``monitoring:read``; does nothing when monitoring already runs.
+        When ``multi-connection-monitor`` is installed, also polls the
+        connections that plugin was opted into. That call is a no-op until
+        the plugin is installed.
         """
-        if self.monitor is not None or not self._can_read:
+        if not self._can_read:
             return False
-        wanted = (self.secure_store.get_settings().get("monitoring") or {}).get(
-            "autostart_connection_id"
-        )
-        if not wanted:
-            return False
-        for index in range(1, self.connection_combo.count()):
-            conn = self.connection_combo.itemData(index)
-            if conn and conn.get("id") == wanted:
-                self.connection_combo.setCurrentIndex(index)
-                self._start_monitoring()
-                return True
-        return False
+        started = False
+        if self.monitor is None:
+            wanted = (self.secure_store.get_settings().get("monitoring") or {}).get(
+                "autostart_connection_id"
+            )
+            if wanted:
+                for index in range(1, self.connection_combo.count()):
+                    conn = self.connection_combo.itemData(index)
+                    if conn and conn.get("id") == wanted:
+                        self.connection_combo.setCurrentIndex(index)
+                        self._start_monitoring()
+                        started = True
+                        break
+        try:
+            from ..monitoring.multi_watch import watch_if_installed
+
+            watch_if_installed()
+        except Exception:
+            pass
+        return started
 
     def _start_monitoring(self):
         """Start monitoring: tunnel + checkout on a worker, then timer-driven polls."""
@@ -843,6 +910,12 @@ class MonitoringWidget(QWidget):
 
         def job():
             asyncio.run(monitor.poll_once())
+            try:
+                from ..monitoring.multi_watch import watch_if_installed
+
+                watch_if_installed()
+            except Exception:
+                pass
 
         def on_ok(_result):
             if self.monitor is monitor:
@@ -864,6 +937,9 @@ class MonitoringWidget(QWidget):
 
     def _handle_alert(self, alert: Alert):
         """Fire notification channels on the GUI thread."""
+        connection = self.current_connection or {}
+        if connection.get("id") and not getattr(alert, "connection_id", None):
+            alert.connection_id = str(connection["id"])
         self.notification_dispatcher.notify(alert)
         self._refresh_notification_log()
 

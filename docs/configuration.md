@@ -16,7 +16,11 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `update_auto_check` | When true, ask the public GitHub Releases API at most once every 24 hours. Nothing is installed | `false` |
 | `retention` | `enabled`, `keep_daily`, `keep_monthly`, and optional `connections` overrides. Off deletes nothing. Prunes Local, Proton Drive and S3 after a scheduled backup | off, 7 daily, 6 monthly |
 | `telemetry` | Anonymous telemetry | `False` |
-| `experimental.restore` | Enables the experimental **Restore…** button (full restore). `DSM_EXPERIMENTAL=1` forces it on and locks the checkbox | `False` |
+| `experimental.restore` | Shows **Restore…**. Uncheck to hide it. A missing key is on. `DSM_EXPERIMENTAL=1` forces it on | `True` |
+| `discord_alerts` | Discord webhook `url`, `min_severity`, `cooldown_minutes`. Secret stays in SecureStore. Off until Monitoring enables Discord | empty URL |
+| `telegram_alerts` | `bot_token`, `chat_id`, `min_severity`, `cooldown_minutes`. Posts only to `api.telegram.org`. Off until Monitoring enables Telegram | empty |
+| `connection_email_alerts` | Per-connection SMTP for `connection-email-alerts`. Passwords stay here | `connections` empty |
+| `multi_connection_monitor` | Connection ids and `min_interval_seconds` for `multi-connection-monitor`. An empty list does not poll | `[]`, 60 seconds |
 | `email_alerts` | SMTP alert channel: `host`, `port`, `security` (`starttls` / `ssl` / `none`), `username`, `sender`, `recipients`, `min_severity` (`warning` / `critical`), `cooldown_minutes`. The password is stored encrypted | host empty (channel unavailable) |
 | `monitoring.autostart_connection_id` | Connection watched automatically when the app opens (checkbox in Monitoring) | `None` |
 | `s3_backup` | `bucket`, `prefix`, `region`, `endpoint` (MinIO / R2 / B2) and optional access keys, stored encrypted | empty |
@@ -111,10 +115,12 @@ No required secrets for core operation. Useful optional variables:
 | `DSM_PROTONDRIVE_RCLONE` | rclone binary path (default `rclone` on `PATH`) |
 | `DSM_PROTONDRIVE_OTP_SECRET` / `DSM_PROTONDRIVE_2FA` | Optional TOTP secret or one-shot 2FA code |
 | `RCLONE_PROTONDRIVE_*` | Alternate env names accepted by rclone itself |
-| `DSM_EXPERIMENTAL` | `1` / `true` / `yes` / `on` enables every experimental feature (currently full restore) regardless of the saved setting |
+| `DSM_EXPERIMENTAL` | `1` / `true` / `yes` / `on` forces full restore on even when `experimental.restore` is false |
 | `DSM_S3_BUCKET` / `DSM_S3_PREFIX` / `DSM_S3_REGION` / `DSM_S3_ENDPOINT` | S3-compatible backup destination (override SecureStore `s3_backup`) |
 | `DSM_S3_ACCESS_KEY_ID` / `DSM_S3_SECRET_ACCESS_KEY` | S3 credentials; otherwise `AWS_*` variables or the default boto3 chain (profile, instance role) |
 | `DSM_SMTP_HOST` / `DSM_SMTP_PORT` / `DSM_SMTP_SECURITY` / `DSM_SMTP_USERNAME` / `DSM_SMTP_PASSWORD` / `DSM_SMTP_FROM` / `DSM_SMTP_TO` | SMTP alert channel (override SecureStore `email_alerts`; `DSM_SMTP_TO` is a comma-separated list) |
+| `DSM_DISCORD_WEBHOOK_URL` | Discord incoming webhook (override SecureStore `discord_alerts.url`) |
+| `DSM_TELEGRAM_BOT_TOKEN` / `DSM_TELEGRAM_CHAT_ID` | Telegram bot token and chat id (override SecureStore `telegram_alerts`). There is no URL override; posts go to `api.telegram.org` only |
 | `X-DSM-MFA` | TOTP code for companion API Basic auth when that user has an authenticator enabled |
 
 Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
@@ -171,11 +177,15 @@ Optional pytest live probes: `DSM_E2E_IMPORT=1 pytest -v tests/test_import_conne
 
 Settings → Notifications → **Email alerts**: host, port, security (`starttls`, `ssl`, or `none` for loopback relays only), user, password, sender, recipients, minimum severity and per-alert cooldown. The **Email** checkbox in Monitoring → Channels is only enabled when the SMTP configuration is complete. A failed send is logged and does not start the cooldown, so the next occurrence is mailed again.
 
-### Experimental full restore and the audit log
+### Full restore and the audit log
 
-Off by default. Enable it in Settings → Backups & Adapters or run with `DSM_EXPERIMENTAL=1`. Requires the `backups:restore` permission when RBAC is active. Every attempt, successful or not, is appended to `audit.log` (JSON lines, mode `600`, secrets stripped) in the user data directory.
+**Restore…** is available on the Backups tab. It requires the `backups:restore` permission when RBAC is active, a typed confirmation, and a safety backup. Every attempt, successful or not, is appended to `audit.log` (JSON lines, mode `600`, secrets stripped) in the user data directory. PostgreSQL drops each archived table with `CASCADE` before `pg_restore --clean`, so a foreign key from a table that exists only on the target does not block the restore.
 
-End-to-end tests cover SQLite. Other engines use their driver's `restore_backup` and should be rehearsed against a scratch server first.
+End-to-end tests cover SQLite. Other engines use their driver's `restore_backup`. Rehearse into a scratch database when the target has objects you need to keep.
+
+### Discord and Telegram alerts
+
+Settings → Notifications. Discord takes an incoming webhook URL (`https://discord.com/api/webhooks/<id>/<token>`, also discordapp.com, canary, and ptb). Telegram takes a bot token and a chat id; the send URL is built at runtime as `https://api.telegram.org/bot<token>/sendMessage` and is not stored. Both follow the same minimum severity and cooldown as email. The Monitoring checkboxes stay disabled until the configuration is valid. Tokens and URLs are not written to the notification log. Nothing is bundled.
 
 ## Default ports
 

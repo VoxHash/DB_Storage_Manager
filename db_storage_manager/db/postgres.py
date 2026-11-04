@@ -18,6 +18,84 @@ from .base import (
 )
 
 
+def quote_pg_ident(name: str) -> str:
+    """Quote a PostgreSQL identifier. Rejects NUL."""
+    if "\x00" in name:
+        raise ValueError("identifier contains NUL")
+    return '"' + name.replace('"', '""') + '"'
+
+
+def pg_restore_table_idents(listing: str) -> list[tuple[str, str]]:
+    """``(schema, table)`` pairs from ``pg_restore --list`` output.
+
+    ``TABLE DATA`` lines are not tables. ``pg_catalog`` and
+    ``information_schema`` are never returned.
+    """
+    found: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for raw in listing.splitlines():
+        line = raw.strip()
+        if not line or line.startswith(";"):
+            continue
+        _dump_id, sep, rest = line.partition(";")
+        if not sep:
+            continue
+        tokens = _pg_toc_tokens(rest.strip())
+        # catalogId, oid, description…, schema, name, owner.
+        # Description may be several words ("TABLE DATA"). The last three
+        # fields are schema, name and owner, and they may be quoted.
+        if len(tokens) < 6:
+            continue
+        description = " ".join(tokens[2:-3])
+        if description != "TABLE":
+            continue
+        schema, name = tokens[-3], tokens[-2]
+        if schema in {"pg_catalog", "information_schema"}:
+            continue
+        key = (schema, name)
+        if key not in seen:
+            seen.add(key)
+            found.append(key)
+    return found
+
+
+def drop_table_cascade_sql(schema: str, table: str) -> str:
+    """DROP that also removes foreign keys from tables the backup does not contain."""
+    return (
+        f"DROP TABLE IF EXISTS {quote_pg_ident(schema)}.{quote_pg_ident(table)} CASCADE"
+    )
+
+
+def _pg_toc_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        if text[index].isspace():
+            index += 1
+            continue
+        if text[index] == '"':
+            index += 1
+            buf: list[str] = []
+            while index < length:
+                if text[index] == '"':
+                    if index + 1 < length and text[index + 1] == '"':
+                        buf.append('"')
+                        index += 2
+                        continue
+                    index += 1
+                    break
+                buf.append(text[index])
+                index += 1
+            tokens.append("".join(buf))
+            continue
+        start = index
+        while index < length and not text[index].isspace():
+            index += 1
+        tokens.append(text[start:index])
+    return tokens
+
+
 def pg_restore_only_version_skew(stderr: str) -> bool:
     """True when every pg_restore error is a ``SET <parameter>`` the server lacks.
 
@@ -358,6 +436,20 @@ class PostgreSQLConnection(DatabaseConnection):
         size = backup_file.stat().st_size
         return {"path": str(backup_file), "size": size}
 
+    async def _pg_restore_list(self, backup_file: Path) -> str:
+        process = await asyncio.create_subprocess_exec(
+            "pg_restore",
+            "--list",
+            str(backup_file),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            detail = stderr.decode(errors="replace").strip() or "pg_restore --list failed"
+            raise RuntimeError(detail)
+        return stdout.decode(errors="replace")
+
     async def restore_backup(self, backup_path: str) -> None:
         """Restore PostgreSQL backup using pg_restore"""
         if not self.connection:
@@ -366,6 +458,26 @@ class PostgreSQLConnection(DatabaseConnection):
         backup_file = Path(backup_path)
         if not backup_file.exists():
             raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        # pg_restore --clean cannot DROP a backed-up table while a table that
+        # exists only on the target still references it. Drop each archived
+        # table with CASCADE first: the foreign key goes away, the target-only
+        # table stays. Views that depend on an archived table are dropped and
+        # come back only when the backup contains them.
+        listing = await self._pg_restore_list(backup_file)
+        from psycopg2 import sql as pg_sql
+
+        cursor = self.connection.cursor()
+        try:
+            for schema, table in pg_restore_table_idents(listing):
+                cursor.execute(
+                    pg_sql.SQL("DROP TABLE IF EXISTS {}.{} CASCADE").format(
+                        pg_sql.Identifier(schema), pg_sql.Identifier(table)
+                    )
+                )
+            self.connection.commit()
+        finally:
+            cursor.close()
 
         # Build pg_restore command
         cmd = [

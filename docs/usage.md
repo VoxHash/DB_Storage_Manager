@@ -52,7 +52,7 @@ On the **Backups** tab:
 4. **Scheduled Backups** — add interval jobs (connection + Local/Proton + passphrase), then enable/disable or remove them from the table. Each due schedule runs in its own worker thread (a schedule that is still running is skipped, at most two dumps run at once). Definitions live in `scheduled-backups.json`; passphrases are stored only in the encrypted `scheduled-backup-secrets.enc`.
 5. **Dry-run Restore** of an encrypted backup prompts for the passphrase (the encryption field is used first); it is not stored. **Verify All** checks local files natively and Proton Drive rows through the adapter.
 6. **Sizes** — the **Size** column is the stored file (compressed and possibly encrypted); **Source DB size** is the live database size when the backup ran. Hover either cell for the breakdown. They differ by design: the live size counts table pages, indexes, TOAST and free space, while a dump stores logical data only (no index pages, no bloat), so a backup smaller than the Dashboard **Total size** is normal.
-7. **Restore… (experimental)** — hidden unless enabled (Settings → Backups & Adapters, or `DSM_EXPERIMENTAL=1`) and needs `backups:restore`. Choose the target connection, type the database name to confirm, optionally keep an encrypted safety backup of the current state, and enter the passphrase for encrypted backups. A pre-flight check (checksum, decrypt, unpack) runs before anything is overwritten, and the outcome is written to the audit log. Tick **Rehearse into a new scratch database** and type `SCRATCH` to restore into a new SQLite file or a new PostgreSQL/MySQL database; the production database is not modified and no safety backup is taken.
+7. **Restore…** is on unless Settings → Backups & Adapters unchecks it (`DSM_EXPERIMENTAL=1` forces it on). It needs `backups:restore`. Choose the target connection, type the database name to confirm, keep an encrypted safety backup of the current state, and enter the passphrase for encrypted backups. A pre-flight check (checksum, decrypt, unpack) runs before anything is overwritten, and the outcome is written to the audit log. Tick **Rehearse into a new scratch database** and type `SCRATCH` to restore into a new SQLite file or a new PostgreSQL/MySQL database; the production database is not modified and no safety backup is taken.
 
 Proton Drive is not configured until rclone is installed and either an rclone remote exists, SecureStore has username+password (**Configure Proton Drive…**), or `DSM_PROTONDRIVE_USERNAME` + `DSM_PROTONDRIVE_PASSWORD` are set via `.env.protondrive.local` / `./scripts/setup-protondrive-env.sh` — the UI shows a clear status line (orange when not ready) instead of a fake local path. rclone transfers use `--protondrive-replace-existing-draft=true` and retry on draft/422 conflicts (Proton 502 spikes are retried with a longer timeout).
 
@@ -76,7 +76,7 @@ Use **Settings** to switch theme and language. Theme application goes through `t
 4. **Metrics**, **Alerts**, **Performance**, and **Health** tabs refresh every 5 seconds from the real `monitoring/` collectors (not placeholders)
 5. On **Alerts**, select rows and **Acknowledge Selected**, or **Acknowledge All**; **Refresh Now** forces an immediate poll
 
-6. **Channels**: desktop, in-app and **Email** (needs the SMTP settings from Settings → Notifications). Users with the `monitor` role can run all of this; enable **Start monitoring on launch** to watch a connection as soon as the app opens
+6. **Channels**: desktop, in-app, **Email**, **Webhook**, **Slack**, **Discord**, and **Telegram**. Each remote channel is off until Settings → Notifications has a valid configuration. Discord is an incoming webhook URL. Telegram is a bot token and chat id; the app posts only to `api.telegram.org`. Secrets stay in SecureStore and are not written to the notification log. Users with the `monitor` role can run all of this; enable **Start monitoring on launch** to watch a connection as soon as the app opens. **Install** `connection-email-alerts` for SMTP that belongs to one connection, and `multi-connection-monitor` to health-check several opted-in connections from the same process.
 
 Thresholds (connection count, cache hit ratio, health failures) live in `AlertManager`. SQLite reports basic connectivity metrics; PostgreSQL / MySQL / SQL Server collect richer engine counters when connected.
 
@@ -85,7 +85,7 @@ Thresholds (connection count, cache hit ratio, health failures) live in `AlertMa
 1. Open **Plugins** (View → Plugins, or Ctrl+6)
 2. Review built-in plugins (`migration`, `data_comparison`) and any user installs
 3. **Enable** / **Disable** — persisted in SecureStore (`settings.plugins.enabled`)
-4. **Install from Path…** — select a directory that contains `plugin.json` (see `examples/plugins/hello_echo/`). The first premium plugin, PITR Verify, is bundled at the directory `bundled_plugin_dir("pitr-verify")` (`db_storage_manager/premium_plugins/pitr-verify`) and asks for a licence before install
+4. **Install from Path…** — select a directory that contains `plugin.json` (see `examples/plugins/hello_echo/`), or a parent folder such as `db_storage_manager/premium_plugins/` whose subfolders each contain `plugin.json`. A parent installs every eligible child. One licence key is not reused across that parent; each premium plugin asks for its own key. **Install bundled…** registers the free plugins shipped with the app and offers the premium plugins in the same package. Built-in `migration` and `data_comparison` stay free and are already registered
 5. **Install from URL…** — http(s) URL to a `.zip` or `.tar.gz` archive with the same layout
 6. **Uninstall** — removes user-installed plugins only (built-ins can only be disabled)
 7. **Premium plugins** — the **License** column shows `Free`, `Licensed`, `Licensed (offline)`, `Not activated`, `Expired`, `Invalid` or `Wrong product`. Select a premium plugin and use **Get License** (opens its LicenseChain checkout), then **Activate License…** and paste the key (an email prompt appears only if the purchase needs it). **Deactivate License** removes the key from this computer. Installing a premium plugin from path or URL asks for the key first, before any of its code runs
@@ -95,7 +95,7 @@ Premium pricing (single plugin / all-plugins bundle): US$1.99 / US$4.99 per mont
 
 Settings → General has **Reduce transparency**, which swaps the glass surfaces for solid colours (also `DSM_REDUCE_TRANSPARENCY=1`).
 
-Authoring API: `db_storage_manager.plugins.sdk` (API version `1.0`). Registry on disk: `plugins/registry.json` under the user data directory. There is no remote store catalog yet; publish later by shipping the same `plugin.json` package.
+Authoring API: `db_storage_manager.plugins.sdk` (API version `1.0`): opt-in, real catalogs or provider APIs, no bundled credentials. A check the plugin cannot answer is `not_available` (`plugins.sdk.not_available()`), not a guessed pass or fail. Registry on disk: `plugins/registry.json` under the user data directory. There is no remote store catalog; publish by shipping the same `plugin.json` package.
 
 ## SSH tunneling
 

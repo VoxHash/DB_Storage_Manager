@@ -25,6 +25,12 @@ class DatabaseMonitor:
         self.monitoring_task: Optional[asyncio.Task] = None
         self._on_metrics: Optional[Callable[[Dict[str, Any]], None]] = None
         self._last_health_alert_status: Optional[str] = None
+        connection_id = getattr(connection.config, "id", None)
+
+        def _stamp(alert: Alert) -> None:
+            alert.connection_id = str(connection_id) if connection_id else None
+
+        self.alert_manager.add_alert_callback(_stamp)
 
     async def poll_once(self) -> Dict[str, Any]:
         """Collect one metrics + health sample and evaluate alert thresholds.
