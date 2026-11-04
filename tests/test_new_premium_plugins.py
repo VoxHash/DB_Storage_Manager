@@ -27,8 +27,7 @@ def _auth(isolated_secure_store, monkeypatch):
     monkeypatch.setattr(auth_mod, "_auth_manager", AuthenticationManager(store=store))
 
 
-def test_manifests_match_provisioned_products_when_present():
-    """Product ids are the seller-account UUIDs. A plugin is not sellable before that."""
+def test_manifests_use_monthly_products():
     for plugin_id in (
         "extension-inventory",
         "multi-cloud-discovery",
@@ -36,11 +35,12 @@ def test_manifests_match_provisioned_products_when_present():
         "maintenance-window-watch",
     ):
         manifest = load_manifest(bundled_plugin_dir(plugin_id))
+        monthly = PREMIUM_PRODUCT_IDS[plugin_id]["monthly"]
         assert manifest.license is not None
+        assert manifest.license.product_id == monthly
         assert manifest.license.pricing["monthly"] == PRICING_TIERS["plugin"]["monthly"]
-        provisioned = PREMIUM_PRODUCT_IDS.get(plugin_id)
-        if provisioned:
-            assert manifest.license.product_id == provisioned["monthly"]
+        assert manifest.license.pricing["yearly"] == PRICING_TIERS["plugin"]["yearly"]
+        assert manifest.license.pricing["one_time"] == PRICING_TIERS["plugin"]["one_time"]
 
 
 def test_extension_inventory_flags_deprecated_and_outdated():

@@ -59,6 +59,26 @@ PREMIUM_PRODUCT_IDS: Dict[str, Dict[str, str]] = {
         "yearly": "49f37f1f-3383-4f01-9200-47fef68c29c3",
         "one_time": "5fd3ee0f-6c16-49ca-ac06-23fc462d0cc1",
     },
+    "multi-cloud-discovery": {
+        "monthly": "d9f0bfa8-758c-411e-9446-af50ccf339c0",
+        "yearly": "daf5e451-50ee-4dc9-a2a1-8eb3eb4b2854",
+        "one_time": "6cdbf488-6a87-4596-b4e7-c7f639017485",
+    },
+    "extension-inventory": {
+        "monthly": "f0bca715-64e1-4202-86e1-e811770b7d1b",
+        "yearly": "f1fd1d21-c9e1-404b-b4c9-7fb0ec7575d8",
+        "one_time": "51fc2cd0-25c7-47f2-8b0a-f7a4537f21d9",
+    },
+    "trusted-sources-check": {
+        "monthly": "f0b37125-b4ed-4598-9afd-d8a14f57c50b",
+        "yearly": "23aeaeb1-650e-40de-bf63-002e1474214e",
+        "one_time": "3e33ac79-85a2-4086-bb81-63a19ad6f4e0",
+    },
+    "maintenance-window-watch": {
+        "monthly": "26ee9d50-4557-4647-9c95-56bbe5b678a0",
+        "yearly": "e7af4563-8306-44c5-8b49-2a5b9ed3ddcc",
+        "one_time": "25aa4f42-c914-4a06-a871-ed651d367e65",
+    },
 }
 
 # A valid licence for any bundle product unlocks every first-party premium

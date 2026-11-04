@@ -248,7 +248,7 @@ A plugin without a `license` block is free. To sell a plugin through [LicenseCha
 ```
 
 - `product_id` is required; `purchase_url` defaults to `https://pay.licensechain.app/checkout/<product_id>`; `provider` must be `licensechain`. Unknown or malformed values reject the manifest (fail closed)
-- Provisioned LicenseChain product ids for the bundle and each planned premium plugin are in `db_storage_manager.plugins.pricing.PREMIUM_PRODUCT_IDS` (monthly, yearly, one-time per entry)
+- Provisioned LicenseChain product ids for the bundle and each first-party premium plugin are in `db_storage_manager.plugins.pricing.PREMIUM_PRODUCT_IDS` (monthly, yearly, one-time per entry)
 - A licence for any bundle product (`PREMIUM_PRODUCT_IDS["bundle"]`: monthly, yearly or one-time) also unlocks every plugin whose `product_id` is one of the first-party ids in `PREMIUM_PRODUCT_IDS`; see `plugins.pricing.accepted_product_ids`. A plugin-only key unlocks only that plugin, and third-party `product_id`s are matched exactly
 - `pricing` is display-only (shown in the licence prompt); LicenseChain holds the authoritative price. Options: `monthly`, `yearly`, `one_time`, positive amounts, 3-letter uppercase `currency`. First-party plugins stay at or under `plugins.sdk.PRICING_TIERS["plugin"]`
 - The host checks the licence before importing plugin code (install), on enable and on every execution. Plugins never see the licence key. Built-in plugins ignore the block
@@ -303,19 +303,19 @@ report = plugin.execute(connection, table="people", dest="people.csv.enc", passp
 
 ### Extension inventory (`extension-inventory`)
 
-PostgreSQL `pg_available_extensions`. Installed `xml2`, `intagg`, or `tsearch2` is a finding (deprecated or removed in the PostgreSQL manual). An installed version other than `default_version` is listed as outdated. SQLite and MySQL are `not_available`. Running requires `monitoring:read`. LicenseChain products for this plugin are not provisioned yet (`POST /v1/products` returned HTTP 401), so it is not on sale.
+PostgreSQL `pg_available_extensions`. Installed `xml2`, `intagg`, or `tsearch2` is a finding (deprecated or removed in the PostgreSQL manual). An installed version other than `default_version` is listed as outdated. SQLite and MySQL are `not_available`. Running requires `monitoring:read`. `license.product_id` is `PREMIUM_PRODUCT_IDS["extension-inventory"]["monthly"]`.
 
 ### Multi-cloud discovery (`multi-cloud-discovery`)
 
-Lists DigitalOcean (`GET /v2/databases`), Supabase (`GET /v1/projects`, host `db.<ref>.supabase.co`), Neon (projects plus endpoints), and Aiven (`GET /v1/project/{project}/service`, `Authorization: aivenv1`). Tokens are the operator's environment or connection extra. Passwords and URIs are dropped. A missing token or HTTP 401/403 is `not_available` for that provider. Discover Cloud calls `execute` only when the plugin is installed and licensed. Not on sale until LicenseChain products exist.
+Lists DigitalOcean (`GET /v2/databases`), Supabase (`GET /v1/projects`, host `db.<ref>.supabase.co`), Neon (projects plus endpoints), and Aiven (`GET /v1/project/{project}/service`, `Authorization: aivenv1`). Tokens are the operator's environment or connection extra. Passwords and URIs are dropped. A missing token or HTTP 401/403 is `not_available` for that provider. Discover Cloud calls `execute` only when the plugin is installed and licensed. `license.product_id` is `PREMIUM_PRODUCT_IDS["multi-cloud-discovery"]["monthly"]`.
 
 ### Trusted sources (`trusted-sources-check`)
 
-Compares an allow list with the session client IP (`inet_client_addr()` or the MySQL process-list host). It does not call an IP-echo service. Neon documents an empty `allowed_ips.ips` as open. Supabase `entitlement: disallowed` is `not_available`. An empty DigitalOcean rule list is `partial`. `0.0.0.0/0` is a finding. Not on sale until LicenseChain products exist.
+Compares an allow list with the session client IP (`inet_client_addr()` or the MySQL process-list host). It does not call an IP-echo service. Neon documents an empty `allowed_ips.ips` as open. Supabase `entitlement: disallowed` is `not_available`. An empty DigitalOcean rule list is `partial`. `0.0.0.0/0` is a finding. Running requires `monitoring:read`. `license.product_id` is `PREMIUM_PRODUCT_IDS["trusted-sources-check"]["monthly"]`.
 
 ### Maintenance window (`maintenance-window-watch`)
 
-`alerts` is the feed. PostgreSQL final dates are from https://www.postgresql.org/support/versioning/. MySQL dates are Oracle extended-support ends (8.0 ended 2026-04-30, 8.4 ends 2032-04-30, 9.7 ends 2034-04-30). A version absent from those tables is `not_available`. Pending DigitalOcean `maintenance_window` or RDS `PendingMaintenanceActions` add warning alerts. MariaDB is not compared to the MySQL calendar. Not on sale until LicenseChain products exist.
+`alerts` is the feed. PostgreSQL final dates are from https://www.postgresql.org/support/versioning/. MySQL dates are Oracle extended-support ends (8.0 ended 2026-04-30, 8.4 ends 2032-04-30, 9.7 ends 2034-04-30). A version absent from those tables is `not_available`. Pending DigitalOcean `maintenance_window` or RDS `PendingMaintenanceActions` add warning alerts. MariaDB is not compared to the MySQL calendar. Running requires `monitoring:read`. `license.product_id` is `PREMIUM_PRODUCT_IDS["maintenance-window-watch"]["monthly"]`.
 
 ### Local marketplace
 
