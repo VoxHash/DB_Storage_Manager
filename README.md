@@ -17,7 +17,7 @@
 - **Multi-user / RBAC** — Optional local accounts (`users.enc`), roles, and permission checks for shared workstations
 - **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
 - **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh; desktop, in-app and real SMTP email channels; dedicated `monitor` role; optional watch-on-launch
-- **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL
+- **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL. The core and built-in plugins are free; optional premium plugins are licensed through [LicenseChain](https://licensechain.app) from US$1.99/month (updates included) and you can support the project at [GitHub Sponsors](https://github.com/sponsors/VoxHash)
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
 - **Backup & Restore** — Local, Proton Drive (rclone) and S3-compatible adapters with scheduling, SHA-256 verification, dry-run, and an opt-in experimental full restore (RBAC-gated, audited)
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n

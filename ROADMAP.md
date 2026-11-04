@@ -11,7 +11,10 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 - [x] S3-compatible adapter at parity with Local and Proton Drive (encrypted, verified, dry-run, restore)
 - [x] SMTP email alert channel, `monitor` role, watch-on-launch
 - [x] Theme fixes (Light RBAC panel, scroll areas, plugin status colours)
+- [x] Premium plugin licensing through LicenseChain (core and built-ins stay free; see "Plugin pricing and sustainability")
+- [x] Liquid-glass tokens, icon-only buttons with accessible names, and a Reduce transparency switch
 - [ ] Rehearse full restore against live PostgreSQL and MySQL servers in CI (SQLite is covered today)
+- [ ] Publish the first premium plugin: create its LicenseChain products (`scripts/licensechain_products.py --apply`) and set `license.product_id`
 
 ## Next
 
@@ -43,6 +46,20 @@ Planned on the existing `plugins.sdk` (API `1.0`): opt-in, real catalogs or prov
 - [ ] `maintenance-window-watch` — provider maintenance and version end-of-life in the alerts feed
 
 Plugin acceptance bar: tests against a real SQLite/Postgres fixture or recorded provider responses, a manifest entry, a documented permission, and an RBAC permission (`plugins:manage` to install, `monitoring:*` / `backups:*` to run).
+
+### Plugin pricing and sustainability
+
+The core app and the built-in `migration` and `data_comparison` plugins stay free. Only new, separately distributed premium plugins are gated, so maintenance and security work can be funded without turning the tool into a paywall. Prices are kept low enough to be reasonable worldwide, and anyone for whom they are still out of reach can write to contact@voxhash.dev for a discount; no one is asked to justify hardship in detail.
+
+| | Monthly | Yearly | One-time (this major version) |
+|---|---|---|---|
+| One premium plugin | US$1.99 | US$16 | US$24 |
+| All premium plugins (bundle) | US$4.99 | US$39 | US$59 |
+
+- Buyers get every update (features, fixes, security, compatibility) while a subscription is active; a one-time licence keeps working and receives all updates for that major version. A new major version may need a new licence, announced in the changelog first
+- LicenseChain holds the authoritative price and billing (one price and currency per product); `plugin.json` only mirrors it for display
+- Optional donations without buying anything: https://github.com/sponsors/VoxHash (the same `github: voxhash` entry as `.github/FUNDING.yml`)
+- Framework decision: stay on PyQt6. A Tauri, Electron or QML rewrite was evaluated against current desktop UI trends and is not justified; the liquid-glass look is delivered with Qt stylesheets, with accessibility (contrast, focus rings, Reduce transparency) taking priority over blur
 
 ### Agent / MCP control surface
 

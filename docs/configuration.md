@@ -42,6 +42,7 @@ Key files:
 | `backups/` | Local backup payloads |
 | `plugins/registry.json` | Local plugin marketplace registry (builtins + installs) |
 | `plugins/installed/` | Copied user-installed plugin packages |
+| `plugin-licenses.enc` | Fernet-encrypted premium plugin licence records (key, email, last verification); the key is never logged |
 | `users.enc` | Encrypted local RBAC accounts (password hashes; mode `600`) |
 | `.master-key` | Fernet master key (Unix mode `600`) |
 
@@ -85,6 +86,13 @@ No required secrets for core operation. Useful optional variables:
 | `APPDATA` | Windows user data root (OS-provided) |
 | `ORACLE_CLIENT_LIB_DIR` | Optional path to Oracle Instant Client libraries (enables `oracledb` Thick mode) |
 | `DSM_E2E_CONNECTIONS_FILE` | Absolute path to a local JSON fixture of real DB profiles for optional live probes (`tests/test_real_connections.py`) |
+| `DSM_REDUCE_TRANSPARENCY` | `1` flattens glass surfaces to solid colours (also a Settings checkbox) |
+| `LICENSECHAIN_API_BASE` | LicenseChain API base for premium plugin licences (default `https://api.licensechain.app/v1`; must be `https` except for localhost) |
+| `LICENSECHAIN_PAY_BASE` | LicenseChain hosted checkout / validate base (default `https://pay.licensechain.app`) |
+| `LICENSECHAIN_API_KEY` | Only for `scripts/licensechain_products.py --apply` (maintainers creating products). Never needed by users and never stored by the app |
+| `DSM_LICENSE_RECHECK_HOURS` | Hours between online licence re-checks (default `24`) |
+| `DSM_LICENSE_GRACE_DAYS` | Days a verified licence keeps working offline (default `7`) |
+| `DSM_LICENSECHAIN_HWUID` | `0` disables sending the hashed device id with licence verification (default on) |
 | `DSM_E2E_CONNECT_TIMEOUT` | Seconds for each live `test_connection()` probe (default `8`) |
 | AWS / Google credentials | S3 / Google Drive backup adapters, and optional RDS / Cloud SQL discovery |
 | `DSM_AWS_REGION` / `DSM_AWS_ACCESS_KEY_ID` / `DSM_AWS_SECRET_ACCESS_KEY` / `DSM_AWS_PROFILE` | AWS RDS discovery + IAM auth tokens (or use the default AWS credential chain) |

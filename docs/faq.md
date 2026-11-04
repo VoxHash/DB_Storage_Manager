@@ -37,6 +37,10 @@ Yes, as an experimental opt-in feature: enable it in Settings → Backups & Adap
 
 It remains available as a library adapter only. Storing a long-lived OAuth token in a desktop form is riskier than S3 keys or an rclone remote, so Local, Proton Drive and S3 are the supported destinations.
 
+## Is DB Storage Manager free? What do premium plugins cost?
+
+The app and the built-in `migration` and `data_comparison` plugins are free. Optional premium plugins are licensed through LicenseChain at deliberately low prices: US$1.99/month, US$16/year or US$24 one-time per plugin, and US$4.99/month, US$39/year or US$59 one-time for all of them. Updates are included while a subscription is active, or for the major version of a one-time licence. If the price is a barrier, write to contact@voxhash.dev. You can also donate at https://github.com/sponsors/VoxHash.
+
 ## Is there a REST API or web UI?
 
 Not in the current release. The product is a desktop application with a Python package API for programmatic access. A web interface is on the longer-term roadmap.

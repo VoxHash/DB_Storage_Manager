@@ -233,6 +233,25 @@ A third-party plugin is a directory containing `plugin.json` plus an entry modul
 
 `entry` is `module:ClassName` relative to the plugin root. The class must subclass `Plugin`. See `examples/plugins/hello_echo/`.
 
+### Premium plugins (optional `license` block)
+
+A plugin without a `license` block is free. To sell a plugin through [LicenseChain](https://licensechain.app), create a product in the LicenseChain dashboard (or run `python scripts/licensechain_products.py path/to/plugin --apply`) and add its id:
+
+```json
+{
+  "license": {
+    "provider": "licensechain",
+    "product_id": "<LicenseChain product UUID>",
+    "pricing": { "currency": "USD", "monthly": 1.99, "yearly": 16.00, "one_time": 24.00 }
+  }
+}
+```
+
+- `product_id` is required; `purchase_url` defaults to `https://pay.licensechain.app/checkout/<product_id>`; `provider` must be `licensechain`. Unknown or malformed values reject the manifest (fail closed)
+- `pricing` is display-only (shown in the licence prompt); LicenseChain holds the authoritative price. Options: `monthly`, `yearly`, `one_time`, positive amounts, 3-letter uppercase `currency`. First-party plugins stay at or under `plugins.sdk.PRICING_TIERS["plugin"]`
+- The host checks the licence before importing plugin code (install), on enable and on every execution. Plugins never see the licence key. Built-in plugins ignore the block
+- Python: `LocalPluginMarketplace.activate_license(plugin_id, key, email=None)`, `deactivate_license`, `license_status`, `require_license`; `install_from_path(path, license_key=..., license_email=...)`. A missing licence raises `PluginLicenseRequired`
+
 ### Local marketplace
 
 ```python
