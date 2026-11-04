@@ -13,7 +13,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 - [x] Theme fixes (Light RBAC panel, scroll areas, plugin status colours)
 - [x] Premium plugin licensing through LicenseChain (core and built-ins stay free; see "Plugin pricing and sustainability")
 - [x] Liquid-glass tokens, icon-only buttons with accessible names, and a Reduce transparency switch
-- [ ] Rehearse full restore against live PostgreSQL and MySQL servers in CI (SQLite is covered today)
+- [x] Rehearse full restore against live PostgreSQL and MySQL servers in CI (`tests/test_live_restore.py`, `.github/workflows/live-restore.yml`: PostgreSQL 14/15/16, MySQL 8.0; MariaDB 11 verified locally). Finding: restore replaces backed-up objects but keeps target-only ones, and PostgreSQL `--clean` fails loudly when a target-only table depends on a backed-up one — rehearse into a scratch database
 - [ ] Publish the first premium plugin: create its LicenseChain products (`scripts/licensechain_products.py --apply`) and set `license.product_id`
 
 ## Next
@@ -23,7 +23,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 - [ ] Google Drive as a plugin or an rclone `drive` remote (the library adapter stays out of the UI: a long-lived OAuth token in a desktop form is an opsec risk)
 - [ ] Retention rules per connection (keep N daily / M monthly) with pruning for Local, Proton Drive and S3
 - [ ] Restore into a scratch database for rehearsal before touching production
-- [ ] Promote full restore from experimental to stable after the live-engine rehearsals above
+- [ ] Promote full restore from experimental to stable after the live-engine rehearsals above pass in CI and the scratch-database restore exists (the dependent-table limitation above is the remaining blocker)
 - [~] Automatic restore on a critical alert — deferred. A restore replaces data, and an unattended trigger cannot tell a failing server from a failing probe. It would need opt-in per connection, a cooldown, a signed audit trail and a human confirmation path; manual experimental restore is the supported route until then
 
 ### Monitoring

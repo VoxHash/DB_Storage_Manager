@@ -18,6 +18,28 @@ from .base import (
 )
 
 
+def pg_restore_only_version_skew(stderr: str) -> bool:
+    """True when every pg_restore error is a ``SET <parameter>`` the server lacks.
+
+    A pg_restore newer than the server (for example client 18 into server 16)
+    replays settings such as ``SET transaction_timeout = 0`` that older servers
+    reject with "unrecognized configuration parameter". pg_restore then exits
+    non-zero even though every object and row was restored. Any other error
+    (permissions, missing roles, broken data) is still a failure.
+    """
+    error_lines = [
+        line for line in stderr.splitlines() if line.startswith("pg_restore: error:")
+    ]
+    commands = [
+        line for line in stderr.splitlines() if line.startswith("Command was:")
+    ]
+    if not error_lines or len(commands) != len(error_lines):
+        return False
+    return all(
+        "unrecognized configuration parameter" in line for line in error_lines
+    ) and all(line[len("Command was:") :].lstrip().startswith("SET ") for line in commands)
+
+
 class PostgreSQLConnection(DatabaseConnection):
     """PostgreSQL database connection"""
 
@@ -365,6 +387,8 @@ class PostgreSQLConnection(DatabaseConnection):
         env = __import__("os").environ.copy()
         if self.config.password:
             env["PGPASSWORD"] = self.config.password
+        # Error text is parsed below; keep it in English.
+        env["LC_MESSAGES"] = "C"
 
         # Run pg_restore
         process = await asyncio.create_subprocess_exec(
@@ -377,4 +401,6 @@ class PostgreSQLConnection(DatabaseConnection):
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise RuntimeError(f"pg_restore failed: {stderr.decode()}")
+            message = stderr.decode(errors="replace")
+            if not pg_restore_only_version_skew(message):
+                raise RuntimeError(f"pg_restore failed: {message}")

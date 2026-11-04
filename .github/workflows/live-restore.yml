@@ -1,0 +1,120 @@
+name: Live restore rehearsal
+
+# Runs tests/test_live_restore.py against real PostgreSQL and MySQL servers:
+# create a backup (pg_dump / mysqldump), drift the data, then run the
+# experimental full restore (pg_restore / mysql client) and compare the result.
+# SQLite is covered by tests/test_full_restore.py in the regular CI job.
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - "db_storage_manager/backups/**"
+      - "db_storage_manager/db/postgres.py"
+      - "db_storage_manager/db/mysql.py"
+      - "db_storage_manager/db/pool.py"
+      - "db_storage_manager/experimental.py"
+      - "tests/test_live_restore.py"
+      - ".github/workflows/live-restore.yml"
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - "db_storage_manager/backups/**"
+      - "db_storage_manager/db/postgres.py"
+      - "db_storage_manager/db/mysql.py"
+      - "db_storage_manager/db/pool.py"
+      - "db_storage_manager/experimental.py"
+      - "tests/test_live_restore.py"
+      - ".github/workflows/live-restore.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DSM_PBKDF2_ITERATIONS: "12000"
+
+jobs:
+  postgres:
+    name: PostgreSQL ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["14", "15", "16"]
+    services:
+      postgres:
+        image: postgres:${{ matrix.version }}
+        env:
+          POSTGRES_PASSWORD: dsm-live-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DSM_LIVE_PG_HOST: 127.0.0.1
+      DSM_LIVE_PG_PORT: "5432"
+      DSM_LIVE_PG_USER: postgres
+      DSM_LIVE_PG_PASSWORD: dsm-live-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+      - name: Rehearse full restore against PostgreSQL ${{ matrix.version }}
+        run: pytest -v tests/test_live_restore.py -k postgresql
+
+  mysql:
+    name: MySQL ${{ matrix.version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["8.0"]
+    services:
+      mysql:
+        image: mysql:${{ matrix.version }}
+        env:
+          MYSQL_ROOT_PASSWORD: dsm-live-ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pdsm-live-ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DSM_LIVE_MYSQL_HOST: 127.0.0.1
+      DSM_LIVE_MYSQL_PORT: "3306"
+      DSM_LIVE_MYSQL_USER: root
+      DSM_LIVE_MYSQL_PASSWORD: dsm-live-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install MySQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+          mysqldump --version
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+      - name: Rehearse full restore against MySQL ${{ matrix.version }}
+        run: pytest -v tests/test_live_restore.py -k mysql
