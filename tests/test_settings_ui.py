@@ -319,20 +319,20 @@ def test_off_machine_adapters_force_encryption(app, backups):
     assert widget.encrypt_checkbox.isEnabled()
 
 
-def test_restore_button_is_hidden_unless_experimental_is_on(app, backups, monkeypatch):
+def test_restore_button_is_visible_by_default_and_hides_when_turned_off(app, backups):
     widget, _, _ = backups
     widget.refresh_destinations()
-    assert widget.restore_button.isHidden()
+    assert not widget.restore_button.isHidden()
+    assert widget.restore_button.isEnabled()
 
     from db_storage_manager.security.store import SecureStore
 
     settings = SecureStore()
     data = settings.get_settings()
-    data["experimental"] = {"restore": True}
+    data["experimental"] = {"restore": False}
     settings.set_settings(data)
     widget.refresh_destinations()
-    assert not widget.restore_button.isHidden()
-    assert widget.restore_button.isEnabled()
+    assert widget.restore_button.isHidden()
 
 
 def test_restore_dialog_requires_typed_name_and_passphrases(app, backups, monkeypatch):
@@ -414,12 +414,19 @@ def test_restore_button_runs_a_real_restore_after_both_confirmations(app, backup
     assert read_audit()[-1]["outcome"] == "completed"
 
 
-def test_restore_is_refused_in_the_ui_while_experimental_is_off(app, backups):
+def test_restore_is_refused_in_the_ui_while_turned_off(app, backups):
     widget, db, _ = backups
+    from db_storage_manager.security.store import SecureStore
+
+    settings = SecureStore()
+    data = settings.get_settings()
+    data["experimental"] = {"restore": False}
+    settings.set_settings(data)
+    widget.refresh_destinations()
     _create_backup(app, widget)
     widget.backups_table.selectRow(0)
     widget.restore_selected()
-    assert "experimental" in widget.verify_status_label.text().lower()
+    assert "turned off" in widget.verify_status_label.text().lower()
     assert widget._jobs.any_busy() is False
 
 
