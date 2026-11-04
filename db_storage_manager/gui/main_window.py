@@ -34,6 +34,7 @@ from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
 from .tray import AppTray, clamp_notification_seconds
 from .updates import UpdatesDialog
+from .icons import refresh_icons
 from .utils import apply_glassmorphism, apply_theme_to_app
 from ..resources import apply_app_icon
 
@@ -327,6 +328,8 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         """Apply theme to application and refresh glass panel stylesheets."""
         apply_theme_to_app(self)
+        # Stroke icons are painted with token colours: repaint on theme switch.
+        refresh_icons(self)
         # Tab-local glass stylesheets embed token colors; re-apply so Atmospheric /
         # Light / Dracula switches do not leave stale MetricCard / PageTitle ink.
         for panel in self.findChildren(QWidget, "glassmorphism"):

@@ -44,6 +44,7 @@ from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDisp
 from ..monitoring.notifications import resolve_email_config, validate_email_config
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
+from .icons import set_icon_only
 from .jobs import JobRunner
 from .utils import (
     apply_glassmorphism,
@@ -225,6 +226,11 @@ class MonitoringWidget(QWidget):
         self.acknowledge_all_button.setEnabled(False)
         alerts_actions.addWidget(self.acknowledge_all_button)
         self.refresh_button = QPushButton(t("monitoring.refresh_now"))
+        set_icon_only(
+            self.refresh_button,
+            "refresh",
+            t("monitoring.refresh_now").replace("&", ""),
+        )
         self.refresh_button.clicked.connect(self._poll_now)
         self.refresh_button.setEnabled(False)
         alerts_actions.addWidget(self.refresh_button)

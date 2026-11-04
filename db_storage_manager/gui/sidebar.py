@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Sequence, Tuple
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QFrame,
@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from .icons import DEFAULT_ICON_PX, NAV_ICONS, themed_icon
 
 
 class NavSidebar(QFrame):
@@ -74,9 +76,16 @@ class NavSidebar(QFrame):
             self._nav_layout.removeWidget(btn)
             btn.deleteLater()
 
-        for index, (_key, label) in enumerate(items):
+        for index, (key, label) in enumerate(items):
             btn = QPushButton(label)
             btn.setObjectName("NavItem")
+            icon_name = NAV_ICONS.get(key)
+            if icon_name:
+                # Icon + visible text: navigation keeps its label for scanning.
+                btn.setIcon(themed_icon(icon_name, nav=True))
+                btn.setIconSize(QSize(DEFAULT_ICON_PX, DEFAULT_ICON_PX))
+                btn.setProperty("dsmIcon", icon_name)
+                btn.setAccessibleName(label)
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setMinimumHeight(40)
@@ -103,6 +112,14 @@ class NavSidebar(QFrame):
     def set_labels(self, labels: Sequence[str]) -> None:
         for btn, label in zip(self._buttons, labels):
             btn.setText(label)
+            btn.setAccessibleName(label)
+
+    def refresh_icons(self) -> None:
+        """Re-colour nav glyphs after a theme change."""
+        for btn in self._buttons:
+            name = btn.property("dsmIcon")
+            if name:
+                btn.setIcon(themed_icon(name, nav=True))
 
     def _on_id_clicked(self, index: int) -> None:
         self.navigated.emit(index)

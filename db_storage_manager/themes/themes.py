@@ -3,6 +3,14 @@ Theme definitions — design tokens for the desktop shell.
 
 Token naming follows a page/ink/muted/line/soft/accent model (adapted from
 open design-system patterns) mapped onto DB Storage Manager surfaces.
+
+``glassmorphism`` holds the "liquid glass" tokens. Per 2026 platform guidance
+(translucent material on *navigation and overlays*, never under tables / numbers)
+they are only applied to the sidebar rail and the sign-in card. Qt style sheets
+cannot blur what is behind a widget, so the material is built from a vertical
+tint gradient + a specular hairline (``highlight``) and stays correct without
+blur; ``backdrop_blur`` is kept for native / Qt Quick shells. ``solid_*`` tokens
+are the opaque fallback used when "Reduce transparency" is on.
 """
 
 THEMES = {
@@ -20,7 +28,7 @@ THEMES = {
             "border": "#E0E5E9",
             "success": "#2E7D32",
             "error": "#C62828",
-            "warning": "#EF6C00",
+            "warning": "#B45309",
             "info": "#294F82",
             "sidebar_bg": "#EEF1F4",
             "sidebar_hover": "#E4E9EE",
@@ -35,6 +43,12 @@ THEMES = {
             "background": "rgba(255, 255, 255, 0.92)",
             "border": "rgba(224, 229, 233, 0.95)",
             "backdrop_blur": "10px",
+            "tint_top": "rgba(255, 255, 255, 0.78)",
+            "tint_bottom": "rgba(232, 237, 242, 0.92)",
+            "highlight": "rgba(255, 255, 255, 0.95)",
+            "shadow": "rgba(32, 37, 43, 0.14)",
+            "solid_background": "#EEF1F4",
+            "solid_border": "#E0E5E9",
         },
     },
     "dark": {
@@ -66,6 +80,12 @@ THEMES = {
             "background": "rgba(18, 24, 32, 0.92)",
             "border": "rgba(36, 48, 68, 0.95)",
             "backdrop_blur": "10px",
+            "tint_top": "rgba(26, 38, 54, 0.82)",
+            "tint_bottom": "rgba(8, 13, 20, 0.96)",
+            "highlight": "rgba(148, 197, 214, 0.16)",
+            "shadow": "rgba(0, 0, 0, 0.50)",
+            "solid_background": "#0A1018",
+            "solid_border": "#243044",
         },
     },
     "dracula": {
@@ -97,6 +117,12 @@ THEMES = {
             "background": "rgba(40, 42, 54, 0.92)",
             "border": "rgba(69, 71, 90, 0.95)",
             "backdrop_blur": "10px",
+            "tint_top": "rgba(49, 50, 68, 0.82)",
+            "tint_bottom": "rgba(21, 21, 33, 0.96)",
+            "highlight": "rgba(248, 248, 242, 0.14)",
+            "shadow": "rgba(0, 0, 0, 0.50)",
+            "solid_background": "#181825",
+            "solid_border": "#45475A",
         },
     },
 }

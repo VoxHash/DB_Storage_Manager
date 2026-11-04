@@ -28,6 +28,13 @@ def _c(colors: Mapping[str, str], key: str, fallback: str) -> str:
     return colors.get(key) or fallback
 
 
+def rgba(hex_color: str, alpha: float) -> str:
+    """Convert ``#RRGGBB`` to a Qt ``rgba(r, g, b, a)`` style-sheet colour."""
+    value = hex_color.lstrip("#")
+    r, g, b = (int(value[i : i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r}, {g}, {b}, {alpha:.2f})"
+
+
 def apply_page_layout(layout: QVBoxLayout) -> None:
     """Apply shared content margins and spacing to a tab root layout."""
     layout.setContentsMargins(*PAGE_MARGINS)
@@ -108,8 +115,17 @@ def configure_dense_table(
     table.setObjectName("DenseTable")
 
 
-def build_app_stylesheet(colors: Mapping[str, str]) -> str:
-    """Build the desktop-shell stylesheet from theme color tokens."""
+def build_app_stylesheet(
+    colors: Mapping[str, str], glass: Optional[Mapping[str, str]] = None
+) -> str:
+    """Build the desktop-shell stylesheet from theme color tokens.
+
+    ``glass`` carries the liquid-glass tokens (see ``themes.themes``). The
+    material is only applied to navigation (sidebar rail) and the sign-in card;
+    tables, inputs and metric numbers stay on opaque surfaces so contrast does
+    not change as content moves underneath. Without ``glass`` the shell renders
+    flat (the "reduce transparency" look).
+    """
     bg = _c(colors, "background", "#0B0F14")
     surface = _c(colors, "surface", "#121820")
     elevated = _c(colors, "surface_elevated", surface)
@@ -130,6 +146,17 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
     success = _c(colors, "success", "#34D399")
     error = _c(colors, "error", "#F87171")
     warning = _c(colors, "warning", "#FBBF24")
+
+    g = dict(glass or {})
+    glass_top = g.get("tint_top") or sidebar_bg
+    glass_bottom = g.get("tint_bottom") or sidebar_bg
+    glass_highlight = g.get("highlight") or border
+    glass_edge = g.get("border") or border
+    flat = glass_top == glass_bottom
+    nav_pill_bg = sidebar_active if flat else rgba(primary, 0.16)
+    nav_pill_edge = primary if flat else rgba(primary, 0.40)
+    card_top = glass_top if g else surface
+    card_bottom = glass_bottom if g else surface
 
     return f"""
         QMainWindow, QDialog {{
@@ -179,7 +206,12 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
         }}
         #NavSidebar {{
             background-color: {sidebar_bg};
-            border-right: 1px solid {border};
+            background: qlineargradient(
+                x1: 0, y1: 0, x2: 0, y2: 1,
+                stop: 0 {glass_top}, stop: 1 {glass_bottom}
+            );
+            border-left: 1px solid {glass_highlight};
+            border-right: 1px solid {glass_edge};
         }}
         #NavBrand {{
             color: {text};
@@ -228,8 +260,9 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
             color: {text};
         }}
         #NavSidebar QPushButton#NavItem:checked {{
-            background-color: {sidebar_active};
+            background-color: {nav_pill_bg};
             color: {primary};
+            border: 1px solid {nav_pill_edge};
             border-left: 2px solid {primary};
             font-weight: 600;
         }}
@@ -339,6 +372,15 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
         }}
         QPushButton:pressed {{
             background-color: {selection};
+        }}
+        QPushButton:focus {{
+            border-color: {primary};
+            background-color: {selection};
+        }}
+        QPushButton[iconOnly="true"] {{
+            padding: 0;
+            min-width: 24px;
+            min-height: 24px;
         }}
         QPushButton:disabled {{
             background-color: {surface};
@@ -498,7 +540,12 @@ def build_app_stylesheet(colors: Mapping[str, str]) -> str:
         QLabel#StatusWarning {{ color: {warning}; }}
         #LoginCard {{
             background-color: {surface};
-            border: 1px solid {border};
+            background: qlineargradient(
+                x1: 0, y1: 0, x2: 0, y2: 1,
+                stop: 0 {card_top}, stop: 1 {card_bottom}
+            );
+            border: 1px solid {glass_edge if g else border};
+            border-top: 1px solid {glass_highlight};
             border-radius: 12px;
         }}
         #LoginTitle {{
@@ -599,6 +646,11 @@ def apply_glassmorphism(widget: QWidget) -> None:
         QPushButton:hover {{
             background-color: {primary_hover};
         }}
+        QPushButton[iconOnly="true"] {{
+            padding: 0;
+            min-width: 24px;
+            min-height: 24px;
+        }}
         QPushButton:disabled {{
             background-color: {border};
             color: {muted};
@@ -664,11 +716,12 @@ def apply_theme_to_app(app: Any) -> None:
     theme_manager = get_theme_manager()
     theme = theme_manager.get_theme()
     colors = theme["colors"]
-    app.setStyleSheet(build_app_stylesheet(colors))
+    app.setStyleSheet(build_app_stylesheet(colors, theme_manager.get_glass()))
 
 
 __all__ = [
     "DENSE_ROW_HEIGHT",
+    "rgba",
     "PAGE_MARGINS",
     "PAGE_SPACING",
     "apply_glassmorphism",

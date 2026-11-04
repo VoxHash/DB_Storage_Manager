@@ -170,6 +170,16 @@ class SettingsWidget(QWidget):
         self.theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         form.addRow(self.theme_label, self.theme_combo)
 
+        # Accessibility: opaque sidebar / sign-in card instead of the glass material.
+        self.reduce_transparency_check = QCheckBox()
+        self.reduce_transparency_check.setChecked(
+            self.theme_manager.reduce_transparency
+        )
+        self.reduce_transparency_check.toggled.connect(
+            self._on_reduce_transparency_toggled
+        )
+        form.addRow("", self.reduce_transparency_check)
+
         self.language_label = QLabel()
         self.language_combo = QComboBox()
         for lang_code, lang_data in SUPPORTED_LANGUAGES.items():
@@ -658,6 +668,12 @@ class SettingsWidget(QWidget):
             self.tabs.setTabText(i, _mnemonic_safe(title))
 
         self.theme_label.setText(_colon(t("settings.theme")))
+        self.reduce_transparency_check.setText(
+            t(
+                "settings.reduce_transparency",
+                default="Reduce transparency (opaque sidebar and sign-in card)",
+            )
+        )
         self.language_label.setText(_colon(t("settings.language")))
         self.safe_mode_label.setText(_colon(t("settings.safe_mode")))
         self.auto_connect_label.setText(_colon(t("settings.auto_connect")))
@@ -850,6 +866,11 @@ class SettingsWidget(QWidget):
         if theme_key:
             self.theme_manager.set_theme(theme_key)
             self.theme_changed.emit(theme_key)
+
+    def _on_reduce_transparency_toggled(self, checked: bool) -> None:
+        """Persist the accessibility preference and repaint the shell."""
+        self.theme_manager.set_reduce_transparency(checked)
+        self.theme_changed.emit(self.theme_manager.current_theme)
 
     def _on_language_changed(self, index):
         """Handle language change"""

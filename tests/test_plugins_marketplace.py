@@ -263,7 +263,7 @@ def test_plugins_widget_offscreen_smoke(marketplace, monkeypatch):
 
     app = QApplication.instance() or QApplication([])
     widget = PluginsWidget(marketplace=mp)
-    assert widget.table.columnCount() == 7
+    assert widget.table.columnCount() == 8  # incl. License column
     assert widget.table.rowCount() >= 2
     assert "hello_echo" not in _plugins_table_ids(widget)
 

@@ -45,6 +45,7 @@ from ..db.base import ConnectionConfig
 from ..experimental import is_restore_enabled
 from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
+from .icons import set_icon_only
 from .jobs import JobRunner, JobWorker
 from .restore_dialog import RestoreDialog
 from .utils import (
@@ -436,6 +437,11 @@ class BackupsWidget(QWidget):
         schedule_actions.addWidget(self.schedule_remove_button)
         self.schedule_refresh_button = QPushButton(
             t("backups.schedule_refresh", default="Refresh schedules")
+        )
+        set_icon_only(
+            self.schedule_refresh_button,
+            "refresh",
+            t("backups.schedule_refresh", default="Refresh schedules"),
         )
         self.schedule_refresh_button.clicked.connect(self._reload_schedules_table)
         schedule_actions.addWidget(self.schedule_refresh_button)

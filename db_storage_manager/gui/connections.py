@@ -42,6 +42,7 @@ from ..ssh import (
     normalize_ssh_config,
     validate_ssh_config,
 )
+from .icons import set_icon_only
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -79,6 +80,11 @@ class CloudDiscoverDialog(QDialog):
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton(
             t("connections.discover_refresh", "Refresh Discovery")
+        )
+        set_icon_only(
+            self.refresh_btn,
+            "refresh",
+            t("connections.discover_refresh", "Refresh Discovery"),
         )
         self.refresh_btn.clicked.connect(self._run_discovery)
         btn_row.addWidget(self.refresh_btn)
@@ -565,6 +571,9 @@ class ConnectionsWidget(QWidget):
         button_layout.addWidget(self.import_ssh_button)
 
         self.edit_button = QPushButton(t("connections.edit"))
+        set_icon_only(
+            self.edit_button, "edit", t("connections.edit").replace("&", "")
+        )
         self.edit_button.clicked.connect(self._edit_connection)
         self.edit_button.setEnabled(False)
         button_layout.addWidget(self.edit_button)
