@@ -10,7 +10,6 @@ import pytest
 
 from db_storage_manager.plugins.manifest import ManifestError, discover_plugin_roots
 from db_storage_manager.premium_plugins import bundled_plugins_parent
-from tests.test_plugins_marketplace import marketplace  # noqa: F401
 
 
 REPO = Path(__file__).resolve().parents[1]

@@ -20,8 +20,6 @@ import db_storage_manager.plugins.sdk as sdk_mod
 import db_storage_manager.security.auth as auth_mod
 import pytest
 
-from tests.test_plugins_marketplace import marketplace  # noqa: F401
-
 
 PROFILE = {
     "enabled": True,
