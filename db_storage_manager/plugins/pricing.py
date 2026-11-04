@@ -24,6 +24,43 @@ PRICING_TIERS: Dict[str, Dict[str, float]] = {
     "bundle": {"monthly": 4.99, "yearly": 39.00, "one_time": 59.00},
 }
 
+# LicenseChain product ids provisioned for the first-party premium plugins and
+# the "all premium plugins" bundle (one product per billing option). A plugin's
+# ``plugin.json`` ``license.product_id`` is the one it sells first; these are
+# not secrets (they appear in the public checkout URL).
+PREMIUM_PRODUCT_IDS: Dict[str, Dict[str, str]] = {
+    "bundle": {
+        "monthly": "68967897-d070-450c-bb7a-07a3e7d79bdf",
+        "yearly": "38da2336-ae9f-42e5-81a1-1ea99a882e2c",
+        "one_time": "4429e413-fe8f-4602-b281-0ecf3a7d3c60",
+    },
+    "pitr-verify": {
+        "monthly": "2e1b1388-5e8c-459d-a5e6-62ef146c4682",
+        "yearly": "d1c45cba-7af8-422e-8b47-88086ae4c714",
+        "one_time": "50736ce6-a35e-48f1-b893-a4fc9a1ed173",
+    },
+    "schema-drift": {
+        "monthly": "fbcb9ad2-6859-4d9b-832e-7d0224fb669a",
+        "yearly": "2815f050-6b3b-4f94-a010-fc3388607f72",
+        "one_time": "0db40f25-6248-45cd-b354-db0043b22cc2",
+    },
+    "rls-audit": {
+        "monthly": "dbd8dffc-608b-4eed-9a84-2b0e4e406491",
+        "yearly": "1cd4f7bd-72d9-4ba3-9a6a-4a35effe8bf7",
+        "one_time": "a64d369f-2fa0-4598-88e0-afb79b304336",
+    },
+    "pooler-health": {
+        "monthly": "869a9e74-5506-428f-a941-532c10b0c757",
+        "yearly": "15cb51f0-9b8f-490f-9834-d9d845227028",
+        "one_time": "4e51906a-8e0c-4ade-9069-760a08fda5dc",
+    },
+    "encrypted-export": {
+        "monthly": "cf252f7b-9e64-4149-8c64-be1fcdbd8f98",
+        "yearly": "0e19b52f-f0bf-4e0b-bf1e-ee53d917e949",
+        "one_time": "15ba1ef3-4efa-4218-aaf3-8db9944dcb2e",
+    },
+}
+
 BILLING_OPTIONS = ("monthly", "yearly", "one_time")
 _MAX_AMOUNT = 10_000.0
 

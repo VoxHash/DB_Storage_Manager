@@ -12,6 +12,8 @@ import pytest
 from db_storage_manager.config import SPONSORS_URL
 from db_storage_manager.plugins.manifest import ManifestError, validate_manifest
 from db_storage_manager.plugins.pricing import (
+    BILLING_OPTIONS,
+    PREMIUM_PRODUCT_IDS,
     PRICING_TIERS,
     exceeds_first_party_policy,
     format_pricing,
@@ -159,3 +161,16 @@ def test_script_rejects_unaffordable_price(tmp_path):
     )
     assert result.returncode == 2
     assert "policy ceiling" in result.stderr
+
+
+def test_provisioned_licensechain_product_ids_are_complete_and_unique():
+    import uuid
+
+    ids = []
+    for key, options in PREMIUM_PRODUCT_IDS.items():
+        assert set(options) == set(BILLING_OPTIONS), key
+        for product_id in options.values():
+            assert str(uuid.UUID(product_id)) == product_id
+            ids.append(product_id)
+    assert len(set(ids)) == len(ids)
+    assert "bundle" in PREMIUM_PRODUCT_IDS
