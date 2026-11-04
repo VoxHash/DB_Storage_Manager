@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 import uuid
 
-from .manager import BackupManager
+from .manager import ENCRYPTED_ADAPTERS, BackupManager
 from .base import BackupAdapter
 from ..db.base import ConnectionConfig
 from ..config import SCHEDULED_BACKUPS_FILE, USER_DATA_DIR
@@ -335,12 +335,12 @@ class ScheduledBackupManager:
                 "adapterConfig": cfg,
                 "compression": cfg.get("compression") or "none",
                 "encryption": bool(
-                    cfg.get("encryption", item.adapter_type == "protondrive")
+                    cfg.get("encryption", item.adapter_type in ENCRYPTED_ADAPTERS)
                 ),
                 "encryptionKey": passphrase,
             }
-            # Opsec: Proton Drive scheduled jobs always encrypt before upload.
-            if item.adapter_type == "protondrive":
+            # Opsec: off-machine destinations always encrypt before upload.
+            if item.adapter_type in ENCRYPTED_ADAPTERS:
                 options["encryption"] = True
             if options["encryption"] and not passphrase:
                 logger.error(

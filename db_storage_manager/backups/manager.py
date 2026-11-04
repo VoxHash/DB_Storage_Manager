@@ -8,6 +8,8 @@ from pathlib import Path
 import tempfile
 import threading
 
+from ..audit import write_audit
+
 from .base import BackupAdapter, BackupInfo, BackupOptions
 from ..db.factory import DatabaseConnectionFactory
 from ..db.base import ConnectionConfig
@@ -36,6 +38,41 @@ def backup_path_from_result(backup_result: Union[str, Path, Dict[str, Any]]) -> 
         "create_backup must return a path str or dict with 'path', "
         f"got {type(backup_result).__name__}"
     )
+
+
+# Destinations that store backups off this machine. Their ``restore_backup``
+# returns the stored object (still encrypted / compressed); Local returns an
+# unpacked payload. Cloud destinations must always be encrypted.
+REMOTE_DESTINATIONS = {
+    "protondrive": "protondrive",
+    "proton_drive": "protondrive",
+    "proton": "protondrive",
+    "s3": "s3",
+    "googledrive": "googledrive",
+}
+ENCRYPTED_ADAPTERS = frozenset({"protondrive", "s3", "googledrive"})
+
+# Engine names that identify the same dump format.
+_DB_TYPE_FAMILY = {
+    "postgresql": "postgres",
+    "postgres": "postgres",
+    "supabase": "postgres",
+    "mysql": "mysql",
+    "mariadb": "mysql",
+    "mssql": "sqlserver",
+    "sqlserver": "sqlserver",
+    "mongodb": "mongodb",
+    "mongo": "mongodb",
+}
+
+
+def _db_family(name: Any) -> str:
+    key = str(name or "").strip().lower()
+    return _DB_TYPE_FAMILY.get(key, key)
+
+
+class RestoreRefused(RuntimeError):
+    """A full restore was stopped before any change was made to the target."""
 
 
 class BackupManager:
@@ -71,10 +108,15 @@ class BackupManager:
             adapter = LocalBackupAdapter()
             self.register_adapter("local", adapter)
             return adapter
-        elif adapter_type == "s3" and config:
-            from .s3 import S3BackupAdapter
+        elif adapter_type == "s3":
+            from .s3 import S3BackupAdapter, resolve_s3_config
 
-            adapter = S3BackupAdapter(config)
+            resolved = dict(config or {})
+            if not resolved.get("bucket"):
+                resolved = {**resolve_s3_config(), **resolved}
+            if not resolved.get("bucket"):
+                return None
+            adapter = S3BackupAdapter(resolved)
             self.register_adapter("s3", adapter)
             return adapter
         elif adapter_type == "googledrive" and config:
@@ -126,6 +168,10 @@ class BackupManager:
             )
             temp_backup.parent.mkdir(parents=True, exist_ok=True)
 
+            # Live relation size at backup time (best effort): lets the UI show
+            # live size vs dump size vs stored size for the same moment.
+            source_storage_bytes = await self._live_storage_bytes(db_connection)
+
             # Create backup using database connection
             backup_result = await db_connection.create_backup(str(temp_backup))
             dump_path = backup_path_from_result(backup_result)
@@ -139,7 +185,11 @@ class BackupManager:
                 compression=options.get("compression") if options else None,
                 encryption=options.get("encryption", False) if options else False,
                 encryptionKey=options.get("encryptionKey") if options else None,
-                metadata=connection_config.__dict__,
+                metadata=(
+                    {"sourceStorageBytes": source_storage_bytes}
+                    if source_storage_bytes is not None
+                    else {}
+                ),
                 adapterType=options.get("adapterType") if options else None,
                 adapterConfig=options.get("adapterConfig") if options else None,
             )
@@ -155,6 +205,52 @@ class BackupManager:
         finally:
             await DatabaseConnectionFactory.release(db_connection)
 
+    @staticmethod
+    async def _live_storage_bytes(db_connection: Any) -> Optional[int]:
+        """Total relation size reported by ``analyze_storage`` (None if unsupported)."""
+        try:
+            analysis = await db_connection.analyze_storage()
+            value = analysis.get("totalSize")
+            return int(value) if value is not None else None
+        except Exception:  # noqa: BLE001 - size context is optional
+            rollback = getattr(
+                getattr(db_connection, "connection", None), "rollback", None
+            )
+            if callable(rollback):
+                try:
+                    rollback()
+                except Exception:  # noqa: BLE001
+                    pass
+            return None
+
+    async def _materialize_payload(
+        self,
+        adapter: BackupAdapter,
+        backup_info: BackupInfo,
+        encryption_key: Optional[str],
+    ) -> str:
+        """Return a local, decrypted + decompressed dump path for ``backup_info``.
+
+        Local returns an unpacked payload itself; remote adapters return the
+        stored object, which is unpacked (and the download removed) here.
+        """
+        from .local import LocalBackupAdapter
+        from .pipeline import unpack_payload
+
+        stored = await adapter.restore_backup(
+            backup_info, encryption_key=encryption_key
+        )
+        if isinstance(adapter, LocalBackupAdapter):
+            return stored
+        raw = Path(stored)
+        try:
+            passphrase = encryption_key or (backup_info.metadata or {}).get(
+                "encryptionKey"
+            )
+            return str(unpack_payload(raw, backup_info.metadata or {}, passphrase))
+        finally:
+            raw.unlink(missing_ok=True)
+
     async def restore_backup(
         self,
         adapter: BackupAdapter,
@@ -162,25 +258,204 @@ class BackupManager:
         connection_config: ConnectionConfig,
         encryption_key: Optional[str] = None,
     ) -> None:
-        """Restore a backup to a database connection"""
-        # Download backup from adapter if needed
-        local_backup_path = await adapter.restore_backup(
-            backup_info, encryption_key=encryption_key
-        )
+        """Low-level restore of ``backup_info`` into a database connection.
 
+        This performs no safety checks; the GUI / API use :meth:`full_restore`,
+        which adds the experimental gate, RBAC, confirmation and audit trail.
+        """
+        payload = await self._materialize_payload(
+            adapter, backup_info, encryption_key
+        )
+        await self._apply_payload(payload, backup_info, connection_config)
+
+    async def _apply_payload(
+        self,
+        payload: str,
+        backup_info: BackupInfo,
+        connection_config: ConnectionConfig,
+    ) -> None:
+        """Restore the unpacked ``payload`` into the target, then remove temp files."""
         try:
             effective = self._effective_connection_config(connection_config)
             db_connection = await DatabaseConnectionFactory.acquire(effective)
-
             try:
-                # Restore backup
-                await db_connection.restore_backup(local_backup_path)
+                await db_connection.restore_backup(payload)
             finally:
                 await DatabaseConnectionFactory.release(db_connection)
         finally:
-            # Clean up temporary file if it was downloaded
-            if local_backup_path != backup_info.path:
-                Path(local_backup_path).unlink(missing_ok=True)
+            # The materialized payload is always a private temp file, except
+            # when a Local adapter hands back the stored (plain, uncompressed)
+            # file itself.
+            if payload != backup_info.path:
+                Path(payload).unlink(missing_ok=True)
+
+    @staticmethod
+    def restore_confirmation_phrase(connection_config: ConnectionConfig) -> str:
+        """Text the operator must type to authorise a restore into this target."""
+        database = str(connection_config.database or "").strip()
+        if "/" in database or "\\" in database:
+            # File-based engines (SQLite): the file name, not a long absolute path.
+            database = Path(database.replace("\\", "/")).name
+        return database or str(connection_config.name)
+
+    async def full_restore(
+        self,
+        adapter: BackupAdapter,
+        backup_info: BackupInfo,
+        connection_config: ConnectionConfig,
+        *,
+        confirmation: str,
+        encryption_key: Optional[str] = None,
+        safety_backup_dir: Optional[Path] = None,
+        safety_passphrase: Optional[str] = None,
+        on_stage: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Experimental, destructive restore into ``connection_config``.
+
+        Order (nothing touches the target before step 5):
+
+        1. experimental gate (``DSM_EXPERIMENTAL`` / Settings) and RBAC
+           ``backups:restore``;
+        2. typed confirmation must equal the target database name;
+        3. engine of the backup must match the target engine;
+        4. pre-flight: SHA-256, decrypt / decompress with the passphrase,
+           SQLite integrity check (dry run) - fails here on a wrong passphrase;
+        5. optional encrypted *safety backup* of the current target;
+        6. restore through the engine driver.
+
+        Every outcome is written to the audit log (no secrets).
+        """
+        from ..experimental import (
+            ExperimentalDisabledError,
+            require_restore_enabled,
+        )
+        from ..security.auth import PermissionDenied, get_auth_manager
+
+        def stage(name: str) -> None:
+            if on_stage:
+                on_stage(name)
+
+        audit_base = {
+            "backupId": backup_info.id,
+            "backupName": backup_info.name,
+            "targetConnectionId": connection_config.id,
+            "targetName": connection_config.name,
+            "targetDatabase": connection_config.database,
+            "adapter": type(adapter).__name__,
+        }
+        current_stage = "gate"
+        remote_payload: Optional[str] = None
+        try:
+            stage("gate")
+            require_restore_enabled()
+            get_auth_manager().require("backups:restore")
+
+            if (confirmation or "").strip() != self.restore_confirmation_phrase(
+                connection_config
+            ):
+                raise RestoreRefused(
+                    "Confirmation text does not match the target database name"
+                )
+
+            backup_family = _db_family(
+                (backup_info.metadata or {}).get("databaseType")
+            )
+            if backup_family and backup_family != _db_family(
+                connection_config.type
+            ):
+                raise RestoreRefused(
+                    f"Backup was taken from a {backup_family} database; the "
+                    f"target is {connection_config.type}"
+                )
+
+            current_stage = "preflight"
+            stage("preflight")
+            metadata = backup_info.metadata or {}
+            passphrase = encryption_key or metadata.get("encryptionKey")
+            if self.is_remote_backup(backup_info):
+                verify = self.verify_backup(backup_info)
+                if not verify.get("ok"):
+                    raise RestoreRefused(
+                        "Pre-flight checksum failed: "
+                        f"{verify.get('error') or verify.get('status')}"
+                    )
+                # Download once and unpack now: a wrong passphrase or corrupt
+                # archive must fail here, before a safety backup or any write.
+                try:
+                    remote_payload = await self._materialize_payload(
+                        adapter, backup_info, passphrase
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    raise RestoreRefused(
+                        f"Pre-flight could not unpack the backup: {exc}"
+                    ) from exc
+            else:
+                dry = self.dry_run_restore(backup_info, encryption_key=passphrase)
+                if not dry.get("ok"):
+                    raise RestoreRefused(
+                        f"Pre-flight dry run failed at {dry.get('stage')}: "
+                        f"{dry.get('error')}"
+                    )
+
+            safety_name: Optional[str] = None
+            if safety_backup_dir is not None:
+                current_stage = "safety_backup"
+                stage("safety_backup")
+                if not safety_passphrase:
+                    raise RestoreRefused(
+                        "A safety backup needs its own encryption passphrase"
+                    )
+                from .local import LocalBackupAdapter
+
+                safety = await self.create_backup(
+                    LocalBackupAdapter(base_path=Path(safety_backup_dir)),
+                    connection_config,
+                    {
+                        "compression": "zstd",
+                        "encryption": True,
+                        "encryptionKey": safety_passphrase,
+                        "adapterType": "local",
+                    },
+                )
+                safety_name = safety.name
+
+            current_stage = "restore"
+            stage("restore")
+            if remote_payload is not None:
+                payload_to_apply, remote_payload = remote_payload, None
+                await self._apply_payload(
+                    payload_to_apply, backup_info, connection_config
+                )
+            else:
+                await self.restore_backup(
+                    adapter, backup_info, connection_config, passphrase
+                )
+        except Exception as exc:
+            if remote_payload is not None:
+                Path(remote_payload).unlink(missing_ok=True)
+            write_audit(
+                "backup.restore",
+                "refused"
+                if isinstance(
+                    exc,
+                    (RestoreRefused, ExperimentalDisabledError, PermissionDenied),
+                )
+                else "failed",
+                stage=current_stage,
+                error=str(exc),
+                **audit_base,
+            )
+            raise
+
+        write_audit(
+            "backup.restore",
+            "completed",
+            stage="restore",
+            safetyBackup=safety_name,
+            **audit_base,
+        )
+        stage("done")
+        return {"ok": True, "safetyBackup": safety_name}
 
     async def create_batch_backups(
         self,
@@ -267,20 +542,26 @@ class BackupManager:
         }
 
     @staticmethod
-    def is_remote_backup(backup_info: BackupInfo) -> bool:
-        """True when the listing came from a non-local destination (Proton Drive)."""
+    def backup_destination(backup_info: BackupInfo) -> Optional[str]:
+        """Canonical remote destination ("protondrive" / "s3" / ...) or None."""
         destination = str((backup_info.metadata or {}).get("destination") or "")
-        return destination.lower() in ("protondrive", "proton_drive", "proton")
+        return REMOTE_DESTINATIONS.get(destination.lower())
+
+    @classmethod
+    def is_remote_backup(cls, backup_info: BackupInfo) -> bool:
+        """True when the listing came from a non-local destination."""
+        return cls.backup_destination(backup_info) is not None
 
     def verify_backup(self, backup_info: BackupInfo) -> Dict[str, Any]:
-        """Adapter-aware SHA-256 verification (local file or Proton Drive object).
+        """Adapter-aware SHA-256 verification (local file or remote object).
 
-        ``BackupInfo.path`` for Proton rows is an rclone remote target such as
-        ``protondrive:folder/name`` - never a local filesystem path - so it must
-        not be checked with ``Path.exists``.
+        ``BackupInfo.path`` for remote rows is an rclone target or object key -
+        never a local filesystem path - so it must not be checked with
+        ``Path.exists``.
         """
-        if self.is_remote_backup(backup_info):
-            adapter = self.get_adapter("protondrive")
+        destination = self.backup_destination(backup_info)
+        if destination is not None:
+            adapter = self.get_adapter(destination)
             verify = getattr(adapter, "verify_remote_checksum", None)
             if verify is None:
                 return {
@@ -290,7 +571,7 @@ class BackupManager:
                     "path": backup_info.path,
                     "expected": (backup_info.metadata or {}).get("sha256"),
                     "actual": None,
-                    "error": "Proton Drive adapter unavailable",
+                    "error": f"{destination} adapter unavailable",
                 }
             result = dict(verify(backup_info))
         else:

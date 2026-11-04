@@ -110,6 +110,15 @@ class LocalBackupAdapter(BackupAdapter):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         safe_name = sanitize_backup_basename(options.connectionName)
         original_filename = f"{safe_name}_{timestamp}.backup"
+        # Two backups of one connection inside the same second (e.g. a safety
+        # backup right before a restore) must never overwrite each other.
+        taken = 1
+        while any(
+            (self.base_path / f"{original_filename}{ext}").exists()
+            for ext in ("", ".gz", ".zst", ".enc", ".gz.enc", ".zst.enc")
+        ):
+            taken += 1
+            original_filename = f"{safe_name}_{timestamp}_{taken}.backup"
         final_filename = original_filename
 
         source_path = Path(options.backupPath)
@@ -176,7 +185,13 @@ class LocalBackupAdapter(BackupAdapter):
             "connectionName": options.connectionName,
             "sha256": checksum,
             "createdAt": created_at.isoformat(),
+            # Size of the raw dump before compression / encryption (the stored
+            # file size differs from the live database size - see size_notes).
+            "dumpSize": source_path.stat().st_size,
         }
+        live_size = (options.metadata or {}).get("sourceStorageBytes")
+        if isinstance(live_size, int):
+            metadata["sourceStorageBytes"] = live_size
         # Never persist the passphrase
         self._write_meta(processed_path, metadata)
 
@@ -185,8 +200,12 @@ class LocalBackupAdapter(BackupAdapter):
             "encryption": encrypted,
             "databaseType": options.databaseType,
             "connectionId": options.connectionId,
+            "connectionName": options.connectionName,
             "sha256": checksum,
+            "dumpSize": metadata["dumpSize"],
         }
+        if "sourceStorageBytes" in metadata:
+            info_meta["sourceStorageBytes"] = metadata["sourceStorageBytes"]
         if encrypted:
             info_meta["encryptionScheme"] = ENCRYPTION_SCHEME
 
@@ -288,6 +307,8 @@ class LocalBackupAdapter(BackupAdapter):
                 "connectionName",
                 "sha256",
                 "encryptionScheme",
+                "dumpSize",
+                "sourceStorageBytes",
             ):
                 if key in stored and stored[key] is not None:
                     metadata[key] = stored[key]

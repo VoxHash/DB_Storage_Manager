@@ -805,7 +805,11 @@ class ProtonDriveBackupAdapter(BackupAdapter):
             "destination": "protondrive",
             "remote": self.remote,
             "remotePath": self.remote_folder,
+            "dumpSize": source_path.stat().st_size,
         }
+        live_size = (options.metadata or {}).get("sourceStorageBytes")
+        if isinstance(live_size, int):
+            metadata["sourceStorageBytes"] = live_size
         return current, metadata, temps
 
     def _cleanup_temps(self, temps: List[Path]) -> None:
@@ -860,7 +864,11 @@ class ProtonDriveBackupAdapter(BackupAdapter):
                 "connectionId": options.connectionId,
                 "sha256": metadata["sha256"],
                 "destination": "protondrive",
+                "connectionName": options.connectionName,
+                "dumpSize": metadata["dumpSize"],
             }
+            if "sourceStorageBytes" in metadata:
+                info_meta["sourceStorageBytes"] = metadata["sourceStorageBytes"]
             if metadata["encryption"]:
                 info_meta["encryptionScheme"] = ENCRYPTION_SCHEME
 
@@ -967,6 +975,8 @@ class ProtonDriveBackupAdapter(BackupAdapter):
                     "connectionName",
                     "sha256",
                     "encryptionScheme",
+                    "dumpSize",
+                    "sourceStorageBytes",
                 ):
                     if key in stored and stored[key] is not None:
                         metadata[key] = stored[key]

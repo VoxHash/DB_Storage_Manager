@@ -31,6 +31,8 @@ SCHEDULED_BACKUPS_FILE = USER_DATA_DIR / "scheduled-backups.json"
 # Fernet-encrypted map of schedule id -> DSMENC1 passphrase (never in the JSON schedule file)
 SCHEDULED_BACKUP_SECRETS_FILE = USER_DATA_DIR / "scheduled-backup-secrets.enc"
 BACKUP_DIR = USER_DATA_DIR / "backups"
+# Append-only JSON-lines audit trail for destructive / security-relevant actions
+AUDIT_LOG_FILE = USER_DATA_DIR / "audit.log"
 PLUGINS_DIR = USER_DATA_DIR / "plugins"
 MASTER_KEY_FILE = USER_DATA_DIR / ".master-key"
 
@@ -49,6 +51,8 @@ DEFAULT_ALERT_THRESHOLDS = {
 DEFAULT_ALERT_CHANNELS = {
     "desktop": True,
     "in_app": True,
+    # SMTP mail; off until Settings > Notifications has a working server
+    "email": False,
 }
 
 # Dashboard customization (watched summary metrics + table columns)
@@ -101,6 +105,45 @@ DEFAULT_PROTON_DRIVE = {
     # .env.protondrive.local or SecureStore settings["proton_drive"]
 }
 
+# Experimental features (default OFF on stable). ``DSM_EXPERIMENTAL=1`` forces them on.
+DEFAULT_EXPERIMENTAL = {
+    # Full Restore Backup (destructive: replaces objects in the target database)
+    "restore": False,
+}
+
+# S3-compatible backup destination (AWS S3, MinIO, Cloudflare R2, Backblaze B2, ...).
+# Secrets (access_key_id / secret_access_key) live in SecureStore or the AWS
+# credential chain (env / profile / instance role) - never in this default.
+DEFAULT_S3_BACKUP = {
+    "bucket": "",
+    "prefix": "db-storage-manager-backups/",
+    "region": "us-east-1",
+    "endpoint": "",
+}
+
+# SMTP alert channel for Monitoring. The password is stored encrypted in
+# SecureStore (or read from DSM_SMTP_PASSWORD); nothing here is a secret.
+DEFAULT_EMAIL_ALERTS = {
+    "host": "",
+    "port": 587,
+    # "starttls" (587), "ssl" (465) or "none" (only for loopback / trusted relays)
+    "security": "starttls",
+    "username": "",
+    "sender": "",
+    "recipients": [],
+    # Lowest severity that sends mail: "warning" or "critical"
+    "min_severity": "critical",
+    # Same alert title/source is mailed at most once per cooldown window
+    "cooldown_minutes": 30,
+}
+
+# Monitoring preferences (non-secret)
+DEFAULT_MONITORING_PREFS = {
+    # Connection id to start watching automatically when the app opens, so an
+    # on-call / monitor user gets alerts without clicking Start.
+    "autostart_connection_id": None,
+}
+
 # Cloud-managed databases (RDS / Cloud SQL / Azure SQL) — non-secret defaults only
 DEFAULT_CLOUD_MANAGED = {
     "aws": {
@@ -137,6 +180,10 @@ DEFAULT_SETTINGS = {
     "companion": copy.deepcopy(DEFAULT_COMPANION),
     "proton_drive": copy.deepcopy(DEFAULT_PROTON_DRIVE),
     "cloud_managed": copy.deepcopy(DEFAULT_CLOUD_MANAGED),
+    "experimental": copy.deepcopy(DEFAULT_EXPERIMENTAL),
+    "s3_backup": copy.deepcopy(DEFAULT_S3_BACKUP),
+    "email_alerts": copy.deepcopy(DEFAULT_EMAIL_ALERTS),
+    "monitoring": copy.deepcopy(DEFAULT_MONITORING_PREFS),
 }
 
 # Database connection defaults

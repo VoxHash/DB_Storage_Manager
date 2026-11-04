@@ -63,6 +63,7 @@ setup(
         "dev": [
             "pytest>=7.4.0",
             "pytest-qt>=4.2.0",
+            "moto[server,s3]>=5.0.0",
             "black>=23.11.0",
             "flake8>=6.1.0",
             "mypy>=1.7.0",

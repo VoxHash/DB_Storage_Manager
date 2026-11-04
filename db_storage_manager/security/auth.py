@@ -61,6 +61,10 @@ class UserRole(Enum):
     ADMIN = "admin"
     USER = "user"
     VIEWER = "viewer"
+    # On-call / NOC operator: watches live metrics, acknowledges and routes
+    # alerts, reads backups - but cannot run SQL, create or restore backups,
+    # or change connections.
+    MONITOR = "monitor"
     GUEST = "guest"
 
 
@@ -132,6 +136,16 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[str]] = {
         PERM_SETTINGS_READ,
         PERM_PLUGINS_READ,
         PERM_MONITORING_READ,
+        PERM_API_READ,
+        PERM_DASHBOARD_READ,
+    },
+    UserRole.MONITOR: {
+        PERM_CONNECTIONS_READ,
+        PERM_BACKUPS_READ,
+        PERM_SETTINGS_READ,
+        PERM_PLUGINS_READ,
+        PERM_MONITORING_READ,
+        PERM_MONITORING_WRITE,
         PERM_API_READ,
         PERM_DASHBOARD_READ,
     },
