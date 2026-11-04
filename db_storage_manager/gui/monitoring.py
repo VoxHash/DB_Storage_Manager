@@ -173,6 +173,9 @@ class MonitoringWidget(QWidget):
         self.setObjectName("glassmorphism")
         self.init_ui()
         self._load_alert_prefs()
+        from ..plugins.events import plugin_change_bus
+
+        plugin_change_bus().changed.connect(self._on_plugin_registry_changed)
         self._reload_plugin_forms()
         self.alert_raised.connect(self._handle_alert)
         apply_glassmorphism(self)
@@ -478,7 +481,7 @@ class MonitoringWidget(QWidget):
         self.conn_email_group = QGroupBox(
             t("monitoring.conn_email_group", default="Connection email alerts")
         )
-        form = QFormLayout(self.conn_email_group)
+        outer = QVBoxLayout(self.conn_email_group)
         self.conn_email_status = QLabel(
             t(
                 "monitoring.conn_email_hint",
@@ -491,7 +494,10 @@ class MonitoringWidget(QWidget):
             )
         )
         self.conn_email_status.setWordWrap(True)
-        form.addRow(self.conn_email_status)
+        outer.addWidget(self.conn_email_status)
+        self.conn_email_body = QWidget()
+        form = QFormLayout(self.conn_email_body)
+        form.setContentsMargins(0, 0, 0, 0)
         self.conn_email_combo = QComboBox()
         self.conn_email_combo.currentIndexChanged.connect(
             lambda _index: self._fill_connection_email()
@@ -576,12 +582,13 @@ class MonitoringWidget(QWidget):
         )
         self.conn_email_save.clicked.connect(self._save_connection_email)
         form.addRow(self.conn_email_save)
+        outer.addWidget(self.conn_email_body)
 
     def _build_multi_watch_group(self, t) -> None:
         self.multi_group = QGroupBox(
             t("monitoring.multi_group", default="Multi-connection monitor")
         )
-        layout = QVBoxLayout(self.multi_group)
+        outer = QVBoxLayout(self.multi_group)
         self.multi_status = QLabel(
             t(
                 "monitoring.multi_hint",
@@ -592,7 +599,10 @@ class MonitoringWidget(QWidget):
             )
         )
         self.multi_status.setWordWrap(True)
-        layout.addWidget(self.multi_status)
+        outer.addWidget(self.multi_status)
+        self.multi_body = QWidget()
+        layout = QVBoxLayout(self.multi_body)
+        layout.setContentsMargins(0, 0, 0, 0)
         self.multi_list = QListWidget()
         self.multi_list.setMaximumHeight(120)
         layout.addWidget(self.multi_list)
@@ -616,13 +626,17 @@ class MonitoringWidget(QWidget):
         self.multi_results.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.multi_results.setMaximumHeight(140)
         layout.addWidget(self.multi_results)
+        outer.addWidget(self.multi_body)
 
     def showEvent(self, event) -> None:  # noqa: N802 - Qt override
         super().showEvent(event)
         from ..monitoring.connection_email import plugin_ready as email_ready
         from ..monitoring.multi_watch import plugin_ready as watch_ready
+        from ..plugins.events import plugin_ui_state
 
         snapshot = (
+            plugin_ui_state("connection-email-alerts"),
+            plugin_ui_state("multi-connection-monitor"),
             email_ready(),
             watch_ready(),
             tuple(str(conn.get("id") or "") for conn in self.connections),
@@ -630,21 +644,92 @@ class MonitoringWidget(QWidget):
         if snapshot != self._plugin_snapshot:
             self._reload_plugin_forms()
         else:
-            self._conn_email_ready = snapshot[0]
-            self._multi_ready = snapshot[1]
+            self._conn_email_ready = snapshot[2]
+            self._multi_ready = snapshot[3]
         self.apply_rbac()
+
+    def _on_plugin_registry_changed(self, _plugin_id: str, _enabled: bool) -> None:
+        """Show or hide plugin sections as soon as Plugins enable/disable runs."""
+        self._reload_plugin_forms()
 
     def _reload_plugin_forms(self) -> None:
         from ..monitoring.connection_email import plugin_ready as email_ready
         from ..monitoring.multi_watch import plugin_ready as watch_ready
+        from ..plugins.events import plugin_gate_reason, plugin_ui_state
 
+        self._conn_email_ready = email_ready()
+        self._multi_ready = watch_ready()
+        email_state = self._plugin_section_state(
+            "connection-email-alerts", self._conn_email_ready
+        )
+        watch_state = self._plugin_section_state(
+            "multi-connection-monitor", self._multi_ready
+        )
         self._plugin_snapshot = (
-            email_ready(),
-            watch_ready(),
+            plugin_ui_state("connection-email-alerts"),
+            plugin_ui_state("multi-connection-monitor"),
+            self._conn_email_ready,
+            self._multi_ready,
             tuple(str(conn.get("id") or "") for conn in self.connections),
         )
-        self._reload_email_combo()
-        self._reload_multi_list()
+        self._set_plugin_section(
+            self.conn_email_group,
+            self.conn_email_body,
+            self.conn_email_status,
+            email_state,
+            plugin_gate_reason("connection-email-alerts")
+            if email_state == "gated"
+            else "",
+        )
+        self._set_plugin_section(
+            self.multi_group,
+            self.multi_body,
+            self.multi_status,
+            watch_state,
+            plugin_gate_reason("multi-connection-monitor")
+            if watch_state == "gated"
+            else "",
+        )
+        if email_state == "shown":
+            self._reload_email_combo()
+        if watch_state == "shown":
+            self._reload_multi_list()
+        self.apply_rbac()
+
+    def _plugin_section_state(self, plugin_id: str, ready: bool) -> str:
+        """Hide a section unless the plugin is enabled and can run.
+
+        ``gated`` is an enabled plugin whose licence blocks it: the title and
+        a ``not_available`` line stay, and the form stays hidden.
+        """
+        from ..plugins.events import plugin_ui_state
+
+        state = plugin_ui_state(plugin_id)
+        if state == "gated":
+            return "gated"
+        if state == "shown" and ready:
+            return "shown"
+        return "hidden"
+
+    def _set_plugin_section(
+        self,
+        group: QGroupBox,
+        body: QWidget,
+        status: QLabel,
+        state: str,
+        gated_text: str,
+    ) -> None:
+        if state == "hidden":
+            group.setVisible(False)
+            return
+        group.setVisible(True)
+        if state == "gated":
+            body.setVisible(False)
+            status.setVisible(True)
+            status.setText(gated_text)
+            return
+        body.setVisible(True)
+        status.setVisible(True)
 
     def _reload_email_combo(self) -> None:
         from ..monitoring.connection_email import plugin_ready
@@ -1315,6 +1400,12 @@ class MonitoringWidget(QWidget):
 
     def shutdown(self) -> None:
         """Stop timers and wait briefly for in-flight polls (window close)."""
+        try:
+            from ..plugins.events import plugin_change_bus
+
+            plugin_change_bus().changed.disconnect(self._on_plugin_registry_changed)
+        except (TypeError, RuntimeError):
+            pass
         self.update_timer.stop()
         self.multi_timer.stop()
         self._jobs.wait_all(3000)

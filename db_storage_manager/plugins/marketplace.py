@@ -237,13 +237,18 @@ class LocalPluginMarketplace:
             raise PluginLicenseError(
                 f"plugin '{plugin_id}' does not require a license", code="free"
             )
-        return self.license_gate.activate(plugin_id, requirement, license_key, email)
+        status = self.license_gate.activate(
+            plugin_id, requirement, license_key, email
+        )
+        self._notify_plugin_changed(plugin_id)
+        return status
 
     def deactivate_license(self, plugin_id: str) -> bool:
         """Forget the stored key; the plugin is unloaded from the live manager."""
         removed = self.license_gate.deactivate(plugin_id)
         if self.manager.get_plugin(plugin_id) is not None:
             self.manager.set_enabled(plugin_id, False)
+        self._notify_plugin_changed(plugin_id)
         return removed
 
     def get_enabled_map(self) -> Dict[str, bool]:
@@ -272,6 +277,17 @@ class LocalPluginMarketplace:
         settings["plugins"] = prefs
         store.set_settings(settings)
         self.manager.set_enabled(plugin_id, enabled)
+        self._notify_plugin_changed(plugin_id)
+
+    def _notify_plugin_changed(
+        self, plugin_id: str, enabled: Optional[bool] = None
+    ) -> None:
+        """Let open windows show or hide this plugin's UI without a restart."""
+        from .events import notify_plugin_changed
+
+        if enabled is None:
+            enabled = self.is_enabled(plugin_id)
+        notify_plugin_changed(plugin_id, enabled)
 
     def is_enabled(self, plugin_id: str) -> bool:
         enabled = self.get_enabled_map()
@@ -458,6 +474,7 @@ class LocalPluginMarketplace:
         plugin = load_plugin_from_directory(dest)
         plugin.enabled = self.is_enabled(manifest.id)
         self.manager.register_plugin(plugin)
+        self._notify_plugin_changed(manifest.id)
         return self._row_from_entry(entry)
 
     def install_from_url(
@@ -561,6 +578,7 @@ class LocalPluginMarketplace:
         if self.manager.get_plugin(plugin_id) is not None:
             self.manager.unregister_plugin(plugin_id)
         self._forget_enabled_pref(plugin_id)
+        self._notify_plugin_changed(plugin_id, enabled=False)
         return True
 
     def _forget_enabled_pref(self, plugin_id: str) -> None:

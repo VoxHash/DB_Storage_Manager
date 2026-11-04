@@ -88,12 +88,21 @@ class PluginRunDialog(QDialog):
         self.retention_edit: Optional[QLineEdit] = None
         self.message_edit: Optional[QLineEdit] = None
         self._build()
+        from ..plugins.events import plugin_change_bus
+
+        plugin_change_bus().changed.connect(self._on_plugin_registry_changed)
+        self._sync_plugin_fields()
         apply_glassmorphism(self)
 
     def _build(self) -> None:
         t = self.i18n.translate
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        self._gate = QLabel("")
+        self._gate.setWordWrap(True)
+        self._gate.setVisible(False)
+        layout.addWidget(self._gate)
+        self._fields = QWidget()
+        form = QFormLayout(self._fields)
         spec = self._spec
         if spec.discover_cloud:
             note = QLabel(
@@ -203,7 +212,7 @@ class PluginRunDialog(QDialog):
                 t("plugins.run_message", default="Message"),
                 self.message_edit,
             )
-        layout.addLayout(form)
+        layout.addWidget(self._fields)
 
         actions = QHBoxLayout()
         self.run_btn = QPushButton(t("plugins.run", default="Run…"))
@@ -219,6 +228,33 @@ class PluginRunDialog(QDialog):
         self.result_box.setReadOnly(True)
         self.result_box.setMinimumHeight(180)
         layout.addWidget(self.result_box, 1)
+
+    def _on_plugin_registry_changed(
+        self, plugin_id: str, _enabled: bool
+    ) -> None:
+        if plugin_id != self.plugin_id:
+            return
+        self._sync_plugin_fields()
+
+    def _sync_plugin_fields(self) -> None:
+        """Hide the form unless this plugin is enabled and its licence allows it."""
+        from ..plugins.events import plugin_gate_reason, plugin_ui_state
+
+        state = plugin_ui_state(self.plugin_id, self._marketplace)
+        if state == "shown":
+            self._gate.setVisible(False)
+            self._fields.setVisible(True)
+            self.run_btn.setVisible(True)
+            return
+        self._fields.setVisible(False)
+        self.run_btn.setVisible(False)
+        if state == "gated":
+            self._gate.setText(
+                plugin_gate_reason(self.plugin_id, self._marketplace)
+            )
+            self._gate.setVisible(True)
+            return
+        self._gate.setVisible(False)
 
     def _slot_label(self, kwarg: str) -> str:
         key, default = _SLOT_LABELS.get(
@@ -362,6 +398,14 @@ class PluginRunDialog(QDialog):
         if self._jobs.is_busy("plugin-run"):
             event.ignore()
             return
+        try:
+            from ..plugins.events import plugin_change_bus
+
+            plugin_change_bus().changed.disconnect(
+                self._on_plugin_registry_changed
+            )
+        except (TypeError, RuntimeError):
+            pass
         super().closeEvent(event)
 
     def run_plan(self) -> RunPlan:

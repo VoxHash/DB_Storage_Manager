@@ -68,6 +68,10 @@ class CloudDiscoverDialog(QDialog):
         self._init_ui()
         apply_glassmorphism(self)
         self._refresh_status()
+        from ..plugins.events import plugin_change_bus
+
+        plugin_change_bus().changed.connect(self._on_plugin_registry_changed)
+        self._sync_premium_plugin_ui()
 
     def _init_ui(self) -> None:
         t = self.i18n.translate
@@ -76,6 +80,10 @@ class CloudDiscoverDialog(QDialog):
         self.status_label = QLabel("")
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+        self.premium_note = QLabel("")
+        self.premium_note.setWordWrap(True)
+        self.premium_note.setVisible(False)
+        layout.addWidget(self.premium_note)
 
         btn_row = QHBoxLayout()
         self.refresh_btn = QPushButton(
@@ -215,20 +223,37 @@ class CloudDiscoverDialog(QDialog):
                 )
             )
 
+    def _on_plugin_registry_changed(self, plugin_id: str, _enabled: bool) -> None:
+        if plugin_id != "multi-cloud-discovery":
+            return
+        self._sync_premium_plugin_ui()
+
+    def _sync_premium_plugin_ui(self) -> None:
+        """Show a licence line only when multi-cloud discovery is enabled but gated.
+
+        A disabled or missing plugin contributes no row and no note.
+        """
+        from ..plugins.events import plugin_gate_reason, plugin_ui_state
+
+        if plugin_ui_state("multi-cloud-discovery") == "gated":
+            self.premium_note.setText(
+                plugin_gate_reason("multi-cloud-discovery")
+            )
+            self.premium_note.setVisible(True)
+            return
+        self.premium_note.clear()
+        self.premium_note.setVisible(False)
+
     def _premium_discovery(self):
         """DigitalOcean, Supabase, Neon, and Aiven when that plugin is licensed.
 
-        The plugin is not imported until it is installed and the licence allows
-        it. A missing plugin only adds a status line.
+        The plugin is not imported until it is installed, enabled, and the
+        licence allows it. A missing or disabled plugin adds nothing.
         """
-        t = self.i18n.translate
-        note = t(
-            "connections.premium_cloud",
-            default=(
-                "DigitalOcean, Supabase, Neon, and Aiven are discovered by the "
-                "multi-cloud-discovery plugin once it is installed and licensed."
-            ),
-        )
+        from ..plugins.events import plugin_ui_state
+
+        if plugin_ui_state("multi-cloud-discovery") != "shown":
+            return [], ""
         try:
             from pathlib import Path
 
@@ -244,13 +269,13 @@ class CloudDiscoverDialog(QDialog):
                 ),
                 None,
             )
-            if entry is None:
-                return [], note
+            if entry is None or not market.is_enabled("multi-cloud-discovery"):
+                return [], ""
             market.require_license("multi-cloud-discovery", network=False)
             plugin = load_plugin_from_directory(Path(entry["path"]))
             report = plugin.execute()
         except Exception:
-            return [], note
+            return [], ""
         databases = report.get("databases") if isinstance(report, dict) else None
         if not isinstance(databases, list):
             return [], ""
