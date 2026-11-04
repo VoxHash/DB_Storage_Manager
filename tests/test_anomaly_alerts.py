@@ -1,5 +1,7 @@
 """Local sample history and the anomaly rules."""
 
+import os
+
 from db_storage_manager.monitoring.alerts import AlertSeverity
 from db_storage_manager.monitoring.anomaly import (
     detect_anomalies,
@@ -73,7 +75,8 @@ def test_samples_stay_in_the_given_directory(tmp_path):
     stored = list(tmp_path.glob("*.json"))
     assert len(stored) == 1
     assert ".." not in stored[0].name
-    assert stored[0].stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert stored[0].stat().st_mode & 0o777 == 0o600
 
 
 def test_monitor_emits_anomaly_from_local_history(tmp_path, monkeypatch):
