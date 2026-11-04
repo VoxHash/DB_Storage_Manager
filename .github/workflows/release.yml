@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - 'v*'
+  # Rebuild one platform and attach it to an existing tag. Does not move the tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to attach artifacts to (for example v1.0.8)
+        required: true
+        type: string
 
 jobs:
   build:
@@ -11,12 +18,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RELEASE_TAG: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
     strategy:
       # One hosted runner stall (macOS capacity) must not cancel the other OS builds.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Manual runs rebuild macOS only so Linux and Windows release assets stay as they are.
+        os: ${{ github.event_name == 'workflow_dispatch' && fromJSON('["macos-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macos-latest"]') }}
         python-version: ["3.12"]
 
     steps:
@@ -65,26 +73,46 @@ jobs:
       - name: Build macOS app bundle
         if: matrix.os == 'macos-latest'
         run: |
-          pyinstaller --clean --noconfirm --windowed --name "DB Storage Manager" --osx-bundle-identifier com.voxhash.db-storage-manager pyinstaller.spec || {
-            pyinstaller --clean --noconfirm --name "DB_Storage_Manager" --onefile db_storage_manager/main.py || echo "macOS build attempted"
-          }
+          set -euo pipefail
+          case "${RELEASE_TAG}" in
+            v[0-9]*) ;;
+            *) echo "RELEASE_TAG must be a version tag such as v1.0.8 (got '${RELEASE_TAG}')" >&2; exit 1 ;;
+          esac
+          ICON_DIR="db_storage_manager/resources/icons"
+          ICONSET="${RUNNER_TEMP}/db-storage-manager.iconset"
+          mkdir -p "${ICONSET}"
+          cp "${ICON_DIR}/db-storage-manager-16.png" "${ICONSET}/icon_16x16.png"
+          cp "${ICON_DIR}/db-storage-manager-32.png" "${ICONSET}/icon_16x16@2x.png"
+          cp "${ICON_DIR}/db-storage-manager-32.png" "${ICONSET}/icon_32x32.png"
+          cp "${ICON_DIR}/db-storage-manager-64.png" "${ICONSET}/icon_32x32@2x.png"
+          cp "${ICON_DIR}/db-storage-manager-128.png" "${ICONSET}/icon_128x128.png"
+          cp "${ICON_DIR}/db-storage-manager-256.png" "${ICONSET}/icon_128x128@2x.png"
+          cp "${ICON_DIR}/db-storage-manager-256.png" "${ICONSET}/icon_256x256.png"
+          cp "${ICON_DIR}/db-storage-manager-512.png" "${ICONSET}/icon_256x256@2x.png"
+          cp "${ICON_DIR}/db-storage-manager-512.png" "${ICONSET}/icon_512x512.png"
+          iconutil -c icns "${ICONSET}" -o "${ICON_DIR}/db-storage-manager.icns"
+          # Makespec flags (--windowed, --name, --osx-bundle-identifier) are rejected
+          # beside a .spec file. Bundle id, windowed mode, and the .app name live in pyinstaller.spec.
+          pyinstaller --clean --noconfirm pyinstaller.spec
+          test -d "dist/DB Storage Manager.app/Contents/MacOS"
+          test -f "dist/DB Storage Manager.app/Contents/Info.plist"
           mkdir -p release
-          if [ -d "dist/DB Storage Manager.app" ]; then
-            cp -r "dist/DB Storage Manager.app" release/ || echo "App bundle copied"
-          elif [ -f "dist/DB_Storage_Manager" ]; then
-            cp dist/DB_Storage_Manager release/DB_Storage_Manager-${RELEASE_TAG} || echo "macOS executable copied"
-          fi
+          rm -rf "release/DB Storage Manager.app"
+          cp -R "dist/DB Storage Manager.app" "release/"
 
       - name: Create macOS DMG
         if: matrix.os == 'macos-latest'
         run: |
-          if [ -d "release/DB Storage Manager.app" ]; then
-            hdiutil create -volname "DB Storage Manager" -srcfolder "release/DB Storage Manager.app" -ov -format UDZO release/DB_Storage_Manager-${RELEASE_TAG}.dmg || echo "DMG creation attempted"
-          elif [ -f "release/DB_Storage_Manager" ]; then
-            mkdir -p "release/DB Storage Manager.app/Contents/MacOS"
-            cp release/DB_Storage_Manager "release/DB Storage Manager.app/Contents/MacOS/DB Storage Manager"
-            hdiutil create -volname "DB Storage Manager" -srcfolder "release/DB Storage Manager.app" -ov -format UDZO release/DB_Storage_Manager-${RELEASE_TAG}.dmg || echo "DMG creation attempted"
-          fi
+          set -euo pipefail
+          test -d "release/DB Storage Manager.app"
+          # Name matches the publish glob DB_Storage_Manager-*.dmg
+          hdiutil create \
+            -volname "DB Storage Manager" \
+            -srcfolder "release/DB Storage Manager.app" \
+            -ov \
+            -format UDZO \
+            "release/DB_Storage_Manager-${RELEASE_TAG}.dmg"
+          test -s "release/DB_Storage_Manager-${RELEASE_TAG}.dmg"
 
       - name: Build Linux AppImage
         if: matrix.os == 'ubuntu-latest'
@@ -130,6 +158,7 @@ jobs:
           FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
       - name: Create Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -137,10 +166,32 @@ jobs:
             dist/dist-ubuntu-latest/dist/*.tar.gz
             dist/dist-ubuntu-latest/release/*.AppImage
             dist/dist-windows-latest/release/*.exe
-            dist/dist-macos-latest/release/DB_Storage_Manager-*
+            dist/dist-macos-latest/release/DB_Storage_Manager-*.dmg
           fail_on_unmatched_files: false
           generate_release_notes: false
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Attach macOS DMG to existing release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "${RELEASE_TAG}" in
+            v[0-9]*) ;;
+            *) echo "tag must look like v1.0.8 (got '${RELEASE_TAG}')" >&2; exit 1 ;;
+          esac
+          shopt -s nullglob
+          files=(dist/dist-macos-latest/release/DB_Storage_Manager-*.dmg)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No macOS DMG found to upload" >&2
+            exit 1
+          fi
+          # Adds or replaces only these DMGs. Other release assets are left in place.
+          gh release upload "${RELEASE_TAG}" "${files[@]}" --repo "${GITHUB_REPOSITORY}" --clobber
+          printf 'Uploaded:\n'
+          printf '  %s\n' "${files[@]}"
