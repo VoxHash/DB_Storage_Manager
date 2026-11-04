@@ -75,6 +75,7 @@ class PluginsWidget(QWidget):
         self.get_license_btn.setEnabled(auth.has_permission("plugins:read"))
         self.sponsor_btn.setEnabled(auth.has_permission("plugins:read"))
         self.refresh_btn.setEnabled(auth.has_permission("plugins:read"))
+        self.run_btn.setEnabled(auth.has_permission("plugins:read"))
 
     def init_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -92,6 +93,7 @@ class PluginsWidget(QWidget):
                         "plugin.json (the bundled premium plugins live in that parent). "
                         "Install bundled… registers the plugins shipped with this app. "
                         "Premium plugins also need a LicenseChain licence. "
+                        "Run… executes the selected plugin against a saved connection. "
                         "Enable/disable is saved locally. No remote catalog is shipped yet."
                     ),
                 ),
@@ -139,6 +141,19 @@ class PluginsWidget(QWidget):
         self.disable_btn = QPushButton(t("plugins.disable", default="Disable"))
         self.disable_btn.clicked.connect(lambda: self._set_selected_enabled(False))
         actions.addWidget(self.disable_btn)
+
+        self.run_btn = QPushButton(t("plugins.run", default="Run…"))
+        self.run_btn.setToolTip(
+            t(
+                "plugins.run_tip",
+                default=(
+                    "Run the selected plugin against a saved connection. "
+                    "A missing licence, plan or role is reported as not_available."
+                ),
+            )
+        )
+        self.run_btn.clicked.connect(self._run_selected)
+        actions.addWidget(self.run_btn)
 
         self.install_path_btn = QPushButton(
             t("plugins.install_path", default="Install from Path…")
@@ -333,6 +348,33 @@ class PluginsWidget(QWidget):
             self._license_blocked(row, exc)
             return
         self.refresh()
+
+    def _run_selected(self) -> None:
+        """Open the Run dialog for the selected plugin."""
+        try:
+            get_auth_manager().require("plugins:read")
+        except PermissionDenied as exc:
+            self._deny(exc)
+            return
+        t = self.i18n.translate
+        row = self._selected_row()
+        if row is None:
+            QMessageBox.information(
+                self,
+                t("plugins.title", default="Plugins"),
+                t("plugins.select_first", default="Select a plugin first."),
+            )
+            return
+        from ..security.store import SecureStore
+        from .plugin_run import PluginRunDialog
+
+        dialog = PluginRunDialog(
+            row["id"],
+            SecureStore().get_connections(),
+            self.marketplace,
+            self,
+        )
+        dialog.exec()
 
     # ---------------------------------------------------------- licensing
 

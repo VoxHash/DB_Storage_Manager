@@ -38,7 +38,7 @@ DB Storage Manager is a cross-platform desktop application built with Python and
 - `monitoring/` — `DatabaseMonitor.poll_once()`, `AlertManager` dedupe/acknowledge, GUI status banner
 - `analysis/`, `data/` — advanced features shipped in-tree
 - `cloud/` — AWS RDS / GCP Cloud SQL / Azure SQL discovery, IAM/Entra connect helpers, SecureStore/`env` credentials (`CloudManager`, provider modules); Connections UI **Discover Cloud…**
-- `plugins/` — public SDK (`sdk`, `manifest` API `1.0`), loader, local marketplace/registry (`marketplace.LocalPluginMarketplace`), built-ins (`migration`, `data_comparison`), desktop **Plugins** tab
+- `plugins/` — public SDK (`sdk`, `manifest` API `1.0`), loader, local marketplace/registry (`marketplace.LocalPluginMarketplace`), built-ins (`migration`, `data_comparison`, real copy and compare on the live adapters), desktop **Plugins** tab with **Run…**
 - `premium_plugins/` — separately licensed plugins shipped with the app but not registered as built-ins. `pitr-verify` is the first (`bundled_plugin_dir("pitr-verify")`)
 
 ## Data flow

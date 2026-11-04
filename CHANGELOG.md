@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Run… on the Plugins page** executes the selected plugin against a saved connection. Built-in `migration` copies SQLite, PostgreSQL or MySQL user tables onto another database of the same engine and leaves existing tables in place; replacing rows requires the target database name, the same confirmation a restore uses. Built-in `data_comparison` reads one table on two connections and reports row and column differences. Secret-named columns and `DSMENC1` values are left out of the report and the audit log. Premium plugins other than `multi-cloud-discovery` use the same Run dialog (that one stays on Connections → Discover Cloud). A missing licence, plan or role is `not_available`
+
 ### Fixed
 - **Connection email and the multi-connection monitor** are configured on Monitoring → Channels. Enabled on the Plugins page no longer stops there. Per-connection SMTP is saved in SecureStore; the password is not shown again and is not written to the notification log. The monitor health-checks the connections you opt in (at least 60 seconds apart) and a degraded or unhealthy result uses the alert channels already turned on. A missing or broken install is `not_available`
 - **Install from URL** of a folder of plugins marks every installed plugin as source `url`. Uninstalling a plugin clears its saved enabled flag, so installing it again starts enabled
