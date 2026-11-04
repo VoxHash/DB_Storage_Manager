@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
         self._create_menu_bar()
 
         self.tray: Optional[AppTray] = None
+        self._quitting = False
         self._setup_tray()
 
         self._apply_theme()
@@ -192,6 +193,8 @@ class MainWindow(QMainWindow):
         UpdatesDialog(self).exec()
 
     def _quit_app(self) -> None:
+        """Quit from the tray menu. Closing the window only hides it."""
+        self._quitting = True
         self.close()
         app = QApplication.instance()
         if app is not None:
@@ -405,7 +408,16 @@ class MainWindow(QMainWindow):
         self.monitoring_widget.update_connections(self.connections)
 
     def closeEvent(self, event):
-        """Ensure SSH tunnels and pooled SQL sessions close on shutdown."""
+        """Hide to the tray. Quit (tray menu) shuts tunnels and the pool down."""
+        tray = getattr(self, "tray", None)
+        if tray is not None and not getattr(self, "_quitting", False):
+            event.ignore()
+            self.hide()
+            try:
+                tray.refresh_status()
+            except Exception:
+                pass
+            return
         try:
             self.connections_widget.close_all_tunnels()
         except Exception:

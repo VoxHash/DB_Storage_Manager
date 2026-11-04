@@ -141,6 +141,10 @@ class UsersAdminWidget(QWidget):
         self.password_btn.clicked.connect(self._reset_password)
         actions.addWidget(self.password_btn)
 
+        self.mfa_btn = QPushButton()
+        self.mfa_btn.clicked.connect(self._mfa)
+        actions.addWidget(self.mfa_btn)
+
         self.toggle_btn = QPushButton()
         self.toggle_btn.clicked.connect(self._toggle_enabled)
         actions.addWidget(self.toggle_btn)
@@ -178,6 +182,7 @@ class UsersAdminWidget(QWidget):
         self.password_btn.setText(
             t("auth.reset_password", default="Reset password…")
         )
+        self.mfa_btn.setText(t("auth.mfa_setup", default="Authenticator…"))
         self.toggle_btn.setText(
             t("auth.toggle_enabled", default="Enable / Disable")
         )
@@ -204,6 +209,7 @@ class UsersAdminWidget(QWidget):
         self.add_btn.setEnabled(active and can_manage)
         self.role_btn.setEnabled(active and can_manage)
         self.password_btn.setEnabled(active and can_manage)
+        self.mfa_btn.setEnabled(active and can_manage)
         self.toggle_btn.setEnabled(active and can_manage)
         self.delete_btn.setEnabled(active and can_manage)
 
@@ -346,6 +352,105 @@ class UsersAdminWidget(QWidget):
             return
         QMessageBox.information(
             self, t("auth.users_title"), t("auth.password_updated")
+        )
+        self.refresh()
+
+    def _mfa(self) -> None:
+        """Enrol or turn off TOTP. The secret is enabled only after a valid code."""
+        username = self._selected_username()
+        t = self.i18n.translate
+        if not username:
+            QMessageBox.information(
+                self, t("auth.users_title"), t("auth.select_user_first")
+            )
+            return
+        auth = get_auth_manager()
+        user = auth.get_user(username)
+        if user is None:
+            return
+        if user.mfa_enabled:
+            reply = QMessageBox.question(
+                self,
+                t("auth.mfa_setup", default="Authenticator"),
+                t(
+                    "auth.mfa_disable_confirm",
+                    default="Turn off the authenticator for {user}?",
+                    user=username,
+                ),
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+            try:
+                auth.disable_mfa(username)
+            except (ValueError, PermissionDenied) as exc:
+                QMessageBox.warning(self, t("auth.users_title"), str(exc))
+                return
+            self.refresh()
+            return
+        try:
+            secret = auth.begin_mfa(username)
+            uri = auth.mfa.provisioning_uri(secret, username)
+        except (ValueError, PermissionDenied) as exc:
+            QMessageBox.warning(self, t("auth.users_title"), str(exc))
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(t("auth.mfa_setup", default="Authenticator"))
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(
+            QLabel(
+                t(
+                    "auth.mfa_enroll_help",
+                    default=(
+                        "Add this key to an authenticator app, then enter "
+                        "the current 6-digit code. Sign-in keeps working "
+                        "with the password until the code is accepted."
+                    ),
+                )
+            )
+        )
+        secret_edit = QLineEdit(secret)
+        secret_edit.setReadOnly(True)
+        layout.addWidget(secret_edit)
+        uri_edit = QLineEdit(uri)
+        uri_edit.setReadOnly(True)
+        layout.addWidget(uri_edit)
+        code_edit = QLineEdit()
+        code_edit.setPlaceholderText(t("auth.mfa", default="MFA"))
+        layout.addWidget(code_edit)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok
+            | QDialogButtonBox.StandardButton.Cancel
+        )
+        layout.addWidget(buttons)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            try:
+                auth.cancel_mfa_enrollment(username)
+            except (ValueError, PermissionDenied):
+                pass
+            return
+        if not auth.confirm_mfa(username, code_edit.text()):
+            try:
+                auth.cancel_mfa_enrollment(username)
+            except (ValueError, PermissionDenied):
+                pass
+            QMessageBox.warning(
+                self,
+                t("auth.mfa_setup", default="Authenticator"),
+                t(
+                    "auth.mfa_code_rejected",
+                    default="That code did not match. The authenticator was not enabled.",
+                ),
+            )
+            return
+        QMessageBox.information(
+            self,
+            t("auth.mfa_setup", default="Authenticator"),
+            t(
+                "auth.mfa_enabled_done",
+                default="Authenticator is on. The next sign-in needs the code.",
+            ),
         )
         self.refresh()
 

@@ -30,34 +30,34 @@ PRICING_TIERS: Dict[str, Dict[str, float]] = {
 # not secrets (they appear in the public checkout URL).
 PREMIUM_PRODUCT_IDS: Dict[str, Dict[str, str]] = {
     "bundle": {
-        "monthly": "68967897-d070-450c-bb7a-07a3e7d79bdf",
-        "yearly": "38da2336-ae9f-42e5-81a1-1ea99a882e2c",
-        "one_time": "4429e413-fe8f-4602-b281-0ecf3a7d3c60",
+        "monthly": "e4fb8e02-487f-4809-8ccb-9e99ff909861",
+        "yearly": "7c7b34bd-d87c-4499-8935-05416a6599bc",
+        "one_time": "287b2566-0a86-4173-98d2-243e3178658c",
     },
     "pitr-verify": {
-        "monthly": "2e1b1388-5e8c-459d-a5e6-62ef146c4682",
-        "yearly": "d1c45cba-7af8-422e-8b47-88086ae4c714",
-        "one_time": "50736ce6-a35e-48f1-b893-a4fc9a1ed173",
+        "monthly": "099aab71-af7c-4639-84ff-0779793a734a",
+        "yearly": "5e6d976b-ab60-4cef-a343-aa91122bef60",
+        "one_time": "81eb6032-2629-49ab-8318-ca990d209a0d",
     },
     "schema-drift": {
-        "monthly": "fbcb9ad2-6859-4d9b-832e-7d0224fb669a",
-        "yearly": "2815f050-6b3b-4f94-a010-fc3388607f72",
-        "one_time": "0db40f25-6248-45cd-b354-db0043b22cc2",
+        "monthly": "9905dae5-a315-4214-9e89-9bf286b95405",
+        "yearly": "4235eb77-3e75-4d8c-9192-6a07681293aa",
+        "one_time": "b4a003ad-e70f-4c7b-bc0c-0af3b6c457d7",
     },
     "rls-audit": {
-        "monthly": "dbd8dffc-608b-4eed-9a84-2b0e4e406491",
-        "yearly": "1cd4f7bd-72d9-4ba3-9a6a-4a35effe8bf7",
-        "one_time": "a64d369f-2fa0-4598-88e0-afb79b304336",
+        "monthly": "892f385a-b481-4179-a2ab-042ec325fe01",
+        "yearly": "e502a5fa-02d1-4419-824d-ac0435a47de9",
+        "one_time": "d5a0e27b-605e-49e2-a223-505c509451ae",
     },
     "pooler-health": {
-        "monthly": "869a9e74-5506-428f-a941-532c10b0c757",
-        "yearly": "15cb51f0-9b8f-490f-9834-d9d845227028",
-        "one_time": "4e51906a-8e0c-4ade-9069-760a08fda5dc",
+        "monthly": "d9f24bbd-e3a1-4d08-905b-6784635bb43d",
+        "yearly": "1cdda732-32e5-404d-bb61-fdfe98981fd9",
+        "one_time": "e8c8356b-f9c2-4614-870e-432fec4a51b1",
     },
     "encrypted-export": {
-        "monthly": "cf252f7b-9e64-4149-8c64-be1fcdbd8f98",
-        "yearly": "0e19b52f-f0bf-4e0b-bf1e-ee53d917e949",
-        "one_time": "15ba1ef3-4efa-4218-aaf3-8db9944dcb2e",
+        "monthly": "d7d9d5ae-898c-46c4-a7a6-a1af6dc671cf",
+        "yearly": "49f37f1f-3383-4f01-9200-47fef68c29c3",
+        "one_time": "5fd3ee0f-6c16-49ca-ac06-23fc462d0cc1",
     },
 }
 

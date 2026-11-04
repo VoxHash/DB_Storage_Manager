@@ -22,7 +22,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 
 - [ ] Google Drive as a plugin or an rclone `drive` remote (the library adapter stays out of the UI: a long-lived OAuth token in a desktop form is an opsec risk)
 - [ ] Retention rules per connection (keep N daily / M monthly) with pruning for Local, Proton Drive and S3
-- [ ] Restore into a scratch database for rehearsal before touching production
+- [x] Restore into a scratch database for rehearsal before touching production (Backups → Restore… → **Rehearse into a new scratch database**; type `SCRATCH`. Production is not written. SQLite writes a sibling `*.scratch-<stamp>.db`; PostgreSQL and MySQL `CREATE DATABASE dsm_scratch_…` on the same server)
 - [ ] Promote full restore from experimental to stable after the live-engine rehearsals above pass in CI and the scratch-database restore exists (the dependent-table limitation above is the remaining blocker)
 - [~] Automatic restore on a critical alert — deferred. A restore replaces data, and an unattended trigger cannot tell a failing server from a failing probe. It would need opt-in per connection, a cooldown, a signed audit trail and a human confirmation path; manual experimental restore is the supported route until then
 
@@ -36,7 +36,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 Planned on the existing `plugins.sdk` (API `1.0`): opt-in, real catalogs or provider APIs, no bundled credentials, and a clear "not available on this plan/role" instead of guessing.
 
 - [x] `pitr-verify` — confirm point-in-time recovery is enabled and the window matches retention (provider APIs, `pg_stat_archiver`). Shipped as the first premium plugin
-- [ ] `schema-drift` — snapshot `information_schema` / `pg_catalog` and diff against a baseline or another connection
+- [x] `schema-drift` — snapshot `information_schema` / `sqlite_master` and diff against a baseline or another connection. Shipped as the second premium plugin (`db_storage_manager/premium_plugins/schema-drift`); `license.product_id` is the monthly product on the current seller account
 - [ ] `rls-audit` — Postgres tables exposed without row level security, permissive policies, `SECURITY DEFINER` functions
 - [ ] `pooler-health` — compare direct and pooled endpoints (PgBouncer / Supavisor): latency, pool mode, `max_connections` headroom
 - [ ] `encrypted-export` — per-table export (CSV / Parquet / SQL) in the DSMENC1 envelope with optional redaction

@@ -114,7 +114,79 @@ def test_mfa_required_when_enabled(isolated_secure_store):
     import pyotp
 
     token = pyotp.TOTP(secret).now()
-    assert auth.authenticate("admin", "password123", mfa_token=token)
+    spaced = f"{token[:3]} {token[3:]}"
+    assert auth.authenticate("admin", "password123", mfa_token=spaced)
+
+
+def test_mfa_stays_off_until_a_real_code_confirms_it(isolated_secure_store):
+    store, _ = isolated_secure_store
+    auth = AuthenticationManager(store=store)
+    auth.bootstrap_admin("admin", "password123")
+    auth.authenticate("admin", "password123")
+    secret = auth.begin_mfa("admin")
+    assert auth.confirm_mfa("admin", "000000") is False
+    assert auth.get_user("admin").mfa_enabled is False
+    auth.logout()
+    assert auth.authenticate("admin", "password123") is not None
+    auth.logout()
+    auth.authenticate("admin", "password123")
+    import pyotp
+
+    code = pyotp.TOTP(secret).now()
+    assert auth.confirm_mfa("admin", f"{code[:3]}-{code[3:]}")
+    auth.logout()
+    assert auth.authenticate("admin", "password123") is None
+    assert auth.authenticate(
+        "admin", "password123", mfa_token=pyotp.TOTP(secret).now()
+    )
+
+
+def test_api_basic_sends_totp_in_header(isolated_secure_store, tmp_path):
+    store, _ = isolated_secure_store
+    auth = AuthenticationManager(store=store)
+    auth.bootstrap_admin("admin", "password123")
+    auth.authenticate("admin", "password123")
+    secret = auth.enable_mfa("admin")
+    auth.logout()
+    reset_auth_manager()
+    from db_storage_manager.security import auth as auth_mod
+
+    auth_mod._auth_manager = AuthenticationManager(store=store)
+    backup_dir = tmp_path / "backups"
+    backup_dir.mkdir()
+    server = create_server(
+        "127.0.0.1", 0, api_token="machine-token", backup_dir=backup_dir
+    )
+    host, port = server.server_address[:2]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        import pyotp
+
+        basic = base64.b64encode(b"admin:password123").decode("ascii")
+        conn = HTTPConnection(host, port, timeout=5)
+        conn.request(
+            "GET",
+            "/api/v1/connections",
+            headers={"Authorization": f"Basic {basic}"},
+        )
+        assert conn.getresponse().status == 401
+        conn.close()
+        conn = HTTPConnection(host, port, timeout=5)
+        conn.request(
+            "GET",
+            "/api/v1/connections",
+            headers={
+                "Authorization": f"Basic {basic}",
+                "X-DSM-MFA": pyotp.TOTP(secret).now(),
+            },
+        )
+        assert conn.getresponse().status == 200
+        conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        reset_auth_manager()
 
 
 def test_api_rbac_basic_and_forbidden(isolated_secure_store, tmp_path):

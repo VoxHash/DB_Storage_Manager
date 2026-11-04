@@ -368,6 +368,44 @@ def test_tray_clicks_and_notification_timeout():
     app.processEvents()
 
 
+def test_closing_the_window_hides_to_tray_until_quit():
+    """Offscreen: a tray object is enough. A real tray icon is not required."""
+    app = _qapp()
+    from db_storage_manager.gui.main_window import MainWindow
+
+    window = MainWindow()
+    window.show()
+    app.processEvents()
+    seen = {}
+
+    class _Tray:
+        menu = None
+
+        def refresh_status(self):
+            seen["refresh"] = seen.get("refresh", 0) + 1
+
+        def hide(self):
+            seen["hidden"] = True
+
+        quit_action = type("A", (), {"text": lambda self: "Quit"})()
+
+    window.tray = _Tray()
+    window._quitting = False
+    window.close()
+    app.processEvents()
+    assert not window.isVisible()
+    assert seen.get("refresh") == 1
+    assert "hidden" not in seen
+    assert window.tray.quit_action.text() == "Quit"
+    window._quitting = True
+    window.show()
+    window.close()
+    app.processEvents()
+    assert seen.get("hidden") is True
+    window.deleteLater()
+    app.processEvents()
+
+
 # --------------------------------------------------------------------- RBAC
 
 

@@ -74,6 +74,8 @@ Permission matrix (`db_storage_manager.security.auth.ROLE_PERMISSIONS`; `admin` 
 
 Failed sign-ins are throttled: after 5 failures within 60 seconds the username is locked out for the rest of that window (desktop sign-in dialog and API Basic auth).
 
+TOTP (authenticator app) is optional per user. Settings → Users & RBAC → **Authenticator…** shows a secret and an `otpauth://` URI and enables MFA only after a valid code. Until that code is accepted, password login still works. The sign-in dialog accepts the 6-digit code with or without spaces. The companion API sends the same code in the `X-DSM-MFA` header next to HTTP Basic; a password alone is rejected once MFA is on. There is no WebAuthn ceremony in this app.
+
 `.env.rbac.local` is a gitignored, mode `600` local file. It uses the keys `USERNAME` and `PASSWORD` (template: `.env.rbac.local.example`) and is read by the opt-in sign-in tests in `tests/test_gui_shell.py`. The application itself does not read it; to create the first admin use `db-storage-manager-bootstrap` (flags, or `DSM_BOOTSTRAP_USERNAME` / `DSM_BOOTSTRAP_PASSWORD`). Never commit it.
 
 ## Environment variables
@@ -109,9 +111,13 @@ No required secrets for core operation. Useful optional variables:
 | `DSM_S3_BUCKET` / `DSM_S3_PREFIX` / `DSM_S3_REGION` / `DSM_S3_ENDPOINT` | S3-compatible backup destination (override SecureStore `s3_backup`) |
 | `DSM_S3_ACCESS_KEY_ID` / `DSM_S3_SECRET_ACCESS_KEY` | S3 credentials; otherwise `AWS_*` variables or the default boto3 chain (profile, instance role) |
 | `DSM_SMTP_HOST` / `DSM_SMTP_PORT` / `DSM_SMTP_SECURITY` / `DSM_SMTP_USERNAME` / `DSM_SMTP_PASSWORD` / `DSM_SMTP_FROM` / `DSM_SMTP_TO` | SMTP alert channel (override SecureStore `email_alerts`; `DSM_SMTP_TO` is a comma-separated list) |
-| LDAP / MFA related settings | Only when auth features are enabled |
+| `X-DSM-MFA` | TOTP code for companion API Basic auth when that user has an authenticator enabled |
 
-Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
+Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
+
+`.env.cloud.local.example` and `.env.protondrive.local.example` stay separate files. Cloud discovery and Proton Drive are different credential domains, loaded by different helpers (`load_cloud_dotenv` / `load_protondrive_dotenv`) into different gitignored files, and each has its own setup script. One combined example would invite an AWS key and a Proton password into the same file.
+
+Live sibling-database probes do not read an env file. `tests/test_real_connections.py` uses `tests/fixtures/connections.local.json` (gitignored) and the process environment `DSM_E2E_CONNECTIONS_FILE` / `DSM_E2E_CONNECT_TIMEOUT`. There is no `.env.e2e.local.example`.
 
 ### Importing connections
 

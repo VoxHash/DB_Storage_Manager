@@ -1291,6 +1291,16 @@ class BackupsWidget(QWidget):
                     raise RuntimeError("Backup destination adapter unavailable")
             else:
                 adapter = LocalBackupAdapter(base_path=local_dir)
+            if values.get("scratch"):
+                return asyncio.run(
+                    manager.scratch_restore(
+                        adapter,
+                        backup,
+                        target,
+                        confirmation=values["confirmation"],
+                        encryption_key=values["passphrase"],
+                    )
+                )
             return asyncio.run(
                 manager.full_restore(
                     adapter,
@@ -1306,6 +1316,17 @@ class BackupsWidget(QWidget):
             )
 
         def on_ok(result: Dict[str, Any]) -> None:
+            if result.get("scratch"):
+                self._set_status(
+                    t(
+                        "backups.scratch_done",
+                        default="Scratch restore finished in {name}. Production was not modified.",
+                        name=result.get("scratchDatabase") or "",
+                    ),
+                    "pass",
+                )
+                self.refresh_backups(queue=True)
+                return
             safety = result.get("safetyBackup")
             self._set_status(
                 t(

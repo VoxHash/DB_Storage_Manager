@@ -31,13 +31,14 @@ env.bak/
 venv.bak/
 .venv/
 
-# IDE / editors
+# IDE / editors (local only — not published)
 .idea/
 .vscode/
 *.code-workspace
 *.sublime-project
 *.sublime-workspace
 .cursorindexingignore
+.editorconfig
 
 # Jupyter
 .ipynb_checkpoints

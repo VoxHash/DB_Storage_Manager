@@ -53,7 +53,10 @@ class CompanionHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         # Local companion — allow same-origin web UI fetch
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, X-DSM-MFA",
+        )
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
         if self.command != "HEAD":
@@ -124,7 +127,11 @@ class CompanionHandler(BaseHTTPRequestHandler):
                 username, _, password = raw.partition(":")
             except (ValueError, UnicodeDecodeError):
                 return False
-            user = auth.authenticate(username, password)
+            user = auth.authenticate(
+                username,
+                password,
+                mfa_token=self.headers.get("X-DSM-MFA"),
+            )
             return user is not None
 
         if auth.is_rbac_active():
@@ -165,7 +172,10 @@ class CompanionHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Authorization, Content-Type, X-DSM-MFA",
+        )
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
 

@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ..backups.base import BackupInfo
-from ..backups.manager import BackupManager
+from ..backups.manager import SCRATCH_CONFIRMATION, BackupManager
 from ..db.base import ConnectionConfig
 from ..i18n.manager import get_i18n_manager
 
@@ -79,6 +79,18 @@ class RestoreDialog(QDialog):
                 self.passphrase_edit,
             )
 
+        self.scratch_check = QCheckBox(
+            t(
+                "restore.scratch",
+                default=(
+                    "Rehearse into a new scratch database "
+                    "(production is not modified)"
+                ),
+            )
+        )
+        self.scratch_check.toggled.connect(self._update_confirm)
+        form.addRow("", self.scratch_check)
+
         self.safety_check = QCheckBox(
             t(
                 "restore.safety_backup",
@@ -120,11 +132,17 @@ class RestoreDialog(QDialog):
         return self.target_combo.currentData()
 
     def required_phrase(self) -> str:
+        if self.scratch_check.isChecked():
+            return SCRATCH_CONFIRMATION
         target = self.target()
         return BackupManager.restore_confirmation_phrase(target) if target else ""
 
     def _update_confirm(self, *_args) -> None:
         t = self.i18n.translate
+        scratch = self.scratch_check.isChecked()
+        self.safety_check.setEnabled(not scratch)
+        if scratch:
+            self.safety_check.setChecked(False)
         phrase = self.required_phrase()
         self.phrase_label.setText(
             t(
@@ -141,7 +159,7 @@ class RestoreDialog(QDialog):
         self.ok_button.setEnabled(ok)
 
     def result_values(self) -> Dict[str, Any]:
-        safety = self.safety_check.isChecked()
+        safety = self.safety_check.isChecked() and not self.scratch_check.isChecked()
         return {
             "target": self.target(),
             "confirmation": self.confirm_edit.text().strip(),
@@ -150,4 +168,5 @@ class RestoreDialog(QDialog):
             "safety_passphrase": (
                 self.safety_passphrase_edit.text().strip() if safety else None
             ),
+            "scratch": self.scratch_check.isChecked(),
         }

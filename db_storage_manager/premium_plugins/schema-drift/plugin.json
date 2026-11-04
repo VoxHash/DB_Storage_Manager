@@ -1,0 +1,21 @@
+{
+  "id": "schema-drift",
+  "name": "Schema drift",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Snapshot the schema and diff it against a baseline or another connection.",
+  "plugin_type": "data_comparison",
+  "api_version": "1.0",
+  "entry": "plugin:SchemaDriftPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "9905dae5-a315-4214-9e89-9bf286b95405",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

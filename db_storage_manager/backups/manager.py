@@ -4,6 +4,7 @@ Backup manager for coordinating backup operations
 
 from typing import Any, Dict, List, Optional, Callable, Union
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 import tempfile
 import threading
@@ -73,6 +74,10 @@ def _db_family(name: Any) -> str:
 
 class RestoreRefused(RuntimeError):
     """A full restore was stopped before any change was made to the target."""
+
+
+# Typed confirmation for a rehearsal that must not touch production.
+SCRATCH_CONFIRMATION = "SCRATCH"
 
 
 class BackupManager:
@@ -456,6 +461,175 @@ class BackupManager:
         )
         stage("done")
         return {"ok": True, "safetyBackup": safety_name}
+
+    async def scratch_restore(
+        self,
+        adapter: BackupAdapter,
+        backup_info: BackupInfo,
+        connection_config: ConnectionConfig,
+        *,
+        confirmation: str,
+        encryption_key: Optional[str] = None,
+        scratch_dir: Optional[Path] = None,
+        on_stage: Optional[Callable[[str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Restore ``backup_info`` into a new scratch database.
+
+        Production (the database named by ``connection_config``) is not
+        written. The operator types ``SCRATCH`` rather than the production
+        name. The same experimental gate, RBAC permission and pre-flight as
+        :meth:`full_restore` apply. There is no safety backup, because the
+        live database is not the target.
+        """
+        from ..experimental import (
+            ExperimentalDisabledError,
+            require_restore_enabled,
+        )
+        from ..security.auth import PermissionDenied, get_auth_manager
+        from .scratch import (
+            ScratchError,
+            provision_server_database,
+            scratch_identifier,
+            sqlite_scratch_path,
+        )
+
+        def stage(name: str) -> None:
+            if on_stage:
+                on_stage(name)
+
+        audit_base = {
+            "backupId": backup_info.id,
+            "backupName": backup_info.name,
+            "targetConnectionId": connection_config.id,
+            "targetName": connection_config.name,
+            "targetDatabase": connection_config.database,
+            "adapter": type(adapter).__name__,
+            "mode": "scratch",
+        }
+        current_stage = "gate"
+        remote_payload: Optional[str] = None
+        scratch_cfg: Optional[ConnectionConfig] = None
+        try:
+            stage("gate")
+            require_restore_enabled()
+            get_auth_manager().require("backups:restore")
+            if (confirmation or "").strip() != SCRATCH_CONFIRMATION:
+                raise RestoreRefused(
+                    "Type SCRATCH to restore into a new scratch database"
+                )
+            backup_family = _db_family(
+                (backup_info.metadata or {}).get("databaseType")
+            )
+            if backup_family and backup_family != _db_family(
+                connection_config.type
+            ):
+                raise RestoreRefused(
+                    f"Backup was taken from a {backup_family} database; the "
+                    f"target is {connection_config.type}"
+                )
+
+            current_stage = "preflight"
+            stage("preflight")
+            metadata = backup_info.metadata or {}
+            passphrase = encryption_key or metadata.get("encryptionKey")
+            if self.is_remote_backup(backup_info):
+                verify = self.verify_backup(backup_info)
+                if not verify.get("ok"):
+                    raise RestoreRefused(
+                        "Pre-flight checksum failed: "
+                        f"{verify.get('error') or verify.get('status')}"
+                    )
+                try:
+                    remote_payload = await self._materialize_payload(
+                        adapter, backup_info, passphrase
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    raise RestoreRefused(
+                        f"Pre-flight could not unpack the backup: {exc}"
+                    ) from exc
+            else:
+                dry = self.dry_run_restore(backup_info, encryption_key=passphrase)
+                if not dry.get("ok"):
+                    raise RestoreRefused(
+                        f"Pre-flight dry run failed at {dry.get('stage')}: "
+                        f"{dry.get('error')}"
+                    )
+
+            current_stage = "provision"
+            stage("provision")
+            family = _db_family(connection_config.type)
+            if family == "sqlite":
+                source = connection_config.database or connection_config.connection_string
+                if not source:
+                    raise RestoreRefused("SQLite connection has no database path")
+                dest = sqlite_scratch_path(str(source), directory=scratch_dir)
+                scratch_cfg = replace(
+                    connection_config,
+                    id=f"{connection_config.id}-scratch",
+                    name=f"{connection_config.name} scratch",
+                    database=str(dest),
+                    connection_string=None,
+                )
+            elif family in {"postgres", "mysql"}:
+                name = scratch_identifier(str(connection_config.database or "db"))
+                provision_server_database(connection_config, name)
+                scratch_cfg = replace(
+                    connection_config,
+                    id=f"{connection_config.id}-scratch",
+                    name=f"{connection_config.name} scratch",
+                    database=name,
+                )
+            else:
+                raise RestoreRefused(
+                    "Scratch restore is available for SQLite, PostgreSQL and "
+                    f"MySQL. This connection is {connection_config.type}."
+                )
+
+            current_stage = "restore"
+            stage("restore")
+            if remote_payload is not None:
+                payload_to_apply, remote_payload = remote_payload, None
+                await self._apply_payload(
+                    payload_to_apply, backup_info, scratch_cfg
+                )
+            else:
+                await self.restore_backup(
+                    adapter, backup_info, scratch_cfg, passphrase
+                )
+        except Exception as exc:
+            if remote_payload is not None:
+                Path(remote_payload).unlink(missing_ok=True)
+            if isinstance(exc, ScratchError):
+                exc = RestoreRefused(str(exc))
+            write_audit(
+                "backup.scratch_restore",
+                "refused"
+                if isinstance(
+                    exc,
+                    (RestoreRefused, ExperimentalDisabledError, PermissionDenied),
+                )
+                else "failed",
+                stage=current_stage,
+                error=str(exc),
+                **audit_base,
+            )
+            raise exc
+
+        scratch_name = scratch_cfg.database if scratch_cfg is not None else None
+        write_audit(
+            "backup.scratch_restore",
+            "completed",
+            stage="restore",
+            scratchDatabase=scratch_name,
+            **audit_base,
+        )
+        stage("done")
+        return {
+            "ok": True,
+            "scratch": True,
+            "scratchDatabase": scratch_name,
+            "productionDatabase": connection_config.database,
+        }
 
     async def create_batch_backups(
         self,

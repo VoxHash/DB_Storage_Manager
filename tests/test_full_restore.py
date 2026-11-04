@@ -302,6 +302,40 @@ def test_audit_strips_secret_keys(tmp_path, monkeypatch):
         assert (audit.audit_log_path().stat().st_mode & 0o777) == 0o600
 
 
+def test_scratch_restore_leaves_production_untouched(env):
+    _enable(env)
+    backup = env["make_backup"](compression="gzip")
+    _make_db(env["db"], ["drifted"])
+    before = env["db"].read_bytes()
+    result = asyncio.run(
+        env["manager"].scratch_restore(
+            env["adapter"], backup, env["cfg"], confirmation="SCRATCH"
+        )
+    )
+    assert env["db"].read_bytes() == before
+    assert _names(env["db"]) == ["drifted"]
+    scratch = Path(result["scratchDatabase"])
+    assert scratch.is_file() and scratch.resolve() != env["db"].resolve()
+    assert _names(scratch) == ["alpha", "beta"]
+    entry = audit.read_audit()[-1]
+    assert entry["action"] == "backup.scratch_restore"
+    assert entry["outcome"] == "completed"
+    assert entry["scratchDatabase"] == str(scratch)
+
+
+def test_scratch_restore_refuses_the_production_name(env):
+    _enable(env)
+    backup = env["make_backup"]()
+    with pytest.raises(RestoreRefused, match="SCRATCH"):
+        asyncio.run(
+            env["manager"].scratch_restore(
+                env["adapter"], backup, env["cfg"], confirmation="prod.db"
+            )
+        )
+    assert _names(env["db"]) == ["alpha", "beta"]
+    assert list(env["tmp"].glob("*.scratch-*")) == []
+
+
 def test_backups_in_the_same_second_never_overwrite_each_other(env):
     first = env["make_backup"](compression="gzip")
     second = env["make_backup"](compression="gzip")

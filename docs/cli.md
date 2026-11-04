@@ -54,7 +54,7 @@ Defaults: `http://127.0.0.1:8765/` (Web UI) and `/api/v1/*`.
 
 A SecureStore **pairing** digest (from `db-storage-manager-pair`) is also accepted as Bearer when present — see [privacy-companion.md](privacy-companion.md).
 
-When RBAC accounts exist, unauthenticated API calls (except health/static) return **401**. Prefer HTTP Basic with a local user, or Bearer `DSM_API_TOKEN` / pairing token. Missing permissions return **403**.
+When RBAC accounts exist, unauthenticated API calls (except health/static) return **401**. Prefer HTTP Basic with a local user, or Bearer `DSM_API_TOKEN` / pairing token. If that user has an authenticator enabled, send the current TOTP in the `X-DSM-MFA` header with the Basic request. Missing permissions return **403**.
 
 ### Companion pairing and export
 

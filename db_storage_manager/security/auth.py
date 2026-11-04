@@ -217,6 +217,7 @@ class User:
     role: UserRole = UserRole.USER
     password_hash: str = ""
     mfa_secret: Optional[str] = None
+    mfa_pending_secret: Optional[str] = None
     mfa_enabled: bool = False
     enabled: bool = True
     created_at: str = field(default_factory=_utc_now_iso)
@@ -229,6 +230,7 @@ class User:
             "role": self.role.value,
             "password_hash": self.password_hash,
             "mfa_secret": self.mfa_secret,
+            "mfa_pending_secret": self.mfa_pending_secret,
             "mfa_enabled": bool(self.mfa_enabled),
             "enabled": bool(self.enabled),
             "created_at": self.created_at,
@@ -260,6 +262,7 @@ class User:
             role=role,
             password_hash=str(data.get("password_hash") or ""),
             mfa_secret=data.get("mfa_secret"),
+            mfa_pending_secret=data.get("mfa_pending_secret"),
             mfa_enabled=bool(data.get("mfa_enabled", False)),
             enabled=bool(data.get("enabled", True)),
             created_at=str(data.get("created_at") or _utc_now_iso()),
@@ -300,13 +303,19 @@ class MFAProvider:
         return pyotp.random_base32()
 
     @staticmethod
+    def normalize_token(token: str) -> str:
+        """Keep digits only so a pasted ``123 456`` still verifies."""
+        return "".join(ch for ch in str(token or "") if ch.isdigit())
+
+    @staticmethod
     def verify_token(secret: str, token: str) -> bool:
         import pyotp
 
-        if not token or not secret:
+        code = MFAProvider.normalize_token(token)
+        if not code or not secret:
             return False
         totp = pyotp.TOTP(secret)
-        return bool(totp.verify(str(token).strip(), valid_window=1))
+        return bool(totp.verify(code, valid_window=1))
 
     @staticmethod
     def provisioning_uri(
@@ -602,9 +611,59 @@ class AuthenticationManager:
             raise ValueError("User not found")
         secret = self.mfa.generate_secret()
         user.mfa_secret = secret
+        user.mfa_pending_secret = None
         user.mfa_enabled = True
         self._persist()
         return secret
+
+    def begin_mfa(self, username: str) -> str:
+        """Start TOTP enrolment. Login stays password-only until :meth:`confirm_mfa`."""
+        is_self = (
+            self.current_user is not None
+            and self.current_user.username.lower() == username.lower()
+        )
+        if not is_self:
+            self.require(PERM_USERS_MANAGE)
+        user = self.get_user(username)
+        if not user:
+            raise ValueError("User not found")
+        secret = self.mfa.generate_secret()
+        user.mfa_pending_secret = secret
+        self._persist()
+        return secret
+
+    def confirm_mfa(self, username: str, token: str) -> bool:
+        """Enable MFA after the authenticator produces a valid code for the pending secret."""
+        is_self = (
+            self.current_user is not None
+            and self.current_user.username.lower() == username.lower()
+        )
+        if not is_self:
+            self.require(PERM_USERS_MANAGE)
+        user = self.get_user(username)
+        if not user or not user.mfa_pending_secret:
+            return False
+        if not self.mfa.verify_token(user.mfa_pending_secret, token or ""):
+            return False
+        user.mfa_secret = user.mfa_pending_secret
+        user.mfa_pending_secret = None
+        user.mfa_enabled = True
+        self._persist()
+        return True
+
+    def cancel_mfa_enrollment(self, username: str) -> None:
+        """Drop a pending secret. An already-enabled authenticator stays enabled."""
+        is_self = (
+            self.current_user is not None
+            and self.current_user.username.lower() == username.lower()
+        )
+        if not is_self:
+            self.require(PERM_USERS_MANAGE)
+        user = self.get_user(username)
+        if not user:
+            raise ValueError("User not found")
+        user.mfa_pending_secret = None
+        self._persist()
 
     def disable_mfa(self, username: str) -> None:
         is_self = (
@@ -617,6 +676,7 @@ class AuthenticationManager:
         if not user:
             raise ValueError("User not found")
         user.mfa_secret = None
+        user.mfa_pending_secret = None
         user.mfa_enabled = False
         self._persist()
 

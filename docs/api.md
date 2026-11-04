@@ -258,7 +258,18 @@ A plugin without a `license` block is free. To sell a plugin through [LicenseCha
 
 First premium plugin. It is not a built-in: install the directory from `db_storage_manager.premium_plugins.bundled_plugin_dir("pitr-verify")`. Installing requires `plugins:manage`. `execute` requires `monitoring:read`.
 
-`license.product_id` is `plugins.pricing.PREMIUM_PRODUCT_IDS["pitr-verify"]["monthly"]` (the products were created earlier; do not run `licensechain_products.py --apply` again for this plugin).
+`license.product_id` is `plugins.pricing.PREMIUM_PRODUCT_IDS["pitr-verify"]["monthly"]` (products live on the current LicenseChain seller account; do not run `licensechain_products.py --apply` again for this plugin).
+
+### Schema drift (`schema-drift`)
+
+Second premium plugin. Install `db_storage_manager.premium_plugins.bundled_plugin_dir("schema-drift")`. Installing requires `plugins:manage`. `execute` requires `monitoring:read`.
+
+It snapshots SQLite (`sqlite_master` / `PRAGMA table_info`), PostgreSQL (`information_schema.columns` in `public`) or MySQL (`information_schema.columns` for the current database) and diffs that against a baseline dict or a second connection. `license.product_id` is `PREMIUM_PRODUCT_IDS["schema-drift"]["monthly"]`.
+
+```python
+plugin = load_plugin_from_directory(bundled_plugin_dir("schema-drift"))
+report = plugin.execute(connection, other=other_connection)
+```
 
 ```python
 from db_storage_manager.plugins.loader import load_plugin_from_directory
