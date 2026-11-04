@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLayout,
     QMainWindow,
-    QMessageBox,
     QSizePolicy,
     QTabWidget,
     QVBoxLayout,
@@ -27,7 +26,6 @@ from .settings import SettingsWidget
 from .monitoring import MonitoringWidget
 from .plugins import PluginsWidget
 from .sidebar import NavSidebar
-from ..config import APP_VERSION
 from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
@@ -157,6 +155,7 @@ class MainWindow(QMainWindow):
     def _on_settings_saved(self) -> None:
         """Settings changed: re-read SMTP / S3 / experimental flags elsewhere."""
         self.monitoring_widget.refresh_email_channel()
+        self.monitoring_widget.refresh_http_channels()
         if hasattr(self.backups_widget, "refresh_destinations"):
             self.backups_widget.refresh_destinations()
 
@@ -172,7 +171,7 @@ class MainWindow(QMainWindow):
             timeout_seconds=seconds,
             status_provider=self._tray_status,
             open_section=self.show_section,
-            open_changelog=lambda: self.show_updates(check=False),
+            open_changelog=self.show_changelog,
             open_check_updates=lambda: self.show_updates(check=True),
         )
         self.tray.quit_requested.connect(self._quit_app)
@@ -197,6 +196,12 @@ class MainWindow(QMainWindow):
         """Open Settings → Updates. ``check`` runs the GitHub comparison."""
         self.show_section("settings")
         self.settings_widget.open_updates_tab(check=check)
+
+    def show_changelog(self) -> None:
+        """Open the changelog window. It does not contact GitHub."""
+        from .changelog import ChangelogDialog
+
+        ChangelogDialog(self).exec()
 
     def _on_update_available(self, message: str) -> None:
         """Tray notice only after an opted-in check finds a newer release."""
@@ -290,7 +295,7 @@ class MainWindow(QMainWindow):
         changelog_action = QAction(
             t("menu.changelog", default="Changelog"), self
         )
-        changelog_action.triggered.connect(lambda: self.show_updates(check=False))
+        changelog_action.triggered.connect(self.show_changelog)
         help_menu.addAction(changelog_action)
         check_action = QAction(
             t("menu.check_updates", default="Check for updates"), self
@@ -299,15 +304,13 @@ class MainWindow(QMainWindow):
         help_menu.addAction(check_action)
 
     def _show_about(self):
-        """Show about dialog"""
-        t = self.i18n.translate
-        QMessageBox.about(
+        """Show the About window."""
+        from .about import AboutDialog
+
+        AboutDialog(
             self,
-            t("about.title"),
-            f"{t('about.version', version=APP_VERSION)}\n\n"
-            f"{t('about.description')}\n\n"
-            f"{t('about.copyright')}",
-        )
+            on_check_updates=lambda: self.show_updates(check=True),
+        ).exec()
 
     def _update_tabs(self):
         """Update tab / sidebar labels with translations"""
@@ -328,7 +331,7 @@ class MainWindow(QMainWindow):
             t("nav.workspace", default="Workspace")
         )
         self.sidebar.brand.setText(t("app.title", default="DB Storage Manager"))
-        self.sidebar.caption.setText(t("app.vendor", default="VoxHash Suite"))
+        self.sidebar.caption.setText(t("app.vendor", default="VOXHASH LABS"))
         if getattr(self, "tray", None) is not None:
             self.tray.retranslate()
 

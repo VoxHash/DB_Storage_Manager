@@ -2,7 +2,7 @@
   "app": {
     "title": "Gestionnaire de Stockage de BD",
     "version": "Version {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Fichier",
@@ -109,7 +109,8 @@
     "import_confirm_body": "Importer {count} profil(s) ?\n{names}",
     "import_ssh_title": "Importer une clé privée SSH",
     "import_ssh_dir_title": "Ou sélectionnez un dossier contenant KEY / SSH.pub",
-    "import_ssh_confirm": "Importer le profil SSH « {name} » ?\nType : {type}  Hôte : {host}  Bastion : {bastion}\nLe chemin de la clé privée est référencé (non copié dans git)."
+    "import_ssh_confirm": "Importer le profil SSH « {name} » ?\nType : {type}  Hôte : {host}  Bastion : {bastion}\nLe chemin de la clé privée est référencé (non copié dans git).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon et Aiven sont découverts par le plugin multi-cloud-discovery une fois installé et sous licence."
   },
   "query": {
     "title": "Console de requêtes",
@@ -334,13 +335,25 @@
     "retention_hint": "Désactivé par défaut. Après une sauvegarde planifiée, les copies locales, Proton Drive et S3 plus anciennes que ces règles sont supprimées. Google Drive n’est pas élagué. Si les deux nombres sont à zéro, rien n’est supprimé.",
     "retention_connection": "Connexion",
     "retention_all": "Toutes les connexions (par défaut)",
-    "retention_custom": "Règles propres à la connexion sélectionnée"
+    "retention_custom": "Règles propres à la connexion sélectionnée",
+    "webhook_title": "Alertes webhook",
+    "webhook_hint": "Envoie l’alerte en JSON vers une URL https que vous contrôlez. L’URL est chiffrée et n’est pas écrite dans le journal. http n’est autorisé que pour localhost. Activez Webhook dans Surveillance. Même gravité et délai que l’e-mail.",
+    "webhook_url": "URL du webhook",
+    "slack_title": "Alertes Slack",
+    "slack_hint": "Publie vers un webhook entrant Slack (https://hooks.slack.com). L’URL contient un secret et reste dans SecureStore. Même gravité et délai que l’e-mail.",
+    "slack_url": "URL du webhook Slack"
   },
   "about": {
     "title": "À propos de DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "Une application de bureau professionnelle pour gérer le stockage de bases de données et les sauvegardes.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Version {version}",
+    "channel_line": "Canal : {channel}",
+    "released_line": "Publiée : {date}",
+    "check_updates": "Rechercher des mises à jour...",
+    "copy_version": "Copier les informations de version",
+    "copied": "Informations de version copiées."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Points de données : {value}",
     "channel_email": "E-mail (SMTP, à configurer dans Paramètres)",
     "email_ready": "SMTP est configuré.",
-    "email_not_ready": "Configurez d'abord SMTP dans Paramètres → Notifications : {problems}"
+    "email_not_ready": "Configurez d'abord SMTP dans Paramètres → Notifications : {problems}",
+    "channel_webhook": "Webhook (à régler dans Paramètres)",
+    "channel_slack": "Slack (à régler dans Paramètres)",
+    "webhook_ready": "L’URL du webhook est configurée.",
+    "webhook_not_ready": "Configurez le webhook dans Paramètres → Notifications : {problems}",
+    "slack_ready": "Le webhook Slack est configuré.",
+    "slack_not_ready": "Configurez le webhook Slack dans Paramètres → Notifications : {problems}"
   },
   "analysis": {
     "query_performance": "Performances des requêtes",
@@ -649,7 +668,8 @@
     "changelog_failed": "Impossible de charger le journal des modifications : {error}",
     "auto_check": "Vérifier les mises à jour automatiquement",
     "auto_check_hint": "Désactivé par défaut. Une fois activé, cette machine interroge GitHub au plus une fois par jour. L’application n’installe jamais une mise à jour toute seule.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Journal des modifications…"
   },
   "restore": {
     "final_title": "Confirmation finale",

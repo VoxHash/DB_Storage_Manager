@@ -126,7 +126,14 @@ class SecureStore:
                         base.update(incoming)
                         cloud[provider] = base
                 merged["cloud_managed"] = cloud
-            for key in ("experimental", "s3_backup", "email_alerts", "monitoring"):
+            for key in (
+                "experimental",
+                "s3_backup",
+                "email_alerts",
+                "webhook_alerts",
+                "slack_alerts",
+                "monitoring",
+            ):
                 if isinstance(loaded.get(key), dict):
                     nested = copy.deepcopy(defaults.get(key) or {})
                     nested.update(loaded[key])

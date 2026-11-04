@@ -38,6 +38,8 @@ from ..i18n.manager import get_i18n_manager
 from ..monitoring.notifications import (
     EMAIL_SECURITY_MODES,
     resolve_email_config,
+    resolve_slack_config,
+    resolve_webhook_config,
     send_test_email,
     validate_email_config,
 )
@@ -418,6 +420,54 @@ class SettingsWidget(QWidget):
         email_form.addRow(test_row)
         outer.addWidget(self.email_group)
 
+        webhook = resolve_webhook_config(self.settings)
+        slack = resolve_slack_config(self.settings)
+        self.webhook_group = QGroupBox()
+        webhook_form = QFormLayout(self.webhook_group)
+        self.webhook_hint = _hint_label()
+        webhook_form.addRow(self.webhook_hint)
+        self.webhook_url_label = QLabel()
+        self.webhook_url_edit = QLineEdit(str(webhook.get("url") or ""))
+        self.webhook_url_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.webhook_url_edit.setPlaceholderText("https://example.com/hooks/dsm")
+        webhook_form.addRow(self.webhook_url_label, self.webhook_url_edit)
+        self.webhook_severity_label = QLabel()
+        self.webhook_severity_combo = QComboBox()
+        self.webhook_severity_combo.addItem("", "critical")
+        self.webhook_severity_combo.addItem("", "warning")
+        idx = self.webhook_severity_combo.findData(webhook.get("min_severity"))
+        self.webhook_severity_combo.setCurrentIndex(max(idx, 0))
+        webhook_form.addRow(self.webhook_severity_label, self.webhook_severity_combo)
+        self.webhook_cooldown_label = QLabel()
+        self.webhook_cooldown_spin = QSpinBox()
+        self.webhook_cooldown_spin.setRange(1, 24 * 60)
+        self.webhook_cooldown_spin.setValue(int(webhook.get("cooldown_minutes") or 30))
+        webhook_form.addRow(self.webhook_cooldown_label, self.webhook_cooldown_spin)
+        outer.addWidget(self.webhook_group)
+
+        self.slack_group = QGroupBox()
+        slack_form = QFormLayout(self.slack_group)
+        self.slack_hint = _hint_label()
+        slack_form.addRow(self.slack_hint)
+        self.slack_url_label = QLabel()
+        self.slack_url_edit = QLineEdit(str(slack.get("url") or ""))
+        self.slack_url_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.slack_url_edit.setPlaceholderText("https://hooks.slack.com/services/…")
+        slack_form.addRow(self.slack_url_label, self.slack_url_edit)
+        self.slack_severity_label = QLabel()
+        self.slack_severity_combo = QComboBox()
+        self.slack_severity_combo.addItem("", "critical")
+        self.slack_severity_combo.addItem("", "warning")
+        idx = self.slack_severity_combo.findData(slack.get("min_severity"))
+        self.slack_severity_combo.setCurrentIndex(max(idx, 0))
+        slack_form.addRow(self.slack_severity_label, self.slack_severity_combo)
+        self.slack_cooldown_label = QLabel()
+        self.slack_cooldown_spin = QSpinBox()
+        self.slack_cooldown_spin.setRange(1, 24 * 60)
+        self.slack_cooldown_spin.setValue(int(slack.get("cooldown_minutes") or 30))
+        slack_form.addRow(self.slack_cooldown_label, self.slack_cooldown_spin)
+        outer.addWidget(self.slack_group)
+
         outer.addStretch()
         return page
 
@@ -470,6 +520,12 @@ class SettingsWidget(QWidget):
             self.email_severity_combo,
             self.email_cooldown_spin,
             self.email_test_button,
+            self.webhook_url_edit,
+            self.webhook_severity_combo,
+            self.webhook_cooldown_spin,
+            self.slack_url_edit,
+            self.slack_severity_combo,
+            self.slack_cooldown_spin,
         ):
             widget.setEnabled(editable)
         self.updates_panel.set_editable(editable)
@@ -874,6 +930,70 @@ class SettingsWidget(QWidget):
             t("settings.email_test", default="Send test email")
         )
 
+        self.webhook_group.setTitle(
+            t("settings.webhook_title", default="Webhook alerts")
+        )
+        self.webhook_hint.setText(
+            t(
+                "settings.webhook_hint",
+                default=(
+                    "POSTs a JSON alert to an https URL you control. The URL is "
+                    "stored encrypted and is not written to the notification log. "
+                    "http is only allowed for localhost. Enable Webhook on the "
+                    "Monitoring tab. Same severity and cooldown rules as email."
+                ),
+            )
+        )
+        self.webhook_url_label.setText(
+            _colon(t("settings.webhook_url", default="Webhook URL"))
+        )
+        self.webhook_severity_label.setText(
+            _colon(t("settings.email_min_severity", default="Minimum severity"))
+        )
+        self.webhook_severity_combo.setItemText(
+            0, t("settings.severity_critical", default="Critical only")
+        )
+        self.webhook_severity_combo.setItemText(
+            1, t("settings.severity_warning", default="Warning and critical")
+        )
+        self.webhook_cooldown_label.setText(
+            _colon(t("settings.email_cooldown", default="Repeat cooldown"))
+        )
+        self.webhook_cooldown_spin.setSuffix(
+            f" {t('settings.minutes_suffix', default='min')}"
+        )
+        self.slack_group.setTitle(
+            t("settings.slack_title", default="Slack alerts")
+        )
+        self.slack_hint.setText(
+            t(
+                "settings.slack_hint",
+                default=(
+                    "Posts to a Slack incoming webhook (https://hooks.slack.com). "
+                    "The URL contains a secret and stays in SecureStore. Same "
+                    "severity and cooldown rules as email."
+                ),
+            )
+        )
+        self.slack_url_label.setText(
+            _colon(t("settings.slack_url", default="Slack webhook URL"))
+        )
+        self.slack_severity_label.setText(
+            _colon(t("settings.email_min_severity", default="Minimum severity"))
+        )
+        self.slack_severity_combo.setItemText(
+            0, t("settings.severity_critical", default="Critical only")
+        )
+        self.slack_severity_combo.setItemText(
+            1, t("settings.severity_warning", default="Warning and critical")
+        )
+        self.slack_cooldown_label.setText(
+            _colon(t("settings.email_cooldown", default="Repeat cooldown"))
+        )
+        self.slack_cooldown_spin.setSuffix(
+            f" {t('settings.minutes_suffix', default='min')}"
+        )
+
         self.updates_panel.retranslate()
         self.retention_group.setTitle(
             _mnemonic_safe(t("settings.retention_title", default="Retention"))
@@ -1109,6 +1229,23 @@ class SettingsWidget(QWidget):
         if not form["username"]:
             email.pop("password", None)
 
+        webhook = dict(existing.get("webhook_alerts") or {})
+        webhook.update(
+            {
+                "url": self.webhook_url_edit.text().strip(),
+                "min_severity": self.webhook_severity_combo.currentData() or "critical",
+                "cooldown_minutes": int(self.webhook_cooldown_spin.value()),
+            }
+        )
+        slack = dict(existing.get("slack_alerts") or {})
+        slack.update(
+            {
+                "url": self.slack_url_edit.text().strip(),
+                "min_severity": self.slack_severity_combo.currentData() or "critical",
+                "cooldown_minutes": int(self.slack_cooldown_spin.value()),
+            }
+        )
+
         experimental = dict(existing.get("experimental") or {})
         if not env_forces_experimental():
             experimental["restore"] = self.experimental_restore_check.isChecked()
@@ -1136,6 +1273,8 @@ class SettingsWidget(QWidget):
             "rbac": rbac,
             "experimental": experimental,
             "email_alerts": email,
+            "webhook_alerts": webhook,
+            "slack_alerts": slack,
             "monitoring": monitoring,
         }
         self.secure_store.set_settings(self.settings)

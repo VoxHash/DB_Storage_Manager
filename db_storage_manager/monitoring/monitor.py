@@ -49,6 +49,7 @@ class DatabaseMonitor:
                 pass
 
         self.alert_manager.check_metrics(metrics)
+        self._emit_anomalies(metrics)
 
         health = await self.health_checker.check_health()
         status = health.get("status")
@@ -68,6 +69,30 @@ class DatabaseMonitor:
         self._last_health_alert_status = status
 
         return self.get_dashboard_data()
+
+    def _emit_anomalies(self, metrics: Dict[str, Any]) -> None:
+        """Compare this sample with the local history. Disk errors do not fail the poll."""
+        from .alerts import Alert, AlertSeverity
+        from .anomaly import record_and_detect
+
+        connection_id = getattr(self.connection.config, "id", None) or "default"
+        try:
+            anomalies = record_and_detect(str(connection_id), metrics)
+        except Exception:
+            return
+        rank = {"info": AlertSeverity.INFO, "warning": AlertSeverity.WARNING, "critical": AlertSeverity.CRITICAL}
+        for item in anomalies:
+            title = str(item["title"])
+            if self.alert_manager._has_active_alert(title, "anomaly"):
+                continue
+            self.alert_manager.emit_alert(
+                Alert(
+                    title,
+                    str(item["message"]),
+                    rank.get(str(item["severity"]), AlertSeverity.WARNING),
+                    "anomaly",
+                )
+            )
 
     async def start_monitoring(
         self,
@@ -129,6 +154,7 @@ class DatabaseMonitor:
                     metrics = self.metrics_collector.get_latest_metrics()
                     if metrics:
                         self.alert_manager.check_metrics(metrics)
+                        self._emit_anomalies(metrics)
                 except Exception:
                     pass
                 await asyncio.sleep(metrics_interval)

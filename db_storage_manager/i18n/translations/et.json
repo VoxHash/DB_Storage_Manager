@@ -2,7 +2,7 @@
   "app": {
     "title": "Andmebaasi Hoidla Haldur",
     "version": "Versioon {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Fail",
@@ -109,7 +109,8 @@
     "import_confirm_body": "Kas importida {count} profiil(i)?\n{names}",
     "import_ssh_title": "Impordi privaatne SSH-võti",
     "import_ssh_dir_title": "Või vali kaust, mis sisaldab KEY / SSH.pub",
-    "import_ssh_confirm": "Kas importida SSH-profiil „{name}“?\nTüüp: {type}  Host: {host}  Bastion: {bastion}\nPrivaatvõtme asukohale viidatakse (seda ei kopeerita gitti)."
+    "import_ssh_confirm": "Kas importida SSH-profiil „{name}“?\nTüüp: {type}  Host: {host}  Bastion: {bastion}\nPrivaatvõtme asukohale viidatakse (seda ei kopeerita gitti).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon ja Aiven leitakse pluginaga multi-cloud-discovery, kui see on paigaldatud ja litsentsitud."
   },
   "query": {
     "title": "Päringukonsool",
@@ -334,13 +335,25 @@
     "retention_hint": "Vaikimisi väljas. Pärast ajastatud varukoopiat kustutatakse kohalikud, Proton Drive’i ja S3 koopiad, mis on nendest reeglitest vanemad. Google Drive’i ei kärbita. Kui mõlemad arvud on null, ei kustutata midagi.",
     "retention_connection": "Ühendus",
     "retention_all": "Kõik ühendused (vaikimisi)",
-    "retention_custom": "Valitud ühenduse oma reeglid"
+    "retention_custom": "Valitud ühenduse oma reeglid",
+    "webhook_title": "Webhooki teated",
+    "webhook_hint": "Saadab JSON-teate sinu https-aadressile. URL salvestatakse krüptitult ega lähe logisse. http on lubatud ainult localhostile. Lülita Webhook jälgimises sisse. Sama tase ja ooteaeg nagu meilil.",
+    "webhook_url": "Webhooki URL",
+    "slack_title": "Slacki teated",
+    "slack_hint": "Saadab Slacki incoming-webhookile (https://hooks.slack.com). URL sisaldab saladust ja jääb SecureStore’i. Sama tase ja ooteaeg nagu meilil.",
+    "slack_url": "Slacki webhooki URL"
   },
   "about": {
     "title": "Teave DB Storage Managerist",
     "version": "DB Storage Manager v{version}",
     "description": "Professionaalne töölauarakendus andmebaasi hoidla ja varukoopiate haldamiseks.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Versioon {version}",
+    "channel_line": "Kanal: {channel}",
+    "released_line": "Avaldatud: {date}",
+    "check_updates": "Otsi värskendusi...",
+    "copy_version": "Kopeeri versiooni teave",
+    "copied": "Versiooni teave kopeeritud."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Andmepunkte: {value}",
     "channel_email": "E-post (SMTP, seadistatakse jaotises Seaded)",
     "email_ready": "SMTP on seadistatud.",
-    "email_not_ready": "Seadista esmalt SMTP jaotises Seaded → Teavitused: {problems}"
+    "email_not_ready": "Seadista esmalt SMTP jaotises Seaded → Teavitused: {problems}",
+    "channel_webhook": "Webhook (seadista sätetes)",
+    "channel_slack": "Slack (seadista sätetes)",
+    "webhook_ready": "Webhooki URL on seadistatud.",
+    "webhook_not_ready": "Seadista webhook menüüs Sätted → Teavitused: {problems}",
+    "slack_ready": "Slacki webhook on seadistatud.",
+    "slack_not_ready": "Seadista Slacki webhook menüüs Sätted → Teavitused: {problems}"
   },
   "analysis": {
     "query_performance": "Päringute jõudlus",
@@ -649,7 +668,8 @@
     "changelog_failed": "Muudatuste logi laadimine ebaõnnestus: {error}",
     "auto_check": "Kontrolli uuendusi automaatselt",
     "auto_check_hint": "Vaikimisi väljas. Sisselülitatuna küsib see arvuti GitHubilt kõige rohkem üks kord päevas. Rakendus ei paigalda uuendust ise.",
-    "changelog_menu": "Muudatuste logi"
+    "changelog_menu": "Muudatuste logi",
+    "open_changelog": "Muudatuste logi…"
   },
   "restore": {
     "final_title": "Lõplik kinnitus",

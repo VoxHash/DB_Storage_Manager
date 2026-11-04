@@ -41,7 +41,13 @@ from ..db.factory import DatabaseConnectionFactory
 from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
-from ..monitoring.notifications import resolve_email_config, validate_email_config
+from ..monitoring.notifications import (
+    resolve_email_config,
+    resolve_slack_config,
+    resolve_webhook_config,
+    validate_email_config,
+    validate_webhook_config,
+)
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
 from .icons import set_icon_only
@@ -72,6 +78,7 @@ _METRIC_LABELS = {
     "blocksHit": "Blocks hit",
     "databaseSize": "Database size (bytes)",
     "cacheHitRatio": "Cache hit ratio (%)",
+    "queryTime": "Slowest active query (ms)",
     "totalQueries": "Total queries",
     "connected": "Connected",
     "databaseType": "Database type",
@@ -371,9 +378,17 @@ class MonitoringWidget(QWidget):
         self.email_channel_check = QCheckBox(
             t("monitoring.channel_email", default="Email (SMTP, set up in Settings)")
         )
+        self.webhook_channel_check = QCheckBox(
+            t("monitoring.channel_webhook", default="Webhook (set up in Settings)")
+        )
+        self.slack_channel_check = QCheckBox(
+            t("monitoring.channel_slack", default="Slack (set up in Settings)")
+        )
         channels_form.addWidget(self.desktop_channel_check)
         channels_form.addWidget(self.in_app_channel_check)
         channels_form.addWidget(self.email_channel_check)
+        channels_form.addWidget(self.webhook_channel_check)
+        channels_form.addWidget(self.slack_channel_check)
         channels_layout.addWidget(channels_group)
 
         channel_actions = QHBoxLayout()
@@ -444,13 +459,11 @@ class MonitoringWidget(QWidget):
         self.refresh_email_channel(
             checked=master_on and bool(channels.get("email", False))
         )
-        self.notification_dispatcher.configure(
-            {
-                "desktop": self.desktop_channel_check.isChecked(),
-                "in_app": self.in_app_channel_check.isChecked(),
-                "email": self.email_channel_check.isChecked(),
-            }
+        self.refresh_http_channels(
+            webhook=master_on and bool(channels.get("webhook", False)),
+            slack=master_on and bool(channels.get("slack", False)),
         )
+        self.notification_dispatcher.configure(self._channel_flags())
 
     def refresh_email_channel(self, checked: Optional[bool] = None) -> None:
         """Re-read the SMTP config; the Email channel needs a complete one."""
@@ -474,6 +487,59 @@ class MonitoringWidget(QWidget):
         self.email_channel_check.setEnabled(
             self._email_ready and getattr(self, "_can_write", True)
         )
+
+    def _channel_flags(self) -> Dict[str, bool]:
+        return {
+            "desktop": self.desktop_channel_check.isChecked(),
+            "in_app": self.in_app_channel_check.isChecked(),
+            "email": self.email_channel_check.isChecked(),
+            "webhook": self.webhook_channel_check.isChecked(),
+            "slack": self.slack_channel_check.isChecked(),
+        }
+
+    def refresh_http_channels(
+        self,
+        webhook: Optional[bool] = None,
+        slack: Optional[bool] = None,
+    ) -> None:
+        """Enable Webhook and Slack only when the saved URL passes the same rules."""
+        t = self.i18n.translate
+        settings = self.secure_store.get_settings()
+        webhook_cfg = resolve_webhook_config(settings)
+        slack_cfg = resolve_slack_config(settings)
+        webhook_problems = validate_webhook_config(webhook_cfg, slack=False)
+        slack_problems = validate_webhook_config(slack_cfg, slack=True)
+        self._webhook_ready = not webhook_problems
+        self._slack_ready = not slack_problems
+        self.notification_dispatcher.set_webhook_config(webhook_cfg)
+        self.notification_dispatcher.set_slack_config(slack_cfg)
+        if webhook is None:
+            webhook = self.webhook_channel_check.isChecked()
+        if slack is None:
+            slack = self.slack_channel_check.isChecked()
+        self.webhook_channel_check.setChecked(bool(webhook) and self._webhook_ready)
+        self.slack_channel_check.setChecked(bool(slack) and self._slack_ready)
+        self.webhook_channel_check.setToolTip(
+            t("monitoring.webhook_ready", default="Webhook URL is configured.")
+            if self._webhook_ready
+            else t(
+                "monitoring.webhook_not_ready",
+                default="Configure the webhook under Settings → Notifications first: {problems}",
+                problems="; ".join(webhook_problems),
+            )
+        )
+        self.slack_channel_check.setToolTip(
+            t("monitoring.slack_ready", default="Slack webhook is configured.")
+            if self._slack_ready
+            else t(
+                "monitoring.slack_not_ready",
+                default="Configure the Slack webhook under Settings → Notifications first: {problems}",
+                problems="; ".join(slack_problems),
+            )
+        )
+        can_write = getattr(self, "_can_write", True)
+        self.webhook_channel_check.setEnabled(self._webhook_ready and can_write)
+        self.slack_channel_check.setEnabled(self._slack_ready and can_write)
 
     def _populate_threshold_spins(
         self, thresholds: Dict[str, Dict[str, float]]
@@ -534,11 +600,7 @@ class MonitoringWidget(QWidget):
         if not self._require("monitoring:write"):
             return
         t = self.i18n.translate
-        channels = {
-            "desktop": self.desktop_channel_check.isChecked(),
-            "in_app": self.in_app_channel_check.isChecked(),
-            "email": self.email_channel_check.isChecked(),
-        }
+        channels = self._channel_flags()
         settings = self.secure_store.get_settings()
         settings["alert_channels"] = channels
         # Keep global notifications flag in sync when any channel is on
@@ -602,6 +664,12 @@ class MonitoringWidget(QWidget):
             widget.setEnabled(self._can_write)
         self.email_channel_check.setEnabled(
             self._can_write and getattr(self, "_email_ready", False)
+        )
+        self.webhook_channel_check.setEnabled(
+            self._can_write and getattr(self, "_webhook_ready", False)
+        )
+        self.slack_channel_check.setEnabled(
+            self._can_write and getattr(self, "_slack_ready", False)
         )
         for spins in self._threshold_spins.values():
             for spin in spins.values():

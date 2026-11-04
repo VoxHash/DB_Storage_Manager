@@ -2,7 +2,7 @@
   "app": {
     "title": "DB 스토리지 관리자",
     "version": "버전 {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&파일",
@@ -109,7 +109,8 @@
     "import_confirm_body": "프로필 {count}개를 가져오시겠습니까?\n{names}",
     "import_ssh_title": "SSH 개인 키 가져오기",
     "import_ssh_dir_title": "또는 KEY / SSH.pub이 들어 있는 폴더를 선택하세요",
-    "import_ssh_confirm": "SSH 프로필 “{name}”을(를) 가져오시겠습니까?\n유형: {type}  호스트: {host}  배스천: {bastion}\n개인 키는 경로만 참조됩니다 (git에 복사되지 않음)."
+    "import_ssh_confirm": "SSH 프로필 “{name}”을(를) 가져오시겠습니까?\n유형: {type}  호스트: {host}  배스천: {bastion}\n개인 키는 경로만 참조됩니다 (git에 복사되지 않음).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon, Aiven은 multi-cloud-discovery 플러그인을 설치하고 라이선스를 적용하면 검색됩니다."
   },
   "query": {
     "title": "쿼리 콘솔",
@@ -334,13 +335,25 @@
     "retention_hint": "기본값은 꺼짐입니다. 예약 백업 뒤에 이 규칙보다 오래된 로컬, Proton Drive, S3 사본을 삭제합니다. Google Drive는 정리하지 않습니다. 두 수가 모두 0이면 아무것도 삭제하지 않습니다.",
     "retention_connection": "연결",
     "retention_all": "모든 연결(기본값)",
-    "retention_custom": "선택한 연결만의 규칙"
+    "retention_custom": "선택한 연결만의 규칙",
+    "webhook_title": "Webhook 알림",
+    "webhook_hint": "직접 관리하는 https URL로 JSON 알림을 보냅니다. URL은 암호화되어 저장되며 알림 로그에 쓰지 않습니다. http는 localhost만 허용됩니다. 모니터링 탭에서 Webhook을 켜세요. 심각도와 대기 시간은 메일과 같습니다.",
+    "webhook_url": "Webhook URL",
+    "slack_title": "Slack 알림",
+    "slack_hint": "Slack incoming webhook(https://hooks.slack.com)으로 보냅니다. URL에 비밀이 있으며 SecureStore에 남습니다. 심각도와 대기 시간은 메일과 같습니다.",
+    "slack_url": "Slack webhook URL"
   },
   "about": {
     "title": "DB 스토리지 관리자 정보",
     "version": "DB Storage Manager v{version}",
     "description": "데이터베이스 스토리지 및 백업을 관리하는 전문 데스크톱 애플리케이션입니다.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "버전 {version}",
+    "channel_line": "채널: {channel}",
+    "released_line": "릴리스: {date}",
+    "check_updates": "업데이트 확인...",
+    "copy_version": "버전 정보 복사",
+    "copied": "버전 정보를 복사했습니다."
   },
   "common": {
     "ok": "확인",
@@ -516,7 +529,13 @@
     "perf_data_points": "데이터 포인트: {value}",
     "channel_email": "이메일(SMTP, 설정에서 구성)",
     "email_ready": "SMTP가 구성되었습니다.",
-    "email_not_ready": "먼저 설정 → 알림에서 SMTP를 구성하세요: {problems}"
+    "email_not_ready": "먼저 설정 → 알림에서 SMTP를 구성하세요: {problems}",
+    "channel_webhook": "Webhook(설정에서 구성)",
+    "channel_slack": "Slack(설정에서 구성)",
+    "webhook_ready": "Webhook URL이 구성되었습니다.",
+    "webhook_not_ready": "설정 → 알림에서 webhook을 구성하세요: {problems}",
+    "slack_ready": "Slack webhook이 구성되었습니다.",
+    "slack_not_ready": "설정 → 알림에서 Slack webhook을 구성하세요: {problems}"
   },
   "analysis": {
     "query_performance": "쿼리 성능",
@@ -649,7 +668,8 @@
     "changelog_failed": "변경 내역을 불러올 수 없습니다: {error}",
     "auto_check": "업데이트를 자동으로 확인",
     "auto_check_hint": "기본값은 꺼짐입니다. 켜면 이 컴퓨터는 하루에 한 번만 GitHub에 묻습니다. 앱이 업데이트를 스스로 설치하지는 않습니다.",
-    "changelog_menu": "변경 기록"
+    "changelog_menu": "변경 기록",
+    "open_changelog": "변경 기록…"
   },
   "restore": {
     "final_title": "최종 확인",

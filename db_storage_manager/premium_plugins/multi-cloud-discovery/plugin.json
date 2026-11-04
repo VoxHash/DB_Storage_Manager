@@ -1,0 +1,21 @@
+{
+  "id": "multi-cloud-discovery",
+  "name": "Multi-cloud discovery",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Discover DigitalOcean, Supabase, Neon, and Aiven databases with the operator's own API token.",
+  "plugin_type": "custom",
+  "api_version": "1.0",
+  "entry": "plugin:MultiCloudDiscoveryPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "pending-multi-cloud-discovery",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

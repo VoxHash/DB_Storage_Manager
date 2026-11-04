@@ -1,6 +1,6 @@
-"""Updates tab: changelog, channel, and a manual GitHub release check.
+"""Updates tab: channel and a manual GitHub release check.
 
-The controls live on Settings → Updates. Nothing is downloaded or installed.
+The changelog opens in its own window. Nothing is downloaded or installed.
 An automatic check is a separate opt-in (default off, at most once a day).
 """
 
@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
@@ -39,7 +38,7 @@ from .jobs import JobRunner
 
 
 class UpdatesPanel(QWidget):
-    """Changelog and update check embedded in Settings."""
+    """Update channel and GitHub check. The changelog is a separate window."""
 
     update_available = pyqtSignal(str)
 
@@ -117,17 +116,12 @@ class UpdatesPanel(QWidget):
         self.releases_button = QPushButton(t("updates.open_releases"))
         self.releases_button.clicked.connect(lambda: self._open_url(RELEASES_PAGE))
         actions.addWidget(self.releases_button)
+        self.changelog_button = QPushButton(t("updates.open_changelog", default="Changelog…"))
+        self.changelog_button.clicked.connect(self.open_changelog)
+        actions.addWidget(self.changelog_button)
         actions.addStretch()
         layout.addLayout(actions)
-
-        self.changelog_label = QLabel(t("updates.changelog"))
-        layout.addWidget(self.changelog_label)
-        self.changelog_view = QTextBrowser()
-        self.changelog_view.setOpenExternalLinks(False)
-        self.changelog_view.setPlainText(t("updates.changelog_loading"))
-        layout.addWidget(self.changelog_view, 1)
-
-        self.load_changelog()
+        layout.addStretch(1)
 
     def retranslate(self) -> None:
         t = self.i18n.translate
@@ -142,7 +136,9 @@ class UpdatesPanel(QWidget):
         self.download_button.setText(t("updates.open_download"))
         self.copy_pip_button.setText(t("updates.copy_pip"))
         self.releases_button.setText(t("updates.open_releases"))
-        self.changelog_label.setText(t("updates.changelog"))
+        self.changelog_button.setText(
+            t("updates.open_changelog", default="Changelog…")
+        )
 
     def selected_channel(self) -> str:
         return str(self.channel_combo.currentData() or CHANNEL_STABLE)
@@ -170,25 +166,12 @@ class UpdatesPanel(QWidget):
         except Exception:
             return False
 
-    def load_changelog(self) -> None:
-        """Read the local changelog on this thread.
+    def open_changelog(self) -> None:
+        """Open the local changelog in its own window."""
+        from .changelog import ChangelogDialog
 
-        The file is small. A background job outlives Settings when tests (and
-        window close) delete the panel, and the callback then touches a dead
-        widget.
-        """
-        try:
-            text, source = self._changelog_fn()
-        except Exception as exc:  # noqa: BLE001 — shown in the changelog view
-            self.changelog_view.setPlainText(
-                self.i18n.translate(
-                    "updates.changelog_failed",
-                    error=str(exc) or type(exc).__name__,
-                )
-            )
-            return
-        self.changelog_view.setMarkdown(text)
-        self.changelog_view.setToolTip(source)
+        dialog = ChangelogDialog(self, changelog_fn=self._changelog_fn)
+        dialog.exec()
 
     def check_updates(self, *, notify: bool = False, channel: Optional[str] = None) -> None:
         channel = channel or self.selected_channel()

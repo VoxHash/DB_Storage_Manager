@@ -2,7 +2,7 @@
   "app": {
     "title": "Administrador de Almacenamiento de BD",
     "version": "Versión {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Archivo",
@@ -109,7 +109,8 @@
     "import_confirm_body": "¿Importar {count} perfil(es)?\n{names}",
     "import_ssh_title": "Importar clave privada SSH",
     "import_ssh_dir_title": "O seleccione una carpeta que contenga KEY / SSH.pub",
-    "import_ssh_confirm": "¿Importar el perfil SSH “{name}”?\nTipo: {type}  Host: {host}  Bastión: {bastion}\nSe referencia la ruta de la clave privada (no se copia a git)."
+    "import_ssh_confirm": "¿Importar el perfil SSH “{name}”?\nTipo: {type}  Host: {host}  Bastión: {bastion}\nSe referencia la ruta de la clave privada (no se copia a git).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon y Aiven se descubren con el complemento multi-cloud-discovery cuando está instalado y tiene licencia."
   },
   "query": {
     "title": "Consola de Consultas",
@@ -334,13 +335,25 @@
     "retention_hint": "Apagado de forma predeterminada. Tras una copia programada se borran las copias locales, de Proton Drive y de S3 que excedan estas reglas. Google Drive no se recorta. Si ambos números son cero, no se borra nada.",
     "retention_connection": "Conexión",
     "retention_all": "Todas las conexiones (predeterminado)",
-    "retention_custom": "Reglas propias para la conexión seleccionada"
+    "retention_custom": "Reglas propias para la conexión seleccionada",
+    "webhook_title": "Alertas por webhook",
+    "webhook_hint": "Envía la alerta en JSON a una URL https tuya. La URL se guarda cifrada y no se escribe en el registro. http solo se permite en localhost. Activa Webhook en Supervisión. Misma gravedad y espera que el correo.",
+    "webhook_url": "URL del webhook",
+    "slack_title": "Alertas de Slack",
+    "slack_hint": "Publica en un webhook entrante de Slack (https://hooks.slack.com). La URL contiene un secreto y permanece en SecureStore. Misma gravedad y espera que el correo.",
+    "slack_url": "URL del webhook de Slack"
   },
   "about": {
     "title": "Acerca de DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "Una aplicación de escritorio profesional para gestionar almacenamiento de bases de datos y copias de seguridad.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Versión {version}",
+    "channel_line": "Canal: {channel}",
+    "released_line": "Publicada: {date}",
+    "check_updates": "Buscar actualizaciones...",
+    "copy_version": "Copiar información de versión",
+    "copied": "Información de versión copiada."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Puntos de datos: {value}",
     "channel_email": "Correo (SMTP, se configura en Ajustes)",
     "email_ready": "SMTP está configurado.",
-    "email_not_ready": "Configura primero SMTP en Ajustes → Notificaciones: {problems}"
+    "email_not_ready": "Configura primero SMTP en Ajustes → Notificaciones: {problems}",
+    "channel_webhook": "Webhook (configúralo en Ajustes)",
+    "channel_slack": "Slack (configúralo en Ajustes)",
+    "webhook_ready": "La URL del webhook está configurada.",
+    "webhook_not_ready": "Configura el webhook en Ajustes → Notificaciones: {problems}",
+    "slack_ready": "El webhook de Slack está configurado.",
+    "slack_not_ready": "Configura el webhook de Slack en Ajustes → Notificaciones: {problems}"
   },
   "analysis": {
     "query_performance": "Rendimiento de consultas",
@@ -649,7 +668,8 @@
     "changelog_failed": "No se pudo cargar el registro de cambios: {error}",
     "auto_check": "Buscar actualizaciones automáticamente",
     "auto_check_hint": "Apagado de forma predeterminada. Si lo activas, este equipo pregunta a GitHub como máximo una vez al día. La aplicación nunca instala una actualización por sí sola.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Registro de cambios…"
   },
   "restore": {
     "final_title": "Confirmación final",

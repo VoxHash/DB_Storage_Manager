@@ -313,7 +313,14 @@ def test_updates_panel_check_and_trusted_open(isolated_secure_store):
         open_url_fn=opened.append,
     )
     dlg.wait_idle()
-    assert "Changelog" in dlg.changelog_view.toPlainText()
+    assert dlg.changelog_button.text()
+    from db_storage_manager.gui.changelog import ChangelogDialog
+
+    changelog = ChangelogDialog(
+        changelog_fn=lambda: ("# Changelog\n\n## [1.0.7]", "local")
+    )
+    assert "Changelog" in changelog.view.toPlainText()
+    changelog.close()
     dlg.check_updates()
     dlg.wait_idle()
     app.processEvents()
@@ -644,7 +651,7 @@ def test_about_text_version_year_and_no_built_with():
     for locale in LOCALES:
         loc = _load(locale)
         assert "about.built_with" not in loc
-        assert loc["about.copyright"] == "© 2026 VoxHash"
+        assert loc["about.copyright"] == "© 2026 VOXHASH LABS"
         assert "{version}" in loc["about.version"]
     assert APP_VERSION == "1.0.7"
     blob = json.dumps(_load("en"))

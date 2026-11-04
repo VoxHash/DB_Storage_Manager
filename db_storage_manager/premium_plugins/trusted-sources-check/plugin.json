@@ -1,0 +1,21 @@
+{
+  "id": "trusted-sources-check",
+  "name": "Trusted sources check",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Compare a provider allow list with the IP this database session is using.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:TrustedSourcesPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "pending-trusted-sources-check",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

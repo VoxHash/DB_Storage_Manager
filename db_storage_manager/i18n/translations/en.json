@@ -2,7 +2,7 @@
   "app": {
     "title": "DB Storage Manager",
     "version": "Version {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&File",
@@ -158,7 +158,8 @@
     "import_confirm_body": "Import {count} profile(s)?\n{names}",
     "import_ssh_title": "Import SSH private key",
     "import_ssh_dir_title": "Or select a folder containing KEY / SSH.pub",
-    "import_ssh_confirm": "Import SSH profile “{name}”?\nType: {type}  Host: {host}  Bastion: {bastion}\nPrivate key path is referenced (not copied into git)."
+    "import_ssh_confirm": "Import SSH profile “{name}”?\nType: {type}  Host: {host}  Bastion: {bastion}\nPrivate key path is referenced (not copied into git).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon, and Aiven are discovered by the multi-cloud-discovery plugin once it is installed and licensed."
   },
   "query": {
     "title": "Query Console",
@@ -383,13 +384,25 @@
     "retention_hint": "Off by default. After a scheduled backup, Local, Proton Drive and S3 copies older than these rules are deleted. Google Drive is not pruned. If both counts are zero, nothing is deleted.",
     "retention_connection": "Connection",
     "retention_all": "All connections (default)",
-    "retention_custom": "Custom rules for the selected connection"
+    "retention_custom": "Custom rules for the selected connection",
+    "webhook_title": "Webhook alerts",
+    "webhook_hint": "POSTs a JSON alert to an https URL you control. The URL is stored encrypted and is not written to the notification log. http is only allowed for localhost. Enable Webhook on the Monitoring tab. Same severity and cooldown rules as email.",
+    "webhook_url": "Webhook URL",
+    "slack_title": "Slack alerts",
+    "slack_hint": "Posts to a Slack incoming webhook (https://hooks.slack.com). The URL contains a secret and stays in SecureStore. Same severity and cooldown rules as email.",
+    "slack_url": "Slack webhook URL"
   },
   "about": {
     "title": "About DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "A professional desktop application for managing database storage and backups.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Version {version}",
+    "channel_line": "Channel: {channel}",
+    "released_line": "Released: {date}",
+    "check_updates": "Check for Updates...",
+    "copy_version": "Copy version info",
+    "copied": "Version info copied."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Data points: {value}",
     "channel_email": "Email (SMTP, set up in Settings)",
     "email_ready": "SMTP is configured.",
-    "email_not_ready": "Configure SMTP under Settings → Notifications first: {problems}"
+    "email_not_ready": "Configure SMTP under Settings → Notifications first: {problems}",
+    "channel_webhook": "Webhook (set up in Settings)",
+    "channel_slack": "Slack (set up in Settings)",
+    "webhook_ready": "Webhook URL is configured.",
+    "webhook_not_ready": "Configure the webhook under Settings → Notifications first: {problems}",
+    "slack_ready": "Slack webhook is configured.",
+    "slack_not_ready": "Configure the Slack webhook under Settings → Notifications first: {problems}"
   },
   "analysis": {
     "query_performance": "Query Performance",
@@ -649,7 +668,8 @@
     "changelog_failed": "Could not load the changelog: {error}",
     "auto_check": "Check for updates automatically",
     "auto_check_hint": "Off by default. When on, this machine asks GitHub at most once a day. The app never installs an update by itself.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Changelog…"
   },
   "restore": {
     "final_title": "Final confirmation",

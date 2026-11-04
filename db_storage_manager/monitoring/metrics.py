@@ -45,7 +45,12 @@ class MetricsCollector:
                     (SELECT sum(xact_rollback) FROM pg_stat_database WHERE datname = current_database()) as transactions_rolled_back,
                     (SELECT sum(blks_read) FROM pg_stat_database WHERE datname = current_database()) as blocks_read,
                     (SELECT sum(blks_hit) FROM pg_stat_database WHERE datname = current_database()) as blocks_hit,
-                    (SELECT pg_database_size(current_database())) as database_size
+                    (SELECT pg_database_size(current_database())) as database_size,
+                    (SELECT COALESCE(MAX(EXTRACT(EPOCH FROM (clock_timestamp() - query_start)) * 1000), 0)
+                     FROM pg_stat_activity
+                     WHERE state = 'active'
+                       AND query_start IS NOT NULL
+                       AND pid <> pg_backend_pid()) as slowest_query_ms
             """,
                 safe_mode=True,
             )
@@ -62,6 +67,7 @@ class MetricsCollector:
                     "blocksRead": row.get("blocks_read", 0),
                     "blocksHit": row.get("blocks_hit", 0),
                     "databaseSize": row.get("database_size", 0),
+                    "queryTime": row.get("slowest_query_ms", 0),
                     "cacheHitRatio": (
                         row.get("blocks_hit", 0)
                         / (row.get("blocks_read", 0) + row.get("blocks_hit", 1))
@@ -101,7 +107,8 @@ class MetricsCollector:
             for row in result.get("rows", []):
                 metrics[row.get("Variable_name", "").lower()] = int(row.get("Value", 0))
 
-            return {
+            extra = await self._mysql_size_and_slowest()
+            metrics_out = {
                 "timestamp": datetime.now().isoformat(),
                 "activeConnections": metrics.get("threads_connected", 0),
                 "activeQueries": metrics.get("threads_running", 0),
@@ -123,10 +130,49 @@ class MetricsCollector:
                     else 0
                 ),
             }
+            metrics_out.update(extra)
+            return metrics_out
         except Exception:
             pass
 
         return await self._collect_basic_metrics()
+
+    async def _mysql_size_and_slowest(self) -> Dict[str, Any]:
+        """Database size and the slowest non-sleeping statement, in ms.
+
+        Either query can fail on a restricted account. The keys are omitted
+        then, so anomaly detection does not treat a missing probe as zero.
+        """
+        extra: Dict[str, Any] = {}
+        try:
+            size = await self.connection.execute_query(
+                """
+                SELECT COALESCE(SUM(data_length + index_length), 0) AS database_size
+                FROM information_schema.tables
+                WHERE table_schema = DATABASE()
+                """,
+                safe_mode=True,
+            )
+            rows = size.get("rows") or []
+            if rows:
+                extra["databaseSize"] = rows[0].get("database_size", 0)
+        except Exception:
+            pass
+        try:
+            slow = await self.connection.execute_query(
+                """
+                SELECT COALESCE(MAX(TIME), 0) * 1000 AS slowest_query_ms
+                FROM information_schema.processlist
+                WHERE COMMAND <> 'Sleep' AND ID <> CONNECTION_ID()
+                """,
+                safe_mode=True,
+            )
+            rows = slow.get("rows") or []
+            if rows and rows[0].get("slowest_query_ms") is not None:
+                extra["queryTime"] = rows[0].get("slowest_query_ms")
+        except Exception:
+            pass
+        return extra
 
     async def _collect_sqlserver_metrics(self) -> Dict[str, Any]:
         """Collect SQL Server-specific metrics"""

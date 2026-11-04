@@ -5,20 +5,26 @@ Channels fire when AlertManager emits a new alert. Desktop delivery uses a
 caller-provided handler (typically QSystemTrayIcon.showMessage); in-app
 delivery appends to a durable in-memory log the Monitoring UI can display;
 email delivery speaks real SMTP (STARTTLS / implicit TLS) from a worker thread
-so a slow mail server never blocks the GUI or the monitoring poll.
+so a slow mail server never blocks the GUI or the monitoring poll. Webhook and
+Slack use the same minimum severity and cooldown, and post JSON from a worker
+thread. Slack URLs are only sent to hooks.slack.com.
 """
 
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import smtplib
 import socket
 import ssl
 import threading
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 from email.message import EmailMessage
+from urllib.parse import urlparse
 from email.utils import formatdate, make_msgid
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -28,6 +34,8 @@ DEFAULT_ALERT_CHANNELS: Dict[str, bool] = {
     "desktop": True,
     "in_app": True,
     "email": False,
+    "webhook": False,
+    "slack": False,
 }
 
 DesktopHandler = Callable[[str, str, str], None]
@@ -302,6 +310,132 @@ def send_test_email(cfg: Dict[str, Any], *, timeout: float = 15.0) -> None:
 
 
 # --------------------------------------------------------------------------
+# Webhook and Slack (same severity and cooldown rules as email)
+# --------------------------------------------------------------------------
+
+_METADATA_HOSTS = frozenset(
+    {"169.254.169.254", "metadata.google.internal", "metadata.google.internal."}
+)
+HttpSender = Callable[[str, Dict[str, Any]], None]
+
+
+def _channel_config(
+    settings: Optional[Dict[str, Any]],
+    key: str,
+    defaults: Dict[str, Any],
+    env_name: str,
+) -> Dict[str, Any]:
+    if settings is None:
+        from ..security.store import SecureStore
+
+        settings = SecureStore().get_settings()
+    cfg = dict(defaults)
+    cfg.update(settings.get(key) or {})
+    url = os.environ.get(env_name, "").strip()
+    if url:
+        cfg["url"] = url
+    cfg["url"] = str(cfg.get("url") or "").strip()
+    cfg["min_severity"] = str(cfg.get("min_severity") or "critical").lower()
+    try:
+        cfg["cooldown_minutes"] = max(0, int(cfg.get("cooldown_minutes") or 0))
+    except (TypeError, ValueError):
+        cfg["cooldown_minutes"] = 30
+    return cfg
+
+
+def resolve_webhook_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    from ..config import DEFAULT_WEBHOOK_ALERTS
+
+    return _channel_config(settings, "webhook_alerts", DEFAULT_WEBHOOK_ALERTS, "DSM_WEBHOOK_URL")
+
+
+def resolve_slack_config(settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    from ..config import DEFAULT_SLACK_ALERTS
+
+    return _channel_config(
+        settings, "slack_alerts", DEFAULT_SLACK_ALERTS, "DSM_SLACK_WEBHOOK_URL"
+    )
+
+
+def validate_alert_url(url: str, *, slack: bool = False) -> List[str]:
+    """Problems with a webhook URL. The URL itself is not repeated in errors."""
+    errors: List[str] = []
+    parsed = urlparse(str(url or "").strip())
+    if parsed.username or parsed.password:
+        errors.append("URL must not include a username or password")
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if not host:
+        errors.append("URL host is required")
+        return errors
+    if host in _METADATA_HOSTS:
+        errors.append("Cloud metadata hosts are not allowed")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None and (ip.is_link_local or ip.is_multicast or ip.is_unspecified):
+        errors.append("That address is not allowed")
+    loopback = host in _LOOPBACK_HOSTS or (ip is not None and ip.is_loopback)
+    if slack:
+        if parsed.scheme != "https" or host != "hooks.slack.com":
+            errors.append("Slack webhooks must use https://hooks.slack.com")
+        elif not (parsed.path or "").startswith("/services/"):
+            errors.append("Slack webhook path must start with /services/")
+    elif parsed.scheme == "https":
+        pass
+    elif parsed.scheme == "http" and loopback:
+        pass
+    else:
+        errors.append("Webhook URL must be https (http is only allowed for localhost)")
+    return errors
+
+
+def validate_webhook_config(cfg: Dict[str, Any], *, slack: bool = False) -> List[str]:
+    errors = validate_alert_url(str(cfg.get("url") or ""), slack=slack)
+    if cfg.get("min_severity") not in ("warning", "critical"):
+        errors.append("Minimum severity must be warning or critical")
+    return errors
+
+
+def build_webhook_payload(alert: Alert) -> Dict[str, Any]:
+    return {
+        "app": "DB Storage Manager",
+        "title": alert.title,
+        "message": alert.message,
+        "severity": alert.severity.value,
+        "source": alert.source,
+        "timestamp": alert.timestamp,
+        "host": socket.gethostname(),
+    }
+
+
+def build_slack_payload(alert: Alert) -> Dict[str, Any]:
+    """Incoming-webhook body. Slack documents ``text`` as the message."""
+    return {
+        "text": (
+            f"[{alert.severity.value.upper()}] {alert.title}\n"
+            f"{alert.message}\n"
+            f"Source: {alert.source}"
+        )
+    }
+
+
+def post_json(url: str, payload: Dict[str, Any], *, timeout: float = 15.0) -> None:
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            response.read()
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"HTTP {exc.code}") from exc
+
+
+# --------------------------------------------------------------------------
 # Dispatcher
 # --------------------------------------------------------------------------
 
@@ -314,6 +448,8 @@ class NotificationDispatcher:
         channels: Optional[Dict[str, bool]] = None,
         *,
         email_sender: Optional[Callable[[Dict[str, Any], EmailMessage], None]] = None,
+        webhook_sender: Optional[HttpSender] = None,
+        slack_sender: Optional[HttpSender] = None,
         clock: Callable[[], float] = time.monotonic,
     ):
         self.channels: Dict[str, bool] = dict(DEFAULT_ALERT_CHANNELS)
@@ -323,9 +459,15 @@ class NotificationDispatcher:
         self.delivered: List[Dict[str, Any]] = []
         self._desktop_handler: Optional[DesktopHandler] = None
         self._email_config: Dict[str, Any] = {}
+        self._webhook_config: Dict[str, Any] = {}
+        self._slack_config: Dict[str, Any] = {}
         self._email_sender = email_sender or send_email
+        self._webhook_sender = webhook_sender or post_json
+        self._slack_sender = slack_sender or post_json
         self._clock = clock
         self._email_last_sent: Dict[Tuple[str, str], float] = {}
+        self._webhook_last_sent: Dict[Tuple[str, str], float] = {}
+        self._slack_last_sent: Dict[Tuple[str, str], float] = {}
         self._email_threads: List[threading.Thread] = []
         self._email_lock = threading.Lock()
 
@@ -342,6 +484,12 @@ class NotificationDispatcher:
     def set_email_config(self, cfg: Optional[Dict[str, Any]]) -> None:
         """Set SMTP parameters (see :func:`resolve_email_config`)."""
         self._email_config = dict(cfg or {})
+
+    def set_webhook_config(self, cfg: Optional[Dict[str, Any]]) -> None:
+        self._webhook_config = dict(cfg or {})
+
+    def set_slack_config(self, cfg: Optional[Dict[str, Any]]) -> None:
+        self._slack_config = dict(cfg or {})
 
     def get_channels(self) -> Dict[str, bool]:
         return dict(self.channels)
@@ -496,4 +644,106 @@ class NotificationDispatcher:
             if self._queue_email(alert, record_base):
                 fired.append("email")
 
+        if self.channels.get("webhook", False):
+            if self._queue_http(
+                alert,
+                record_base,
+                channel="webhook",
+                cfg=self._webhook_config,
+                last_sent=self._webhook_last_sent,
+                sender=self._webhook_sender,
+                payload=build_webhook_payload(alert),
+                slack=False,
+            ):
+                fired.append("webhook")
+
+        if self.channels.get("slack", False):
+            if self._queue_http(
+                alert,
+                record_base,
+                channel="slack",
+                cfg=self._slack_config,
+                last_sent=self._slack_last_sent,
+                sender=self._slack_sender,
+                payload=build_slack_payload(alert),
+                slack=True,
+            ):
+                fired.append("slack")
+
         return fired
+
+    def _http_due(
+        self,
+        alert: Alert,
+        cfg: Dict[str, Any],
+        last_sent: Dict[Tuple[str, str], float],
+        *,
+        slack: bool,
+    ) -> Optional[str]:
+        if validate_webhook_config(cfg, slack=slack):
+            return "not_configured"
+        if SEVERITY_RANK.get(alert.severity.value, 0) < SEVERITY_RANK.get(
+            cfg.get("min_severity"), 2
+        ):
+            return "below_min_severity"
+        cooldown = int(cfg.get("cooldown_minutes") or 0) * 60
+        key = (alert.source, alert.title)
+        now = self._clock()
+        with self._email_lock:
+            last = last_sent.get(key)
+            if cooldown and last is not None and now - last < cooldown:
+                return "cooldown"
+            last_sent[key] = now
+        return None
+
+    def _queue_http(
+        self,
+        alert: Alert,
+        record_base: Dict[str, Any],
+        *,
+        channel: str,
+        cfg: Dict[str, Any],
+        last_sent: Dict[Tuple[str, str], float],
+        sender: HttpSender,
+        payload: Dict[str, Any],
+        slack: bool,
+    ) -> bool:
+        entry = {**record_base, "channel": channel, "delivered": False}
+        skip = self._http_due(alert, cfg, last_sent, slack=slack)
+        if skip is not None:
+            entry["skipped"] = skip
+            self.delivered.append(entry)
+            if skip == "not_configured":
+                self.in_app_log.append(
+                    {
+                        **entry,
+                        "message": f"{channel} alert skipped: it is not configured",
+                    }
+                )
+            return False
+        url = str(cfg.get("url") or "")
+        self.delivered.append(entry)
+
+        def worker() -> None:
+            try:
+                sender(url, payload)
+                entry["delivered"] = True
+            except Exception as exc:  # noqa: BLE001 - surfaced without the URL
+                entry["error"] = type(exc).__name__
+                with self._email_lock:
+                    last_sent.pop((alert.source, alert.title), None)
+                self.in_app_log.append(
+                    {
+                        **record_base,
+                        "channel": channel,
+                        "severity": "warning",
+                        "title": f"{channel} alert failed",
+                        "message": f"{alert.title}: {type(exc).__name__}",
+                    }
+                )
+
+        thread = threading.Thread(target=worker, name=f"dsm-alert-{channel}", daemon=True)
+        with self._email_lock:
+            self._email_threads.append(thread)
+        thread.start()
+        return True

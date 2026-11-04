@@ -40,7 +40,7 @@ class NavSidebar(QFrame):
         self.brand.setWordWrap(True)
         layout.addWidget(self.brand)
 
-        self.caption = QLabel("VoxHash Suite")
+        self.caption = QLabel("VOXHASH LABS")
         self.caption.setObjectName("NavCaption")
         layout.addWidget(self.caption)
 

@@ -2,7 +2,7 @@
   "app": {
     "title": "数据库存储管理器",
     "version": "版本 {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&文件",
@@ -109,7 +109,8 @@
     "import_confirm_body": "导入 {count} 个配置吗？\n{names}",
     "import_ssh_title": "导入 SSH 私钥",
     "import_ssh_dir_title": "或选择包含 KEY / SSH.pub 的文件夹",
-    "import_ssh_confirm": "导入 SSH 配置“{name}”吗？\n类型：{type}  主机：{host}  堡垒机：{bastion}\n仅引用私钥路径（不会复制到 git 中）。"
+    "import_ssh_confirm": "导入 SSH 配置“{name}”吗？\n类型：{type}  主机：{host}  堡垒机：{bastion}\n仅引用私钥路径（不会复制到 git 中）。",
+    "premium_cloud": "安装并许可 multi-cloud-discovery 插件后，可发现 DigitalOcean、Supabase、Neon 和 Aiven。"
   },
   "query": {
     "title": "查询控制台",
@@ -334,13 +335,25 @@
     "retention_hint": "默认关闭。计划备份完成后，会删除超出这些规则的本地、Proton Drive 和 S3 副本。不会清理 Google Drive。两个数量都是 0 时，不会删除任何文件。",
     "retention_connection": "连接",
     "retention_all": "所有连接（默认）",
-    "retention_custom": "所选连接使用单独规则"
+    "retention_custom": "所选连接使用单独规则",
+    "webhook_title": "Webhook 警报",
+    "webhook_hint": "向你控制的 https URL 发送 JSON 警报。URL 加密保存，不会写入通知日志。仅 localhost 允许 http。在监控页启用 Webhook。严重级别和冷却时间与电子邮件相同。",
+    "webhook_url": "Webhook URL",
+    "slack_title": "Slack 警报",
+    "slack_hint": "发送到 Slack incoming webhook（https://hooks.slack.com）。URL 含密钥，保存在 SecureStore 中。严重级别和冷却时间与电子邮件相同。",
+    "slack_url": "Slack webhook URL"
   },
   "about": {
     "title": "关于数据库存储管理器",
     "version": "数据库存储管理器 v{version}",
     "description": "用于管理数据库存储和备份的专业桌面应用程序。",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "版本 {version}",
+    "channel_line": "通道：{channel}",
+    "released_line": "发布日期：{date}",
+    "check_updates": "检查更新...",
+    "copy_version": "复制版本信息",
+    "copied": "已复制版本信息。"
   },
   "common": {
     "ok": "确定",
@@ -516,7 +529,13 @@
     "perf_data_points": "数据点：{value}",
     "channel_email": "电子邮件（SMTP，在设置中配置）",
     "email_ready": "SMTP 已配置。",
-    "email_not_ready": "请先在 设置 → 通知 中配置 SMTP：{problems}"
+    "email_not_ready": "请先在 设置 → 通知 中配置 SMTP：{problems}",
+    "channel_webhook": "Webhook（在设置中配置）",
+    "channel_slack": "Slack（在设置中配置）",
+    "webhook_ready": "Webhook URL 已配置。",
+    "webhook_not_ready": "请先在设置 → 通知中配置 webhook：{problems}",
+    "slack_ready": "Slack webhook 已配置。",
+    "slack_not_ready": "请先在设置 → 通知中配置 Slack webhook：{problems}"
   },
   "analysis": {
     "query_performance": "查询性能",
@@ -649,7 +668,8 @@
     "changelog_failed": "无法加载更新日志：{error}",
     "auto_check": "自动检查更新",
     "auto_check_hint": "默认关闭。打开后，这台机器每天最多向 GitHub 询问一次。应用不会自行安装更新。",
-    "changelog_menu": "更新日志"
+    "changelog_menu": "更新日志",
+    "open_changelog": "更新日志…"
   },
   "restore": {
     "final_title": "最终确认",

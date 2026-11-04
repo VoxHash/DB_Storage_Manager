@@ -2,7 +2,7 @@
   "app": {
     "title": "Gerenciador de Armazenamento de BD",
     "version": "Versão {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Arquivo",
@@ -109,7 +109,8 @@
     "import_confirm_body": "Importar {count} perfil(is)?\n{names}",
     "import_ssh_title": "Importar chave privada SSH",
     "import_ssh_dir_title": "Ou selecione uma pasta que contenha KEY / SSH.pub",
-    "import_ssh_confirm": "Importar o perfil SSH “{name}”?\nTipo: {type}  Host: {host}  Bastion: {bastion}\nO caminho da chave privada é referenciado (não é copiado para o git)."
+    "import_ssh_confirm": "Importar o perfil SSH “{name}”?\nTipo: {type}  Host: {host}  Bastion: {bastion}\nO caminho da chave privada é referenciado (não é copiado para o git).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon e Aiven são descobertos pelo plugin multi-cloud-discovery depois de instalado e licenciado."
   },
   "query": {
     "title": "Console de Consultas",
@@ -334,13 +335,25 @@
     "retention_hint": "Desligado por padrão. Depois de um backup agendado, as cópias locais, do Proton Drive e do S3 mais antigas que estas regras são apagadas. O Google Drive não é podado. Se os dois números forem zero, nada é apagado.",
     "retention_connection": "Conexão",
     "retention_all": "Todas as conexões (padrão)",
-    "retention_custom": "Regras próprias para a conexão selecionada"
+    "retention_custom": "Regras próprias para a conexão selecionada",
+    "webhook_title": "Alertas por webhook",
+    "webhook_hint": "Envia o alerta em JSON para um URL https seu. O URL fica cifrado e não entra no registo. http só é permitido em localhost. Ative Webhook na Monitorização. A mesma gravidade e pausa do e-mail.",
+    "webhook_url": "URL do webhook",
+    "slack_title": "Alertas do Slack",
+    "slack_hint": "Publica num webhook de entrada do Slack (https://hooks.slack.com). O URL contém um segredo e fica no SecureStore. A mesma gravidade e pausa do e-mail.",
+    "slack_url": "URL do webhook do Slack"
   },
   "about": {
     "title": "Sobre o DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "Um aplicativo de desktop profissional para gerenciar armazenamento de banco de dados e backups.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Versão {version}",
+    "channel_line": "Canal: {channel}",
+    "released_line": "Publicada: {date}",
+    "check_updates": "Procurar atualizações...",
+    "copy_version": "Copiar informações da versão",
+    "copied": "Informações da versão copiadas."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Pontos de dados: {value}",
     "channel_email": "E-mail (SMTP, configurado em Configurações)",
     "email_ready": "SMTP está configurado.",
-    "email_not_ready": "Configure o SMTP primeiro em Configurações → Notificações: {problems}"
+    "email_not_ready": "Configure o SMTP primeiro em Configurações → Notificações: {problems}",
+    "channel_webhook": "Webhook (configure em Definições)",
+    "channel_slack": "Slack (configure em Definições)",
+    "webhook_ready": "O URL do webhook está configurado.",
+    "webhook_not_ready": "Configure o webhook em Definições → Notificações: {problems}",
+    "slack_ready": "O webhook do Slack está configurado.",
+    "slack_not_ready": "Configure o webhook do Slack em Definições → Notificações: {problems}"
   },
   "analysis": {
     "query_performance": "Desempenho de consultas",
@@ -649,7 +668,8 @@
     "changelog_failed": "Não foi possível carregar o changelog: {error}",
     "auto_check": "Verificar atualizações automaticamente",
     "auto_check_hint": "Desligado por padrão. Quando ligado, esta máquina consulta o GitHub no máximo uma vez por dia. O aplicativo nunca instala uma atualização sozinho.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Registo de alterações…"
   },
   "restore": {
     "final_title": "Confirmação final",

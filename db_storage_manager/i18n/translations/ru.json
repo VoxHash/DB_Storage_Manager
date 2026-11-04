@@ -2,7 +2,7 @@
   "app": {
     "title": "Менеджер хранилища БД",
     "version": "Версия {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Файл",
@@ -109,7 +109,8 @@
     "import_confirm_body": "Импортировать профилей: {count}?\n{names}",
     "import_ssh_title": "Импорт закрытого SSH-ключа",
     "import_ssh_dir_title": "Или выберите папку с KEY / SSH.pub",
-    "import_ssh_confirm": "Импортировать SSH-профиль «{name}»?\nТип: {type}  Хост: {host}  Бастион: {bastion}\nУказывается путь к закрытому ключу (в git он не копируется)."
+    "import_ssh_confirm": "Импортировать SSH-профиль «{name}»?\nТип: {type}  Хост: {host}  Бастион: {bastion}\nУказывается путь к закрытому ключу (в git он не копируется).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon и Aiven обнаруживает плагин multi-cloud-discovery после установки и лицензии."
   },
   "query": {
     "title": "Консоль запросов",
@@ -334,13 +335,25 @@
     "retention_hint": "По умолчанию выключено. После запланированной копии локальные, Proton Drive и S3 копии старше этих правил удаляются. Google Drive не очищается. Если оба числа равны нулю, ничего не удаляется.",
     "retention_connection": "Подключение",
     "retention_all": "Все подключения (по умолчанию)",
-    "retention_custom": "Свои правила для выбранного подключения"
+    "retention_custom": "Свои правила для выбранного подключения",
+    "webhook_title": "Оповещения webhook",
+    "webhook_hint": "Отправляет оповещение JSON на ваш https URL. URL хранится в зашифрованном виде и не пишется в журнал. http разрешён только для localhost. Включите Webhook на вкладке мониторинга. Те же важность и пауза, что у почты.",
+    "webhook_url": "URL webhook",
+    "slack_title": "Оповещения Slack",
+    "slack_hint": "Публикует во входящий webhook Slack (https://hooks.slack.com). URL содержит секрет и остаётся в SecureStore. Те же важность и пауза, что у почты.",
+    "slack_url": "URL webhook Slack"
   },
   "about": {
     "title": "О программе DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "Профессиональное настольное приложение для управления хранилищем баз данных и резервными копиями.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Версия {version}",
+    "channel_line": "Канал: {channel}",
+    "released_line": "Выпуск: {date}",
+    "check_updates": "Проверить обновления...",
+    "copy_version": "Копировать сведения о версии",
+    "copied": "Сведения о версии скопированы."
   },
   "common": {
     "ok": "ОК",
@@ -516,7 +529,13 @@
     "perf_data_points": "Точек данных: {value}",
     "channel_email": "Эл. почта (SMTP, настраивается в Настройках)",
     "email_ready": "SMTP настроен.",
-    "email_not_ready": "Сначала настройте SMTP в Настройки → Уведомления: {problems}"
+    "email_not_ready": "Сначала настройте SMTP в Настройки → Уведомления: {problems}",
+    "channel_webhook": "Webhook (настраивается в параметрах)",
+    "channel_slack": "Slack (настраивается в параметрах)",
+    "webhook_ready": "URL webhook настроен.",
+    "webhook_not_ready": "Настройте webhook в Параметры → Уведомления: {problems}",
+    "slack_ready": "Webhook Slack настроен.",
+    "slack_not_ready": "Настройте webhook Slack в Параметры → Уведомления: {problems}"
   },
   "analysis": {
     "query_performance": "Производительность запросов",
@@ -649,7 +668,8 @@
     "changelog_failed": "Не удалось загрузить журнал изменений: {error}",
     "auto_check": "Проверять обновления автоматически",
     "auto_check_hint": "По умолчанию выключено. Если включить, этот компьютер спрашивает GitHub не чаще одного раза в сутки. Приложение само обновление не устанавливает.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Журнал изменений…"
   },
   "restore": {
     "final_title": "Окончательное подтверждение",

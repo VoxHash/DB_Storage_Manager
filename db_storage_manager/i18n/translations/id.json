@@ -2,7 +2,7 @@
   "app": {
     "title": "Manajer Penyimpanan DB",
     "version": "Versi {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&File",
@@ -109,7 +109,8 @@
     "import_confirm_body": "Impor {count} profil?\n{names}",
     "import_ssh_title": "Impor kunci privat SSH",
     "import_ssh_dir_title": "Atau pilih folder berisi KEY / SSH.pub",
-    "import_ssh_confirm": "Impor profil SSH “{name}”?\nJenis: {type}  Host: {host}  Bastion: {bastion}\nJalur kunci privat direferensikan (tidak disalin ke git)."
+    "import_ssh_confirm": "Impor profil SSH “{name}”?\nJenis: {type}  Host: {host}  Bastion: {bastion}\nJalur kunci privat direferensikan (tidak disalin ke git).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon, dan Aiven ditemukan oleh plugin multi-cloud-discovery setelah terpasang dan berlisensi."
   },
   "query": {
     "title": "Konsol Kueri",
@@ -334,13 +335,25 @@
     "retention_hint": "Mati secara bawaan. Setelah cadangan terjadwal, salinan lokal, Proton Drive, dan S3 yang lebih lama dari aturan ini dihapus. Google Drive tidak dipangkas. Jika kedua angka nol, tidak ada yang dihapus.",
     "retention_connection": "Koneksi",
     "retention_all": "Semua koneksi (bawaan)",
-    "retention_custom": "Aturan khusus untuk koneksi yang dipilih"
+    "retention_custom": "Aturan khusus untuk koneksi yang dipilih",
+    "webhook_title": "Peringatan webhook",
+    "webhook_hint": "Mengirim peringatan JSON ke URL https yang Anda kendalikan. URL disimpan terenkripsi dan tidak ditulis ke log. http hanya untuk localhost. Aktifkan Webhook di Pemantauan. Tingkat dan jeda sama dengan email.",
+    "webhook_url": "URL webhook",
+    "slack_title": "Peringatan Slack",
+    "slack_hint": "Mengirim ke incoming webhook Slack (https://hooks.slack.com). URL berisi rahasia dan tetap di SecureStore. Tingkat dan jeda sama dengan email.",
+    "slack_url": "URL webhook Slack"
   },
   "about": {
     "title": "Tentang Manajer Penyimpanan DB",
     "version": "DB Storage Manager v{version}",
     "description": "Aplikasi desktop profesional untuk mengelola penyimpanan basis data dan cadangan.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Versi {version}",
+    "channel_line": "Kanal: {channel}",
+    "released_line": "Dirilis: {date}",
+    "check_updates": "Periksa pembaruan...",
+    "copy_version": "Salin info versi",
+    "copied": "Info versi disalin."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Titik data: {value}",
     "channel_email": "Email (SMTP, diatur di Pengaturan)",
     "email_ready": "SMTP sudah dikonfigurasi.",
-    "email_not_ready": "Konfigurasikan SMTP di Pengaturan → Notifikasi terlebih dahulu: {problems}"
+    "email_not_ready": "Konfigurasikan SMTP di Pengaturan → Notifikasi terlebih dahulu: {problems}",
+    "channel_webhook": "Webhook (atur di Pengaturan)",
+    "channel_slack": "Slack (atur di Pengaturan)",
+    "webhook_ready": "URL webhook sudah diatur.",
+    "webhook_not_ready": "Atur webhook di Pengaturan → Notifikasi: {problems}",
+    "slack_ready": "Webhook Slack sudah diatur.",
+    "slack_not_ready": "Atur webhook Slack di Pengaturan → Notifikasi: {problems}"
   },
   "analysis": {
     "query_performance": "Kinerja Kueri",
@@ -649,7 +668,8 @@
     "changelog_failed": "Tidak dapat memuat changelog: {error}",
     "auto_check": "Periksa pembaruan secara otomatis",
     "auto_check_hint": "Mati secara bawaan. Jika dinyalakan, mesin ini bertanya ke GitHub paling banyak sekali sehari. Aplikasi tidak pernah memasang pembaruan sendiri.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Catatan perubahan…"
   },
   "restore": {
     "final_title": "Konfirmasi akhir",

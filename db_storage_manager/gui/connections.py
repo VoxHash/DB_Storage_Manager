@@ -162,18 +162,28 @@ class CloudDiscoverDialog(QDialog):
 
         t = self.i18n.translate
         self._refresh_status()
+        core_error = None
         try:
             manager = CloudManager.from_secure_store()
             rows = manager.discover_databases()
         except CloudNotConfiguredError as exc:
-            QMessageBox.warning(self, t("common.error"), str(exc))
-            return
+            rows = []
+            core_error = str(exc)
         except Exception as exc:
             QMessageBox.critical(self, t("common.error"), str(exc))
             return
 
-        self._rows = [r for r in rows if not r.get("error")]
+        extra_rows, extra_note = self._premium_discovery()
+        rows = list(rows) + extra_rows
+        if core_error and not extra_rows:
+            QMessageBox.warning(self, t("common.error"), core_error)
+            if extra_note:
+                self.status_label.setText(self.status_label.text() + "\n" + extra_note)
+            return
+        self._rows = [r for r in rows if not r.get("error") and not r.get("password")]
         errors = [r for r in rows if r.get("error")]
+        if extra_note:
+            self.status_label.setText(self.status_label.text() + "\n" + extra_note)
         self.table.setRowCount(len(self._rows))
         for i, row in enumerate(self._rows):
             self.table.setItem(i, 0, QTableWidgetItem(str(row.get("provider") or "")))
@@ -204,6 +214,58 @@ class CloudDiscoverDialog(QDialog):
                     "No managed databases found for configured providers.",
                 )
             )
+
+    def _premium_discovery(self):
+        """DigitalOcean, Supabase, Neon, and Aiven when that plugin is licensed.
+
+        The plugin is not imported until it is installed and the licence allows
+        it. A missing plugin only adds a status line.
+        """
+        t = self.i18n.translate
+        note = t(
+            "connections.premium_cloud",
+            default=(
+                "DigitalOcean, Supabase, Neon, and Aiven are discovered by the "
+                "multi-cloud-discovery plugin once it is installed and licensed."
+            ),
+        )
+        try:
+            from pathlib import Path
+
+            from ..plugins.loader import load_plugin_from_directory
+            from ..plugins.marketplace import LocalPluginMarketplace
+
+            market = LocalPluginMarketplace()
+            entry = next(
+                (
+                    row
+                    for row in market.list_installed()
+                    if row.get("id") == "multi-cloud-discovery" and row.get("path")
+                ),
+                None,
+            )
+            if entry is None:
+                return [], note
+            market.require_license("multi-cloud-discovery", network=False)
+            plugin = load_plugin_from_directory(Path(entry["path"]))
+            report = plugin.execute()
+        except Exception:
+            return [], note
+        databases = report.get("databases") if isinstance(report, dict) else None
+        if not isinstance(databases, list):
+            return [], ""
+        clean = []
+        for row in databases:
+            if not isinstance(row, dict):
+                continue
+            clean.append(
+                {
+                    key: value
+                    for key, value in row.items()
+                    if key not in {"password", "uri", "users"}
+                }
+            )
+        return clean, ""
 
     def _import_selected(self) -> None:
         t = self.i18n.translate
@@ -245,6 +307,8 @@ class CloudDiscoverDialog(QDialog):
                     prov = manager.azure_provider or AzureDatabaseProvider()
                     mode = "entra_token" if auth_mode == "iam" else "password"
                     imported.append(prov.to_connection_profile(row, auth_mode=mode))
+                elif provider in {"digitalocean", "supabase", "neon", "aiven"}:
+                    imported.append(_managed_profile(row))
             except Exception as exc:
                 QMessageBox.warning(
                     self,
@@ -258,6 +322,30 @@ class CloudDiscoverDialog(QDialog):
 
     def imported_connections(self) -> List[Dict[str, Any]]:
         return list(self._imported)
+
+
+def _managed_profile(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Connection profile for a premium-plugin discovery row. No password is copied."""
+    import uuid
+
+    db_type = str(row.get("db_type") or row.get("engine") or "postgresql")
+    provider = str(row.get("provider") or "")
+    return {
+        "id": str(uuid.uuid4()),
+        "name": str(row.get("name") or row.get("id") or provider),
+        "type": db_type,
+        "host": str(row.get("host") or row.get("endpoint") or ""),
+        "port": row.get("port"),
+        "database": str(row.get("database") or ""),
+        "username": "",
+        "password": "",
+        "ssh_config": None,
+        "extra": {
+            "cloud_provider": provider,
+            "cloud_instance_id": row.get("id"),
+            "auth_mode": "password",
+        },
+    }
 
 
 def _connection_config_kwargs(connection: Dict[str, Any]) -> Dict[str, Any]:

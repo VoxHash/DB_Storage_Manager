@@ -2,7 +2,7 @@
   "app": {
     "title": "DBストレージマネージャー",
     "version": "バージョン {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&ファイル",
@@ -109,7 +109,8 @@
     "import_confirm_body": "{count} 件のプロファイルをインポートしますか？\n{names}",
     "import_ssh_title": "SSH 秘密鍵をインポート",
     "import_ssh_dir_title": "または KEY / SSH.pub を含むフォルダーを選択",
-    "import_ssh_confirm": "SSH プロファイル「{name}」をインポートしますか？\n種類: {type}  ホスト: {host}  踏み台: {bastion}\n秘密鍵はパスのみ参照されます（git にはコピーされません）。"
+    "import_ssh_confirm": "SSH プロファイル「{name}」をインポートしますか？\n種類: {type}  ホスト: {host}  踏み台: {bastion}\n秘密鍵はパスのみ参照されます（git にはコピーされません）。",
+    "premium_cloud": "DigitalOcean、Supabase、Neon、Aiven は multi-cloud-discovery プラグインをインストールしてライセンスすると検出されます。"
   },
   "query": {
     "title": "クエリコンソール",
@@ -334,13 +335,25 @@
     "retention_hint": "既定ではオフです。スケジュールされたバックアップのあと、この規則より古いローカル、Proton Drive、S3 のコピーを削除します。Google Drive は対象外です。両方の数が 0 のときは何も削除しません。",
     "retention_connection": "接続",
     "retention_all": "すべての接続（既定）",
-    "retention_custom": "選択した接続だけの規則"
+    "retention_custom": "選択した接続だけの規則",
+    "webhook_title": "Webhook アラート",
+    "webhook_hint": "管理している https URL に JSON で通知します。URL は暗号化され、通知ログには書きません。http は localhost のみです。監視タブで Webhook を有効にします。重大度と再通知間隔はメールと同じです。",
+    "webhook_url": "Webhook URL",
+    "slack_title": "Slack アラート",
+    "slack_hint": "Slack の incoming webhook（https://hooks.slack.com）へ送ります。URL には秘密が含まれ、SecureStore に残ります。重大度と再通知間隔はメールと同じです。",
+    "slack_url": "Slack webhook URL"
   },
   "about": {
     "title": "DB Storage Managerについて",
     "version": "DB Storage Manager v{version}",
     "description": "データベースストレージとバックアップを管理するプロフェッショナルなデスクトップアプリケーション。",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "バージョン {version}",
+    "channel_line": "チャネル: {channel}",
+    "released_line": "リリース: {date}",
+    "check_updates": "更新を確認...",
+    "copy_version": "バージョン情報をコピー",
+    "copied": "バージョン情報をコピーしました。"
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "データポイント: {value}",
     "channel_email": "メール（SMTP、設定で構成）",
     "email_ready": "SMTP は設定済みです。",
-    "email_not_ready": "先に 設定 → 通知 で SMTP を構成してください: {problems}"
+    "email_not_ready": "先に 設定 → 通知 で SMTP を構成してください: {problems}",
+    "channel_webhook": "Webhook（設定で構成）",
+    "channel_slack": "Slack（設定で構成）",
+    "webhook_ready": "Webhook URL は設定済みです。",
+    "webhook_not_ready": "設定 → 通知で webhook を構成してください: {problems}",
+    "slack_ready": "Slack webhook は設定済みです。",
+    "slack_not_ready": "設定 → 通知で Slack webhook を構成してください: {problems}"
   },
   "analysis": {
     "query_performance": "クエリパフォーマンス",
@@ -649,7 +668,8 @@
     "changelog_failed": "変更履歴を読み込めませんでした: {error}",
     "auto_check": "更新を自動で確認する",
     "auto_check_hint": "既定ではオフです。オンにすると、このマシンは 1 日に 1 回まで GitHub に問い合わせます。アプリが更新を自分でインストールすることはありません。",
-    "changelog_menu": "変更履歴"
+    "changelog_menu": "変更履歴",
+    "open_changelog": "変更履歴…"
   },
   "restore": {
     "final_title": "最終確認",

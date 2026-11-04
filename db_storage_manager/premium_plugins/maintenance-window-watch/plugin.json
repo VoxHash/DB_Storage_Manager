@@ -1,0 +1,21 @@
+{
+  "id": "maintenance-window-watch",
+  "name": "Maintenance window watch",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Report provider maintenance and PostgreSQL or MySQL version end-of-life in an alerts list.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:MaintenanceWindowPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "pending-maintenance-window-watch",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

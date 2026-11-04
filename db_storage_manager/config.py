@@ -166,6 +166,20 @@ DEFAULT_EMAIL_ALERTS = {
     "cooldown_minutes": 30,
 }
 
+# HTTPS webhook and Slack incoming webhook. The URL is a secret (a Slack URL
+# contains the token) and lives in SecureStore. Same severity and cooldown
+# rules as email. Nothing here is a secret.
+DEFAULT_WEBHOOK_ALERTS = {
+    "url": "",
+    "min_severity": "critical",
+    "cooldown_minutes": 30,
+}
+DEFAULT_SLACK_ALERTS = {
+    "url": "",
+    "min_severity": "critical",
+    "cooldown_minutes": 30,
+}
+
 # Monitoring preferences (non-secret)
 DEFAULT_MONITORING_PREFS = {
     # Connection id to start watching automatically when the app opens, so an
@@ -221,6 +235,8 @@ DEFAULT_SETTINGS = {
     "experimental": copy.deepcopy(DEFAULT_EXPERIMENTAL),
     "s3_backup": copy.deepcopy(DEFAULT_S3_BACKUP),
     "email_alerts": copy.deepcopy(DEFAULT_EMAIL_ALERTS),
+    "webhook_alerts": copy.deepcopy(DEFAULT_WEBHOOK_ALERTS),
+    "slack_alerts": copy.deepcopy(DEFAULT_SLACK_ALERTS),
     "monitoring": copy.deepcopy(DEFAULT_MONITORING_PREFS),
 }
 

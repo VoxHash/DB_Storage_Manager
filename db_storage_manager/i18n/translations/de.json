@@ -2,7 +2,7 @@
   "app": {
     "title": "DB-Speicher-Manager",
     "version": "Version {version}",
-    "vendor": "VoxHash Suite"
+    "vendor": "VOXHASH LABS"
   },
   "menu": {
     "file": "&Datei",
@@ -109,7 +109,8 @@
     "import_confirm_body": "{count} Profil(e) importieren?\n{names}",
     "import_ssh_title": "Privaten SSH-Schlüssel importieren",
     "import_ssh_dir_title": "Oder einen Ordner mit KEY / SSH.pub auswählen",
-    "import_ssh_confirm": "SSH-Profil „{name}“ importieren?\nTyp: {type}  Host: {host}  Bastion: {bastion}\nDer Pfad des privaten Schlüssels wird referenziert (nicht in Git kopiert)."
+    "import_ssh_confirm": "SSH-Profil „{name}“ importieren?\nTyp: {type}  Host: {host}  Bastion: {bastion}\nDer Pfad des privaten Schlüssels wird referenziert (nicht in Git kopiert).",
+    "premium_cloud": "DigitalOcean, Supabase, Neon und Aiven findet das Plugin multi-cloud-discovery, sobald es installiert und lizenziert ist."
   },
   "query": {
     "title": "Abfragekonsole",
@@ -334,13 +335,25 @@
     "retention_hint": "Standardmäßig aus. Nach einer geplanten Sicherung werden lokale, Proton-Drive- und S3-Kopien gelöscht, die älter als diese Regeln sind. Google Drive wird nicht bereinigt. Sind beide Zahlen null, wird nichts gelöscht.",
     "retention_connection": "Verbindung",
     "retention_all": "Alle Verbindungen (Standard)",
-    "retention_custom": "Eigene Regeln für die gewählte Verbindung"
+    "retention_custom": "Eigene Regeln für die gewählte Verbindung",
+    "webhook_title": "Webhook-Alarme",
+    "webhook_hint": "Sendet einen JSON-Alarm an eine https-URL unter Ihrer Kontrolle. Die URL wird verschlüsselt gespeichert und nicht ins Protokoll geschrieben. http nur für localhost. Webhook in der Überwachung aktivieren. Dieselbe Stufe und Pause wie bei E-Mail.",
+    "webhook_url": "Webhook-URL",
+    "slack_title": "Slack-Alarme",
+    "slack_hint": "Sendet an einen Slack-Incoming-Webhook (https://hooks.slack.com). Die URL enthält ein Geheimnis und bleibt in SecureStore. Dieselbe Stufe und Pause wie bei E-Mail.",
+    "slack_url": "Slack-Webhook-URL"
   },
   "about": {
     "title": "Über DB Storage Manager",
     "version": "DB Storage Manager v{version}",
     "description": "Eine professionelle Desktop-Anwendung zur Verwaltung von Datenbankspeicher und Backups.",
-    "copyright": "© 2026 VoxHash"
+    "copyright": "© 2026 VOXHASH LABS",
+    "version_label": "Version {version}",
+    "channel_line": "Kanal: {channel}",
+    "released_line": "Veröffentlicht: {date}",
+    "check_updates": "Nach Updates suchen...",
+    "copy_version": "Versionsinfo kopieren",
+    "copied": "Versionsinfo kopiert."
   },
   "common": {
     "ok": "OK",
@@ -516,7 +529,13 @@
     "perf_data_points": "Datenpunkte: {value}",
     "channel_email": "E-Mail (SMTP, in den Einstellungen einrichten)",
     "email_ready": "SMTP ist konfiguriert.",
-    "email_not_ready": "Zuerst SMTP unter Einstellungen → Benachrichtigungen einrichten: {problems}"
+    "email_not_ready": "Zuerst SMTP unter Einstellungen → Benachrichtigungen einrichten: {problems}",
+    "channel_webhook": "Webhook (in den Einstellungen einrichten)",
+    "channel_slack": "Slack (in den Einstellungen einrichten)",
+    "webhook_ready": "Die Webhook-URL ist eingerichtet.",
+    "webhook_not_ready": "Webhook unter Einstellungen → Benachrichtigungen einrichten: {problems}",
+    "slack_ready": "Der Slack-Webhook ist eingerichtet.",
+    "slack_not_ready": "Slack-Webhook unter Einstellungen → Benachrichtigungen einrichten: {problems}"
   },
   "analysis": {
     "query_performance": "Abfrageleistung",
@@ -649,7 +668,8 @@
     "changelog_failed": "Änderungsprotokoll konnte nicht geladen werden: {error}",
     "auto_check": "Automatisch nach Updates suchen",
     "auto_check_hint": "Standardmäßig aus. Wenn eingeschaltet, fragt dieser Rechner GitHub höchstens einmal am Tag. Die App installiert ein Update nie von selbst.",
-    "changelog_menu": "Changelog"
+    "changelog_menu": "Changelog",
+    "open_changelog": "Änderungsprotokoll…"
   },
   "restore": {
     "final_title": "Letzte Bestätigung",

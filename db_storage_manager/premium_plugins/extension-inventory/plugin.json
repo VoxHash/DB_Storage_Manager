@@ -1,0 +1,21 @@
+{
+  "id": "extension-inventory",
+  "name": "Extension inventory",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "List installed and available PostgreSQL extensions and flag deprecated or outdated ones.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:ExtensionInventoryPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "pending-extension-inventory",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}
