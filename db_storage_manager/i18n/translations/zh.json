@@ -351,7 +351,7 @@
     "telegram_chat_id": "聊天 ID"
   },
   "about": {
-    "title": "关于数据库存储管理器",
+    "title": "关于",
     "version": "数据库存储管理器 v{version}",
     "description": "用于管理数据库存储和备份的专业桌面应用程序。",
     "copyright": "© 2026 VOXHASH LABS",

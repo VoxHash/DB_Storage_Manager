@@ -72,7 +72,7 @@ class AboutDialog(QDialog):
         self._channel = channel or saved_update_channel()
         self._released = released
         t = self.i18n.translate
-        self.setWindowTitle(t("about.title", default="About DB Storage Manager"))
+        self.setWindowTitle(t("about.title", default="About"))
         self.setModal(True)
         apply_app_icon(self)
         self.setMinimumWidth(420)

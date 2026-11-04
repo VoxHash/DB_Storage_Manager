@@ -434,7 +434,7 @@
     "telegram_chat_id": "Chat id"
   },
   "about": {
-    "title": "About DB Storage Manager",
+    "title": "About",
     "version": "DB Storage Manager v{version}",
     "description": "A professional desktop application for managing database storage and backups.",
     "copyright": "© 2026 VOXHASH LABS",

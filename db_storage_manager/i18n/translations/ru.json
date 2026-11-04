@@ -351,7 +351,7 @@
     "telegram_chat_id": "Идентификатор чата"
   },
   "about": {
-    "title": "О программе DB Storage Manager",
+    "title": "О программе",
     "version": "DB Storage Manager v{version}",
     "description": "Профессиональное настольное приложение для управления хранилищем баз данных и резервными копиями.",
     "copyright": "© 2026 VOXHASH LABS",

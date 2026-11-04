@@ -351,7 +351,7 @@
     "telegram_chat_id": "채팅 ID"
   },
   "about": {
-    "title": "DB 스토리지 관리자 정보",
+    "title": "정보",
     "version": "DB Storage Manager v{version}",
     "description": "데이터베이스 스토리지 및 백업을 관리하는 전문 데스크톱 애플리케이션입니다.",
     "copyright": "© 2026 VOXHASH LABS",
