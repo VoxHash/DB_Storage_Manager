@@ -69,6 +69,7 @@ The core app and the built-in `migration` and `data_comparison` plugins stay fre
 
 ## Later
 
+- [~] macOS release packaging: a proper `.app` and `DB_Storage_Manager-<tag>.dmg`. Deferred. [v1.0.8](https://github.com/VoxHash/DB_Storage_Manager/releases/tag/v1.0.8) currently has a onefile Mach-O arm64 binary named `DB_Storage_Manager-v1.0.8`, plus the Linux AppImage and the Windows exe. No `.dmg` or `.app` is on that release. PyInstaller rejected app-bundle flags next to `pyinstaller.spec` and fell back to the onefile. The DMG step looked for `release/DB_Storage_Manager` while the artifact was `release/DB_Storage_Manager-v1.0.8`, so `hdiutil` never ran. Follow-up macOS rebuilds were cancelled because hosted macOS runners were not acquired. Do not re-trigger those jobs until runner capacity is available; Linux and Windows assets on v1.0.8 stay as they are
 - [ ] Android / GrapheneOS companion: F-Droid metadata and signed release APK ([docs/android-grapheneos.md](docs/android-grapheneos.md))
 - [ ] Meta Quest glance client, only after UX research shows value over a phone ([docs/quest.md](docs/quest.md))
 - [ ] Optional TLS termination and richer alerts UI for companions
