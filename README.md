@@ -157,10 +157,6 @@ Report vulnerabilities to contact@voxhash.dev — [SECURITY.md](SECURITY.md).
 
 [GNU General Public License v3.0](LICENSE) (GPL-3.0-only).
 
-The desktop UI depends on **PyQt6**, which Riverbank dual-licenses as **GPL-3.0 or commercial**. Distributing this app with the free PyQt6 wheels requires a GPL-compatible project license; GPLv3 matches that constraint and is also used by comparable FOSS SQL clients such as Beekeeper Studio Community Edition. Private internal use and private hardened forks are allowed under GPLv3 without publishing source; source-disclosure obligations apply when you **convey** (distribute) the program. rclone (MIT) and other permissive dependencies remain compatible as combined with a GPLv3 application.
-
-This is not legal advice — see a qualified solicitor if you need counsel for commercial redistribution or dual-licensing.
-
 ---
 
 Maintained by VoxHash Technologies
