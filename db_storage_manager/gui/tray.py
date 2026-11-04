@@ -6,7 +6,7 @@ Behaviour (matches common desktop conventions and what Qt reports per platform):
 * **Double click** - always show and raise the window.
 * **Middle click** - jump to the Backups tab (quick backup status).
 * **Right click** - context menu: Show/Hide, Dashboard / Backups / Monitoring,
-  live status lines (monitoring + backups), Changelog & Updates, Quit.
+  live status lines (monitoring + backups), Changelog, Check for updates, Quit.
 
 Desktop notifications use ``QSystemTrayIcon.showMessage`` with a configurable
 auto-dismiss timeout (Settings -> notification seconds, default 5, clamped
@@ -50,7 +50,8 @@ class AppTray(QObject):
         timeout_seconds: int = DEFAULT_NOTIFICATION_SECONDS,
         status_provider: Optional[Callable[[], "tuple[str, str]"]] = None,
         open_section: Optional[Callable[[str], None]] = None,
-        open_updates: Optional[Callable[[], None]] = None,
+        open_changelog: Optional[Callable[[], None]] = None,
+        open_check_updates: Optional[Callable[[], None]] = None,
         tray: Optional[QSystemTrayIcon] = None,
     ):
         super().__init__(window)
@@ -58,7 +59,8 @@ class AppTray(QObject):
         self.i18n = get_i18n_manager()
         self._status_provider = status_provider
         self._open_section = open_section
-        self._open_updates = open_updates
+        self._open_changelog = open_changelog
+        self._open_check_updates = open_check_updates
         self._timeout_seconds = clamp_notification_seconds(timeout_seconds)
         self.icon = tray or QSystemTrayIcon(self)
         icon = window.windowIcon()
@@ -110,9 +112,12 @@ class AppTray(QObject):
         self.menu.addAction(self.backups_status_action)
         self.menu.addSeparator()
 
-        self.updates_action = QAction(self.menu)
-        self.updates_action.triggered.connect(self._show_updates)
-        self.menu.addAction(self.updates_action)
+        self.changelog_action = QAction(self.menu)
+        self.changelog_action.triggered.connect(self._show_changelog)
+        self.menu.addAction(self.changelog_action)
+        self.check_updates_action = QAction(self.menu)
+        self.check_updates_action.triggered.connect(self._show_check_updates)
+        self.menu.addAction(self.check_updates_action)
         self.quit_action = QAction(self.menu)
         self.quit_action.triggered.connect(self.quit_requested.emit)
         self.menu.addAction(self.quit_action)
@@ -126,7 +131,10 @@ class AppTray(QObject):
         self.dashboard_action.setText(t("tabs.dashboard"))
         self.backups_action.setText(t("tabs.backups"))
         self.monitoring_action.setText(t("tabs.monitoring"))
-        self.updates_action.setText(t("updates.title"))
+        self.changelog_action.setText(t("tray.changelog", default="Changelog"))
+        self.check_updates_action.setText(
+            t("tray.check_updates", default="Check for updates")
+        )
         self.quit_action.setText(t("tray.quit"))
         self.refresh_status()
 
@@ -178,10 +186,15 @@ class AppTray(QObject):
         if self._open_section is not None:
             self._open_section(section)
 
-    def _show_updates(self) -> None:
+    def _show_changelog(self) -> None:
         self.show_window()
-        if self._open_updates is not None:
-            self._open_updates()
+        if self._open_changelog is not None:
+            self._open_changelog()
+
+    def _show_check_updates(self) -> None:
+        self.show_window()
+        if self._open_check_updates is not None:
+            self._open_check_updates()
 
     # -- notifications --------------------------------------------------------
 

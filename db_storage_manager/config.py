@@ -198,8 +198,17 @@ DEFAULT_SETTINGS = {
     "notifications": True,
     # Desktop notification auto-dismiss (seconds, clamped 2-60 by the tray)
     "notification_timeout_seconds": 5,
-    # Manual update checks: "stable" or "experimental" (GitHub pre-releases)
+    # Manual update checks: "stable" or "experimental" (GitHub pre-releases).
+    # Automatic checks are off until Settings → Updates opts in.
     "update_channel": "stable",
+    "update_auto_check": False,
+    # Backup retention. Off until enabled. connections maps id -> override.
+    "retention": {
+        "enabled": False,
+        "keep_daily": 7,
+        "keep_monthly": 6,
+        "connections": {},
+    },
     "telemetry": False,
     "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),

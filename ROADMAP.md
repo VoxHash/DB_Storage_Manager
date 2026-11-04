@@ -20,8 +20,8 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 
 ### Backups and recovery
 
-- [ ] Google Drive as a plugin or an rclone `drive` remote (the library adapter stays out of the UI: a long-lived OAuth token in a desktop form is an opsec risk)
-- [ ] Retention rules per connection (keep N daily / M monthly) with pruning for Local, Proton Drive and S3
+- [~] Google Drive as a plugin or an rclone `drive` remote. Deferred: a long-lived OAuth token in a desktop form is an opsec risk, and the library adapter stays out of the UI. Settings still lists it as API only
+- [x] Retention rules per connection (keep N daily / M monthly) with pruning for Local, Proton Drive and S3. Off by default. Both counts at zero delete nothing. Google Drive is not pruned. Runs after a scheduled backup; `settings.retention.connections` overrides the default per connection id
 - [x] Restore into a scratch database for rehearsal before touching production (Backups → Restore… → **Rehearse into a new scratch database**; type `SCRATCH`. Production is not written. SQLite writes a sibling `*.scratch-<stamp>.db`; PostgreSQL and MySQL `CREATE DATABASE dsm_scratch_…` on the same server)
 - [ ] Promote full restore from experimental to stable after the live-engine rehearsals above pass in CI and the scratch-database restore exists (the dependent-table limitation above is the remaining blocker)
 - [~] Automatic restore on a critical alert — deferred. A restore replaces data, and an unattended trigger cannot tell a failing server from a failing probe. It would need opt-in per connection, a cooldown, a signed audit trail and a human confirmation path; manual experimental restore is the supported route until then
@@ -30,6 +30,8 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 
 - [ ] Anomaly alerts from a local sample history (growth, connections, cache hit ratio, slow queries)
 - [ ] Additional alert channels (webhook, Slack) with the same cooldown and severity rules as email
+- [ ] **Email alerts as a plugin** (`connection-email-alerts`): per-connection SMTP, separate from the workstation-wide profile on Settings → Notifications. Each saved connection would have its own recipients, minimum severity and cooldown. The password stays in SecureStore (encrypted, same as today) and is not copied into the plugin directory or the audit log. The core channel already sends, so this is a credential-shaped migration rather than a small patch and is not built in this pass. Useful when two databases should page different people; not useful as a second global SMTP form
+- [ ] **Multi-connection monitoring plugin** (`multi-connection-monitor`): one process watching several connections, for an on-call desk that today autostarts a single connection. Opsec: polls use credentials already in SecureStore (no new secret store), opt-in per connection, rate-limited, and it must not widen the `monitor` role into `query:*` or `backups:*`. A plugin that runs arbitrary SQL on every connection would be an unattended query runner. Deferred until anomaly alerts have a local sample history, so the plugin reads health checks rather than ad-hoc SQL. Not a quick win
 
 ### Plugin backlog: managed-database gaps
 
@@ -37,9 +39,9 @@ Planned on the existing `plugins.sdk` (API `1.0`): opt-in, real catalogs or prov
 
 - [x] `pitr-verify` — confirm point-in-time recovery is enabled and the window matches retention (provider APIs, `pg_stat_archiver`). Shipped as the first premium plugin
 - [x] `schema-drift` — snapshot `information_schema` / `sqlite_master` and diff against a baseline or another connection. Shipped as the second premium plugin (`db_storage_manager/premium_plugins/schema-drift`); `license.product_id` is the monthly product on the current seller account
-- [ ] `rls-audit` — Postgres tables exposed without row level security, permissive policies, `SECURITY DEFINER` functions
-- [ ] `pooler-health` — compare direct and pooled endpoints (PgBouncer / Supavisor): latency, pool mode, `max_connections` headroom
-- [ ] `encrypted-export` — per-table export (CSV / Parquet / SQL) in the DSMENC1 envelope with optional redaction
+- [x] `rls-audit` — Postgres tables exposed without row level security, permissive policies, `SECURITY DEFINER` functions. Shipped (`db_storage_manager/premium_plugins/rls-audit`); `license.product_id` is the monthly product. SQLite and MySQL are `not_available` rather than a false all-clear. Install needs `plugins:manage`; running needs `monitoring:read`
+- [x] `pooler-health` — compare direct and pooled endpoints (PgBouncer / Supavisor): latency, pool mode, `max_connections` headroom. Shipped (`premium_plugins/pooler-health`). The pooled connection is one the operator passes; a missing endpoint is `partial` and is not guessed. `SHOW pool_mode` failing is `not_available` for pool mode only. Running needs `monitoring:read`
+- [x] `encrypted-export` — per-table export (CSV / Parquet / SQL) in the DSMENC1 envelope with optional redaction. Shipped (`premium_plugins/encrypted-export`). Parquet is `not_available` when this machine has no parquet engine. Plaintext is deleted after encryption. Running needs `backups:create`
 - [ ] `multi-cloud-discovery` — extend **Discover Cloud…** to DigitalOcean, Supabase, Neon, Aiven
 - [ ] `extension-inventory` — installed vs available Postgres extensions and deprecations
 - [ ] `trusted-sources-check` — firewall / allow-list settings versus the current public IP

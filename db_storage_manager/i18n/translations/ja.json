@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "DBストレージマネージャー",
-    "version": "バージョン {version}"
+    "version": "バージョン {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&ファイル",
@@ -15,7 +16,9 @@
     "help": "&ヘルプ",
     "about": "&について",
     "monitoring": "モニタリング(&M)",
-    "plugins": "プラグイン(&P)"
+    "plugins": "プラグイン(&P)",
+    "changelog": "変更履歴",
+    "check_updates": "更新を確認"
   },
   "tabs": {
     "dashboard": "ダッシュボード",
@@ -323,7 +326,15 @@
     "email_recipients": "宛先（カンマ区切り）",
     "email_min_severity": "最小重大度",
     "email_cooldown": "再送のクールダウン",
-    "minutes_suffix": "分"
+    "minutes_suffix": "分",
+    "retention_title": "保持",
+    "retention_enable": "この規則で古いバックアップを削除する",
+    "retention_daily": "日次で残す",
+    "retention_monthly": "月次で残す",
+    "retention_hint": "既定ではオフです。スケジュールされたバックアップのあと、この規則より古いローカル、Proton Drive、S3 のコピーを削除します。Google Drive は対象外です。両方の数が 0 のときは何も削除しません。",
+    "retention_connection": "接続",
+    "retention_all": "すべての接続（既定）",
+    "retention_custom": "選択した接続だけの規則"
   },
   "about": {
     "title": "DB Storage Managerについて",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "コードが一致しません。認証アプリは有効になりませんでした。",
     "mfa_disable_confirm": "{user} の認証アプリをオフにしますか？",
     "mfa_enabled_done": "認証アプリは有効です。次回のサインインでコードが必要です。",
-    "mfa_enroll_help": "このキーを認証アプリに追加し、現在の6桁のコードを入力してください。コードが承認されるまで、パスワードでのサインインは引き続き使えます。",
+    "mfa_enroll_help": "QRコードを読み取るか、手動キーを認証アプリに追加してから、現在の6桁のコードを入力してください。コードが承認されるまで、パスワードでのサインインは引き続き使えます。",
     "mfa_setup": "認証アプリ…",
     "password": "パスワード",
     "rbac_active": "RBAC 有効 — 重要な操作にはサインインが必要です",
@@ -590,7 +601,13 @@
     "role_user": "ユーザー（オペレーター）",
     "role_viewer": "閲覧者",
     "role_guest": "ゲスト",
-    "role_monitor": "モニター"
+    "role_monitor": "モニター",
+    "edit_account": "アカウントを編集…",
+    "edit_account_title": "アカウントを編集 — {user}",
+    "identity_updated": "ユーザー名とメールを保存しました。",
+    "mfa_secret_label": "手動入力キー",
+    "mfa_qr_label": "認証アプリでスキャン",
+    "mfa_uri_label": "otpauth リンク"
   },
   "nav": {
     "workspace": "ワークスペース"
@@ -604,7 +621,9 @@
     "monitoring_status": "モニタリング: {connection} · アラート {alerts} 件",
     "backups_status": "バックアップ: {total} 件中 {enabled} 件のスケジュールが有効 · {state}",
     "backups_job_running": "ジョブ実行中",
-    "backups_job_idle": "待機中"
+    "backups_job_idle": "待機中",
+    "changelog": "変更履歴",
+    "check_updates": "更新を確認"
   },
   "updates": {
     "title": "変更履歴とアップデート",
@@ -612,7 +631,7 @@
     "channel": "アップデートチャネル:",
     "channel_stable": "安定版",
     "channel_experimental": "試験版（プレリリース）",
-    "channel_hint": "チェックはボタンをクリックしたときのみ実行され、公開 GitHub Releases API に接続します。自動でダウンロードやインストールは行われません。",
+    "channel_hint": "確認は公開の GitHub Releases API だけに接続します。ダウンロードもインストールも行いません。自動確認はオンにするまで行われず、オンにしても 24 時間に 1 回までです。",
     "check": "アップデートを確認",
     "idle": "「アップデートを確認」をクリックして、最新の GitHub リリースと比較します。",
     "checking": "GitHub Releases を確認中…",
@@ -627,7 +646,10 @@
     "open_releases": "すべてのリリース",
     "changelog": "変更履歴",
     "changelog_loading": "変更履歴を読み込み中…",
-    "changelog_failed": "変更履歴を読み込めませんでした: {error}"
+    "changelog_failed": "変更履歴を読み込めませんでした: {error}",
+    "auto_check": "更新を自動で確認する",
+    "auto_check_hint": "既定ではオフです。オンにすると、このマシンは 1 日に 1 回まで GitHub に問い合わせます。アプリが更新を自分でインストールすることはありません。",
+    "changelog_menu": "変更履歴"
   },
   "restore": {
     "final_title": "最終確認",

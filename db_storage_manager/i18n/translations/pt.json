@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Gerenciador de Armazenamento de BD",
-    "version": "Versão {version}"
+    "version": "Versão {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&Arquivo",
@@ -15,7 +16,9 @@
     "help": "&Ajuda",
     "about": "&Sobre",
     "monitoring": "&Monitoramento",
-    "plugins": "&Plugins"
+    "plugins": "&Plugins",
+    "changelog": "Changelog",
+    "check_updates": "Verificar atualizações"
   },
   "tabs": {
     "dashboard": "Painel",
@@ -323,7 +326,15 @@
     "email_recipients": "Destinatários (separados por vírgula)",
     "email_min_severity": "Gravidade mínima",
     "email_cooldown": "Intervalo entre repetições",
-    "minutes_suffix": "min"
+    "minutes_suffix": "min",
+    "retention_title": "Retenção",
+    "retention_enable": "Apagar cópias antigas segundo esta regra",
+    "retention_daily": "Manter diárias",
+    "retention_monthly": "Manter mensais",
+    "retention_hint": "Desligado por padrão. Depois de um backup agendado, as cópias locais, do Proton Drive e do S3 mais antigas que estas regras são apagadas. O Google Drive não é podado. Se os dois números forem zero, nada é apagado.",
+    "retention_connection": "Conexão",
+    "retention_all": "Todas as conexões (padrão)",
+    "retention_custom": "Regras próprias para a conexão selecionada"
   },
   "about": {
     "title": "Sobre o DB Storage Manager",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "Esse código não confere. O autenticador não foi ativado.",
     "mfa_disable_confirm": "Desativar o autenticador de {user}?",
     "mfa_enabled_done": "O autenticador está ativo. O próximo início de sessão pede o código.",
-    "mfa_enroll_help": "Adicione esta chave a um app autenticador e depois informe o código de 6 dígitos atual. O início de sessão continua a funcionar com a senha até o código ser aceito.",
+    "mfa_enroll_help": "Escaneie o código QR ou adicione a chave manual a um app autenticador e depois informe o código de 6 dígitos atual. O início de sessão continua a funcionar com a senha até o código ser aceito.",
     "mfa_setup": "Autenticador…",
     "password": "Senha",
     "rbac_active": "RBAC ativo — login necessário para ações sensíveis",
@@ -590,7 +601,13 @@
     "role_user": "Usuário (operador)",
     "role_viewer": "Visualizador",
     "role_guest": "Convidado",
-    "role_monitor": "Monitor"
+    "role_monitor": "Monitor",
+    "edit_account": "Editar conta…",
+    "edit_account_title": "Editar conta — {user}",
+    "identity_updated": "Nome de usuário e e-mail salvos.",
+    "mfa_secret_label": "Chave de entrada manual",
+    "mfa_qr_label": "Escanear com um app autenticador",
+    "mfa_uri_label": "Link otpauth"
   },
   "nav": {
     "workspace": "Espaço de trabalho"
@@ -604,7 +621,9 @@
     "monitoring_status": "Monitoramento: {connection} · {alerts} alerta(s)",
     "backups_status": "Backups: {enabled}/{total} agendamento(s) ativado(s) · {state}",
     "backups_job_running": "tarefa em execução",
-    "backups_job_idle": "ocioso"
+    "backups_job_idle": "ocioso",
+    "changelog": "Changelog",
+    "check_updates": "Verificar atualizações"
   },
   "updates": {
     "title": "Changelog e atualizações",
@@ -612,7 +631,7 @@
     "channel": "Canal de atualização:",
     "channel_stable": "Estável",
     "channel_experimental": "Experimental (pré-lançamentos)",
-    "channel_hint": "As verificações só são executadas quando você clica no botão e consultam a API pública do GitHub Releases. Nada é baixado ou instalado automaticamente.",
+    "channel_hint": "Uma verificação contacta apenas a API pública do GitHub Releases. Nada é baixado nem instalado. As verificações automáticas ficam desligadas até você ativá-las e, então, ocorrem no máximo uma vez a cada 24 horas.",
     "check": "Verificar atualizações",
     "idle": "Clique em “Verificar atualizações” para comparar com a versão mais recente do GitHub.",
     "checking": "Verificando o GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "Todas as versões",
     "changelog": "Changelog",
     "changelog_loading": "Carregando changelog…",
-    "changelog_failed": "Não foi possível carregar o changelog: {error}"
+    "changelog_failed": "Não foi possível carregar o changelog: {error}",
+    "auto_check": "Verificar atualizações automaticamente",
+    "auto_check_hint": "Desligado por padrão. Quando ligado, esta máquina consulta o GitHub no máximo uma vez por dia. O aplicativo nunca instala uma atualização sozinho.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Confirmação final",

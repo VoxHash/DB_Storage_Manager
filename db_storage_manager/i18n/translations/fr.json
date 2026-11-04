@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Gestionnaire de Stockage de BD",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&Fichier",
@@ -15,7 +16,9 @@
     "help": "&Aide",
     "about": "&À propos",
     "monitoring": "&Surveillance",
-    "plugins": "&Plugins"
+    "plugins": "&Plugins",
+    "changelog": "Changelog",
+    "check_updates": "Vérifier les mises à jour"
   },
   "tabs": {
     "dashboard": "Tableau de bord",
@@ -323,7 +326,15 @@
     "email_recipients": "Destinataires (séparés par des virgules)",
     "email_min_severity": "Gravité minimale",
     "email_cooldown": "Délai entre répétitions",
-    "minutes_suffix": "min"
+    "minutes_suffix": "min",
+    "retention_title": "Rétention",
+    "retention_enable": "Supprimer les anciennes copies selon cette règle",
+    "retention_daily": "Conserver par jour",
+    "retention_monthly": "Conserver par mois",
+    "retention_hint": "Désactivé par défaut. Après une sauvegarde planifiée, les copies locales, Proton Drive et S3 plus anciennes que ces règles sont supprimées. Google Drive n’est pas élagué. Si les deux nombres sont à zéro, rien n’est supprimé.",
+    "retention_connection": "Connexion",
+    "retention_all": "Toutes les connexions (par défaut)",
+    "retention_custom": "Règles propres à la connexion sélectionnée"
   },
   "about": {
     "title": "À propos de DB Storage Manager",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "Ce code ne correspond pas. L’authentificateur n’a pas été activé.",
     "mfa_disable_confirm": "Désactiver l’authentificateur pour {user} ?",
     "mfa_enabled_done": "L’authentificateur est activé. La prochaine connexion demandera le code.",
-    "mfa_enroll_help": "Ajoutez cette clé à une application d’authentification, puis saisissez le code à 6 chiffres actuel. La connexion continue de fonctionner avec le mot de passe tant que le code n’est pas accepté.",
+    "mfa_enroll_help": "Scannez le code QR ou ajoutez la clé manuelle à une application d’authentification, puis saisissez le code à 6 chiffres actuel. La connexion continue de fonctionner avec le mot de passe tant que le code n’est pas accepté.",
     "mfa_setup": "Authentificateur…",
     "password": "Mot de passe",
     "rbac_active": "RBAC actif — connexion requise pour les actions sensibles",
@@ -590,7 +601,13 @@
     "role_user": "Utilisateur (opérateur)",
     "role_viewer": "Lecteur",
     "role_guest": "Invité",
-    "role_monitor": "Surveillant"
+    "role_monitor": "Surveillant",
+    "edit_account": "Modifier le compte…",
+    "edit_account_title": "Modifier le compte — {user}",
+    "identity_updated": "Nom d’utilisateur et e-mail enregistrés.",
+    "mfa_secret_label": "Clé de saisie manuelle",
+    "mfa_qr_label": "Scanner avec une application d’authentification",
+    "mfa_uri_label": "Lien otpauth"
   },
   "nav": {
     "workspace": "Espace de travail"
@@ -604,7 +621,9 @@
     "monitoring_status": "Surveillance : {connection} · {alerts} alerte(s)",
     "backups_status": "Sauvegardes : {enabled}/{total} planification(s) active(s) · {state}",
     "backups_job_running": "tâche en cours",
-    "backups_job_idle": "inactif"
+    "backups_job_idle": "inactif",
+    "changelog": "Changelog",
+    "check_updates": "Vérifier les mises à jour"
   },
   "updates": {
     "title": "Journal des modifications et mises à jour",
@@ -612,7 +631,7 @@
     "channel": "Canal de mise à jour :",
     "channel_stable": "Stable",
     "channel_experimental": "Expérimental (préversions)",
-    "channel_hint": "Les vérifications ne s'exécutent que lorsque vous cliquez sur le bouton et interrogent l'API publique GitHub Releases. Rien n'est téléchargé ni installé automatiquement.",
+    "channel_hint": "Une vérification contacte seulement l’API publique GitHub Releases. Rien n’est téléchargé ni installé. Les vérifications automatiques restent désactivées tant que vous ne les activez pas, puis au plus une fois toutes les 24 heures.",
     "check": "Rechercher des mises à jour",
     "idle": "Cliquez sur « Rechercher des mises à jour » pour comparer avec la dernière version GitHub.",
     "checking": "Vérification de GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "Toutes les versions",
     "changelog": "Journal des modifications",
     "changelog_loading": "Chargement du journal des modifications…",
-    "changelog_failed": "Impossible de charger le journal des modifications : {error}"
+    "changelog_failed": "Impossible de charger le journal des modifications : {error}",
+    "auto_check": "Vérifier les mises à jour automatiquement",
+    "auto_check_hint": "Désactivé par défaut. Une fois activé, cette machine interroge GitHub au plus une fois par jour. L’application n’installe jamais une mise à jour toute seule.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Confirmation finale",

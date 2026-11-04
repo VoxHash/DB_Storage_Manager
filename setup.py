@@ -34,7 +34,7 @@ setup(
             "i18n/translations/*.json",
             # Web UI served by db-storage-manager-api
             "api/static/*",
-            "premium_plugins/pitr-verify/*",
+            "premium_plugins/*/*",
         ],
     },
     python_requires=">=3.10",

@@ -13,6 +13,7 @@ import base64
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -206,6 +207,43 @@ def verify_password(password: str, stored: str) -> bool:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def validate_username(username: str) -> str:
+    """Workstation username: starts with a letter or digit, max 64."""
+    username = (username or "").strip()
+    if not _USERNAME_RE.fullmatch(username):
+        raise ValueError(
+            "Username must be 1-64 characters, start with a letter or digit, "
+            "and use only letters, digits, '.', '_' or '-'"
+        )
+    return username
+
+
+def validate_email(email: str) -> str:
+    """A single address, no spaces. Not a full RFC parser."""
+    email = (email or "").strip()
+    if (
+        not email
+        or len(email) > 254
+        or any(ch.isspace() for ch in email)
+        or email.count("@") != 1
+    ):
+        raise ValueError("Enter an email address like name@example.com")
+    local, domain = email.split("@", 1)
+    if (
+        not local
+        or len(local) > 64
+        or "." not in domain
+        or ".." in domain
+        or domain.startswith(".")
+        or domain.endswith(".")
+    ):
+        raise ValueError("Enter an email address like name@example.com")
+    return email
 
 
 @dataclass
@@ -512,6 +550,51 @@ class AuthenticationManager:
             raise ValueError("Password must be at least 8 characters")
         user.password_hash = hash_password(new_password)
         self._persist()
+
+    def update_user_identity(
+        self, username: str, *, new_username: str, email: str
+    ) -> User:
+        """Change username and email. Admin only. The password and MFA stay.
+
+        A pending authenticator secret stays pending: renaming does not
+        enable MFA. The failed-login throttle moves with the username.
+        """
+        self.require(PERM_USERS_MANAGE)
+        user = self.get_user(username)
+        if not user:
+            raise ValueError("User not found")
+        new_username = validate_username(new_username)
+        email = validate_email(email)
+        old_key = user.username.lower()
+        new_key = new_username.lower()
+        if new_key != old_key and new_key in self.users:
+            raise ValueError("That username is already in use")
+        previous = user.username
+        email_changed = user.email != email
+        user.username = new_username
+        user.email = email
+        if new_key != old_key:
+            del self.users[old_key]
+            self.users[new_key] = user
+            failures = self._failed_logins.pop(old_key, None)
+            if failures:
+                self._failed_logins[new_key] = failures
+            if (
+                self.current_user is not None
+                and self.current_user.username.lower() == old_key
+            ):
+                self.current_user = user
+        self._persist()
+        from ..audit import write_audit
+
+        write_audit(
+            "user.identity",
+            "ok",
+            user=previous,
+            new_username=new_username,
+            email_changed=email_changed,
+        )
+        return user
 
     def delete_user(self, username: str) -> None:
         self.require(PERM_USERS_MANAGE)

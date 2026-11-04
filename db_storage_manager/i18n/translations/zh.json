@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "数据库存储管理器",
-    "version": "版本 {version}"
+    "version": "版本 {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&文件",
@@ -15,7 +16,9 @@
     "help": "&帮助",
     "about": "&关于",
     "monitoring": "监控(&M)",
-    "plugins": "插件(&P)"
+    "plugins": "插件(&P)",
+    "changelog": "更新日志",
+    "check_updates": "检查更新"
   },
   "tabs": {
     "dashboard": "仪表板",
@@ -323,7 +326,15 @@
     "email_recipients": "收件人（以逗号分隔）",
     "email_min_severity": "最低严重程度",
     "email_cooldown": "重复冷却时间",
-    "minutes_suffix": "分钟"
+    "minutes_suffix": "分钟",
+    "retention_title": "保留",
+    "retention_enable": "按此规则删除旧备份",
+    "retention_daily": "按日保留",
+    "retention_monthly": "按月保留",
+    "retention_hint": "默认关闭。计划备份完成后，会删除超出这些规则的本地、Proton Drive 和 S3 副本。不会清理 Google Drive。两个数量都是 0 时，不会删除任何文件。",
+    "retention_connection": "连接",
+    "retention_all": "所有连接（默认）",
+    "retention_custom": "所选连接使用单独规则"
   },
   "about": {
     "title": "关于数据库存储管理器",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "验证码不匹配。身份验证器未启用。",
     "mfa_disable_confirm": "要关闭 {user} 的身份验证器吗？",
     "mfa_enabled_done": "身份验证器已开启。下次登录需要验证码。",
-    "mfa_enroll_help": "将此密钥添加到身份验证器应用，然后输入当前的 6 位验证码。在验证码被接受之前，仍可使用密码登录。",
+    "mfa_enroll_help": "扫描二维码，或把手动密钥添加到身份验证器应用，然后输入当前的 6 位验证码。在验证码被接受之前，仍可使用密码登录。",
     "mfa_setup": "身份验证器…",
     "password": "密码",
     "rbac_active": "RBAC 已启用 — 执行敏感操作需要登录",
@@ -590,7 +601,13 @@
     "role_user": "用户（操作员）",
     "role_viewer": "只读用户",
     "role_guest": "访客",
-    "role_monitor": "监控"
+    "role_monitor": "监控",
+    "edit_account": "编辑账户…",
+    "edit_account_title": "编辑账户 — {user}",
+    "identity_updated": "已保存用户名和邮箱。",
+    "mfa_secret_label": "手动输入密钥",
+    "mfa_qr_label": "用身份验证器应用扫描",
+    "mfa_uri_label": "otpauth 链接"
   },
   "nav": {
     "workspace": "工作区"
@@ -604,7 +621,9 @@
     "monitoring_status": "监控：{connection} · {alerts} 条告警",
     "backups_status": "备份：已启用 {enabled}/{total} 个计划 · {state}",
     "backups_job_running": "任务运行中",
-    "backups_job_idle": "空闲"
+    "backups_job_idle": "空闲",
+    "changelog": "更新日志",
+    "check_updates": "检查更新"
   },
   "updates": {
     "title": "更新日志与更新",
@@ -612,7 +631,7 @@
     "channel": "更新通道：",
     "channel_stable": "稳定版",
     "channel_experimental": "实验版（预发布）",
-    "channel_hint": "仅在您点击按钮时才会检查，并访问公开的 GitHub Releases API。不会自动下载或安装任何内容。",
+    "channel_hint": "检查只访问公开的 GitHub Releases API。不会下载或安装任何文件。自动检查在你打开之前保持关闭，打开后每 24 小时最多一次。",
     "check": "检查更新",
     "idle": "点击“检查更新”以与最新的 GitHub 发布版本进行比较。",
     "checking": "正在检查 GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "所有版本",
     "changelog": "更新日志",
     "changelog_loading": "正在加载更新日志…",
-    "changelog_failed": "无法加载更新日志：{error}"
+    "changelog_failed": "无法加载更新日志：{error}",
+    "auto_check": "自动检查更新",
+    "auto_check_hint": "默认关闭。打开后，这台机器每天最多向 GitHub 询问一次。应用不会自行安装更新。",
+    "changelog_menu": "更新日志"
   },
   "restore": {
     "final_title": "最终确认",

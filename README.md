@@ -60,7 +60,7 @@ pip install -e .
 db-storage-manager
 ```
 
-Not on PyPI or npm (no JavaScript companion). To install a tagged release without cloning: `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.7"`. **Help → Changelog & Updates** checks GitHub Releases on demand (stable / experimental channel, no auto-install).
+Not on PyPI or npm (no JavaScript companion). To install a tagged release without cloning: `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.7"`. **Settings → Updates** checks GitHub Releases on demand (stable / experimental channel, no auto-install). An automatic check is off until you opt in.
 
 Optional engines:
 

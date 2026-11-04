@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Andmebaasi Hoidla Haldur",
-    "version": "Versioon {version}"
+    "version": "Versioon {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&Fail",
@@ -15,7 +16,9 @@
     "help": "&Abi",
     "about": "&Teave",
     "monitoring": "&Jälgimine",
-    "plugins": "&Pluginad"
+    "plugins": "&Pluginad",
+    "changelog": "Muudatuste logi",
+    "check_updates": "Kontrolli uuendusi"
   },
   "tabs": {
     "dashboard": "Armatuurlaud",
@@ -323,7 +326,15 @@
     "email_recipients": "Saajad (komaga eraldatud)",
     "email_min_severity": "Minimaalne tõsidus",
     "email_cooldown": "Kordamise paus",
-    "minutes_suffix": "min"
+    "minutes_suffix": "min",
+    "retention_title": "Säilitamine",
+    "retention_enable": "Kustuta vanad varukoopiad selle reegli järgi",
+    "retention_daily": "Säilita päevaseid",
+    "retention_monthly": "Säilita kuiseid",
+    "retention_hint": "Vaikimisi väljas. Pärast ajastatud varukoopiat kustutatakse kohalikud, Proton Drive’i ja S3 koopiad, mis on nendest reeglitest vanemad. Google Drive’i ei kärbita. Kui mõlemad arvud on null, ei kustutata midagi.",
+    "retention_connection": "Ühendus",
+    "retention_all": "Kõik ühendused (vaikimisi)",
+    "retention_custom": "Valitud ühenduse oma reeglid"
   },
   "about": {
     "title": "Teave DB Storage Managerist",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "See kood ei klappinud. Autentikaatorit ei lülitatud sisse.",
     "mfa_disable_confirm": "Kas lülitada autentikaator kasutajal {user} välja?",
     "mfa_enabled_done": "Autentikaator on sees. Järgmisel sisselogimisel on kood vajalik.",
-    "mfa_enroll_help": "Lisa see võti autentikaatorirakendusse ja sisesta seejärel praegune 6-kohaline kood. Parooliga sisselogimine töötab edasi, kuni kood on aktsepteeritud.",
+    "mfa_enroll_help": "Skanni QR-kood või lisa käsitsi võti autentimisrakendusse ja sisesta seejärel praegune 6-kohaline kood. Parooliga sisselogimine töötab edasi, kuni kood vastu võetakse.",
     "mfa_setup": "Autentikaator…",
     "password": "Parool",
     "rbac_active": "RBAC aktiivne — tundlike toimingute jaoks on vaja sisse logida",
@@ -590,7 +601,13 @@
     "role_user": "Kasutaja (operaator)",
     "role_viewer": "Vaataja",
     "role_guest": "Külaline",
-    "role_monitor": "Seire"
+    "role_monitor": "Seire",
+    "edit_account": "Muuda kontot…",
+    "edit_account_title": "Muuda kontot — {user}",
+    "identity_updated": "Kasutajanimi ja e-post on salvestatud.",
+    "mfa_secret_label": "Käsitsi sisestatav võti",
+    "mfa_qr_label": "Skanni autentimisrakendusega",
+    "mfa_uri_label": "otpauth link"
   },
   "nav": {
     "workspace": "Tööruum"
@@ -604,7 +621,9 @@
     "monitoring_status": "Jälgimine: {connection} · {alerts} hoiatus(t)",
     "backups_status": "Varukoopiad: {enabled}/{total} ajakava(d) lubatud · {state}",
     "backups_job_running": "töö käib",
-    "backups_job_idle": "jõude"
+    "backups_job_idle": "jõude",
+    "changelog": "Muudatuste logi",
+    "check_updates": "Kontrolli uuendusi"
   },
   "updates": {
     "title": "Muudatuste logi ja uuendused",
@@ -612,7 +631,7 @@
     "channel": "Uuenduskanal:",
     "channel_stable": "Stabiilne",
     "channel_experimental": "Eksperimentaalne (eelväljalasked)",
-    "channel_hint": "Kontrollid käivituvad ainult nupule klõpsamisel ja pöörduvad avaliku GitHub Releases API poole. Midagi ei laadita alla ega paigaldata automaatselt.",
+    "channel_hint": "Kontroll pöördub ainult GitHubi avaliku Releases API poole. Midagi ei laadita alla ega paigaldata. Automaatkontroll jääb väljalülitatuks, kuni selle sisse lülitate, ja siis kõige rohkem üks kord 24 tunni jooksul.",
     "check": "Otsi uuendusi",
     "idle": "Klõpsa „Otsi uuendusi“, et võrrelda uusima GitHubi väljalaskega.",
     "checking": "GitHub Releases kontrollimine…",
@@ -627,7 +646,10 @@
     "open_releases": "Kõik väljalasked",
     "changelog": "Muudatuste logi",
     "changelog_loading": "Muudatuste logi laadimine…",
-    "changelog_failed": "Muudatuste logi laadimine ebaõnnestus: {error}"
+    "changelog_failed": "Muudatuste logi laadimine ebaõnnestus: {error}",
+    "auto_check": "Kontrolli uuendusi automaatselt",
+    "auto_check_hint": "Vaikimisi väljas. Sisselülitatuna küsib see arvuti GitHubilt kõige rohkem üks kord päevas. Rakendus ei paigalda uuendust ise.",
+    "changelog_menu": "Muudatuste logi"
   },
   "restore": {
     "final_title": "Lõplik kinnitus",

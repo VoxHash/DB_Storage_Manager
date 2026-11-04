@@ -6,7 +6,7 @@ Users & RBAC, Updates.
 import importlib.util
 from typing import Any, Dict, List
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import QSize, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 
 from ..backups.protondrive import configuration_status as proton_drive_status
 from ..backups.s3 import configuration_status as s3_status
-from ..config import APP_VERSION, DEFAULT_SETTINGS
+from ..config import DEFAULT_SETTINGS
 from ..experimental import ENV_VAR as EXPERIMENTAL_ENV_VAR
 from ..experimental import env_forces_experimental
 from ..i18n.languages import SUPPORTED_LANGUAGES
@@ -45,8 +45,9 @@ from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.store import SecureStore
 from ..themes.manager import get_theme_manager
 from ..themes.themes import THEMES
-from ..updates import CHANNEL_EXPERIMENTAL, CHANNEL_STABLE
+from .icons import themed_icon
 from .jobs import JobRunner
+from .updates import UpdatesPanel
 from .proton_drive_config import open_proton_drive_config
 from .s3_config import open_s3_config
 from .tray import (
@@ -92,8 +93,9 @@ class SettingsWidget(QWidget):
     theme_changed = pyqtSignal(str)
     language_changed = pyqtSignal(str)
     notification_timeout_changed = pyqtSignal(int)
-    updates_requested = pyqtSignal()
     settings_saved = pyqtSignal()
+
+    _SAVABLE_TABS = {0, 1, 2, 4}
 
     def __init__(self):
         super().__init__()
@@ -129,6 +131,7 @@ class SettingsWidget(QWidget):
         self.users_admin = UsersAdminWidget()
         self.tabs.addTab(_scrollable(self._wrap(self.users_admin)), "")
         self.tabs.addTab(self._build_updates_tab(), "")
+        self.tabs.currentChanged.connect(self._sync_save_button)
         layout.addWidget(self.tabs, 1)
 
         footer = QHBoxLayout()
@@ -139,6 +142,7 @@ class SettingsWidget(QWidget):
         self.save_button.clicked.connect(self._save_settings)
         footer.addWidget(self.save_button)
         layout.addLayout(footer)
+        self._sync_save_button()
 
         self.setObjectName("glassmorphism")
         apply_glassmorphism(self)
@@ -268,6 +272,37 @@ class SettingsWidget(QWidget):
         e.addWidget(self.experimental_hint)
         outer.addWidget(self.experimental_group)
 
+        self._init_retention_state()
+        self.retention_group = QGroupBox()
+        retention = QVBoxLayout(self.retention_group)
+        retention_form = QFormLayout()
+        self.retention_connection_label = QLabel()
+        self.retention_connection = QComboBox()
+        self.retention_connection.currentIndexChanged.connect(
+            self._on_retention_target_changed
+        )
+        retention_form.addRow(
+            self.retention_connection_label, self.retention_connection
+        )
+        self.retention_custom = QCheckBox()
+        self.retention_custom.toggled.connect(self._on_retention_custom_toggled)
+        retention_form.addRow("", self.retention_custom)
+        self.retention_enable = QCheckBox()
+        retention_form.addRow("", self.retention_enable)
+        self.retention_daily_label = QLabel()
+        self.retention_daily = QSpinBox()
+        self.retention_daily.setRange(0, 3660)
+        retention_form.addRow(self.retention_daily_label, self.retention_daily)
+        self.retention_monthly_label = QLabel()
+        self.retention_monthly = QSpinBox()
+        self.retention_monthly.setRange(0, 240)
+        retention_form.addRow(self.retention_monthly_label, self.retention_monthly)
+        retention.addLayout(retention_form)
+        self.retention_hint = _hint_label()
+        retention.addWidget(self.retention_hint)
+        outer.addWidget(self.retention_group)
+        self._reload_retention_connections()
+
         outer.addStretch()
         return page
 
@@ -389,35 +424,24 @@ class SettingsWidget(QWidget):
     def _build_updates_tab(self) -> QWidget:
         page = QWidget()
         outer = QVBoxLayout(page)
-        outer.setContentsMargins(8, 8, 8, 8)
-        form = QFormLayout()
-        form.setHorizontalSpacing(16)
-
-        self.version_label = QLabel()
-        outer.addWidget(self.version_label)
-
-        self.update_channel_label = QLabel()
-        self.update_channel_combo = QComboBox()
-        self.update_channel_combo.addItem("", CHANNEL_STABLE)
-        self.update_channel_combo.addItem("", CHANNEL_EXPERIMENTAL)
-        idx = self.update_channel_combo.findData(
-            self.settings.get("update_channel", CHANNEL_STABLE)
-        )
-        self.update_channel_combo.setCurrentIndex(max(idx, 0))
-        form.addRow(self.update_channel_label, self.update_channel_combo)
-        outer.addLayout(form)
-
-        self.updates_hint = _hint_label()
-        outer.addWidget(self.updates_hint)
-
-        row = QHBoxLayout()
-        self.updates_button = QPushButton()
-        self.updates_button.clicked.connect(self.updates_requested.emit)
-        row.addWidget(self.updates_button)
-        row.addStretch()
-        outer.addLayout(row)
-        outer.addStretch()
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.updates_panel = UpdatesPanel()
+        outer.addWidget(self.updates_panel)
         return page
+
+    def open_updates_tab(self, *, check: bool = False) -> None:
+        """Show the Updates tab. ``check`` compares with GitHub Releases."""
+        self.tabs.setCurrentIndex(4)
+        if check:
+            self.updates_panel.check_updates(notify=False)
+
+    def _sync_save_button(self, index: int = -1) -> None:
+        """Save sits bottom-right only on tabs that persist preferences."""
+        if index < 0:
+            index = self.tabs.currentIndex()
+        show = index in self._SAVABLE_TABS
+        self.save_button.setVisible(show)
+        self.save_status_label.setVisible(show)
 
     # ------------------------------------------------------------- state
 
@@ -446,9 +470,10 @@ class SettingsWidget(QWidget):
             self.email_severity_combo,
             self.email_cooldown_spin,
             self.email_test_button,
-            self.update_channel_combo,
         ):
             widget.setEnabled(editable)
+        self.updates_panel.set_editable(editable)
+        self._apply_retention_field_enabled()
         # Experimental toggle: editable only with settings:write, and never
         # when the environment already forces it on.
         forced = env_forces_experimental()
@@ -485,6 +510,7 @@ class SettingsWidget(QWidget):
         idx = self.autostart_combo.findData(selected)
         self.autostart_combo.setCurrentIndex(max(idx, 0))
         self.autostart_combo.blockSignals(False)
+        self._reload_retention_connections()
 
     def showEvent(self, event):  # noqa: N802 (Qt API)
         super().showEvent(event)
@@ -848,13 +874,49 @@ class SettingsWidget(QWidget):
             t("settings.email_test", default="Send test email")
         )
 
-        self.version_label.setText(t("updates.current", version=APP_VERSION))
-        self.update_channel_label.setText(_colon(t("updates.channel")))
-        self.update_channel_combo.setItemText(0, t("updates.channel_stable"))
-        self.update_channel_combo.setItemText(1, t("updates.channel_experimental"))
-        self.updates_hint.setText(t("updates.channel_hint"))
-        self.updates_button.setText(t("updates.title"))
+        self.updates_panel.retranslate()
+        self.retention_group.setTitle(
+            _mnemonic_safe(t("settings.retention_title", default="Retention"))
+        )
+        self.retention_connection_label.setText(
+            _colon(t("settings.retention_connection", default="Connection"))
+        )
+        if self.retention_connection.count():
+            self.retention_connection.setItemText(
+                0, t("settings.retention_all", default="All connections (default)")
+            )
+        self.retention_custom.setText(
+            t(
+                "settings.retention_custom",
+                default="Custom rules for the selected connection",
+            )
+        )
+        self.retention_enable.setText(
+            t(
+                "settings.retention_enable",
+                default="Prune old backups for this rule",
+            )
+        )
+        self.retention_daily_label.setText(
+            _colon(t("settings.retention_daily", default="Keep daily"))
+        )
+        self.retention_monthly_label.setText(
+            _colon(t("settings.retention_monthly", default="Keep monthly"))
+        )
+        self.retention_hint.setText(
+            t(
+                "settings.retention_hint",
+                default=(
+                    "Off by default. After a scheduled backup, Local, Proton "
+                    "Drive and S3 copies older than these rules are deleted. "
+                    "Google Drive is not pruned. If both counts are zero, "
+                    "nothing is deleted."
+                ),
+            )
+        )
         self.save_button.setText(t("settings.save"))
+        self.save_button.setIcon(themed_icon("save", filled=True))
+        self.save_button.setIconSize(QSize(16, 16))
         self.users_admin.retranslate()
         self._refresh_adapters()
 
@@ -879,6 +941,138 @@ class SettingsWidget(QWidget):
             self.i18n.set_language(lang_code)
             self._update_texts()
             self.language_changed.emit(lang_code)
+
+    def _init_retention_state(self) -> None:
+        raw = self.settings.get("retention") or {}
+        connections = raw.get("connections") if isinstance(raw.get("connections"), dict) else {}
+        daily = raw.get("keep_daily")
+        monthly = raw.get("keep_monthly")
+        self._retention_state = {
+            "default": {
+                "enabled": bool(raw.get("enabled", False)),
+                "keep_daily": int(7 if daily is None else daily),
+                "keep_monthly": int(6 if monthly is None else monthly),
+            },
+            "connections": {},
+        }
+        for key, value in connections.items():
+            if not isinstance(value, dict):
+                continue
+            self._retention_state["connections"][str(key)] = {
+                "enabled": bool(value.get("enabled", False)),
+                "keep_daily": int(value.get("keep_daily") or 0),
+                "keep_monthly": int(value.get("keep_monthly") or 0),
+            }
+        self._retention_showing = None
+        self._retention_loading = False
+        self._retention_form_ready = False
+
+    def _retention_editable(self) -> bool:
+        auth = get_auth_manager()
+        return auth.has_permission("settings:write") or not auth.is_rbac_active()
+
+    def _apply_retention_field_enabled(self) -> None:
+        if not hasattr(self, "retention_enable"):
+            return
+        editable = self._retention_editable()
+        on_connection = self._retention_showing is not None
+        fields_on = editable and (
+            not on_connection or self.retention_custom.isChecked()
+        )
+        self.retention_connection.setEnabled(editable)
+        self.retention_custom.setEnabled(editable and on_connection)
+        self.retention_enable.setEnabled(fields_on)
+        self.retention_daily.setEnabled(fields_on)
+        self.retention_monthly.setEnabled(fields_on)
+
+    def _flush_retention_form(self) -> None:
+        if not getattr(self, "_retention_form_ready", False):
+            return
+        if getattr(self, "_retention_loading", False):
+            return
+        data = {
+            "enabled": self.retention_enable.isChecked(),
+            "keep_daily": int(self.retention_daily.value()),
+            "keep_monthly": int(self.retention_monthly.value()),
+        }
+        target = self._retention_showing
+        if target is None:
+            self._retention_state["default"] = data
+        elif self.retention_custom.isChecked():
+            self._retention_state["connections"][str(target)] = data
+        else:
+            self._retention_state["connections"].pop(str(target), None)
+
+    def _load_retention_form(self, target) -> None:
+        self._retention_loading = True
+        try:
+            self._retention_showing = target
+            custom = target is not None and str(target) in self._retention_state["connections"]
+            self.retention_custom.setVisible(target is not None)
+            self.retention_custom.setChecked(custom)
+            if target is None or not custom:
+                data = self._retention_state["default"]
+            else:
+                data = self._retention_state["connections"][str(target)]
+            self.retention_enable.setChecked(bool(data["enabled"]))
+            self.retention_daily.setValue(int(data["keep_daily"]))
+            self.retention_monthly.setValue(int(data["keep_monthly"]))
+        finally:
+            self._retention_loading = False
+            self._retention_form_ready = True
+        self._apply_retention_field_enabled()
+
+    def _on_retention_target_changed(self) -> None:
+        if self._retention_loading or not self._retention_form_ready:
+            return
+        self._flush_retention_form()
+        self._load_retention_form(self.retention_connection.currentData())
+
+    def _on_retention_custom_toggled(self, _checked: bool) -> None:
+        if self._retention_loading or not self._retention_form_ready:
+            return
+        self._apply_retention_field_enabled()
+
+    def _reload_retention_connections(self) -> None:
+        if not hasattr(self, "retention_connection"):
+            return
+        self._flush_retention_form()
+        t = self.i18n.translate
+        selected = self.retention_connection.currentData()
+        self.retention_connection.blockSignals(True)
+        self.retention_connection.clear()
+        self.retention_connection.addItem(
+            t("settings.retention_all", default="All connections (default)"), None
+        )
+        try:
+            connections = self.secure_store.get_connections()
+        except Exception:
+            connections = []
+        for conn in connections:
+            self.retention_connection.addItem(
+                str(conn.get("name") or conn.get("id")), conn.get("id")
+            )
+        idx = self.retention_connection.findData(selected)
+        self.retention_connection.setCurrentIndex(max(idx, 0))
+        self.retention_connection.blockSignals(False)
+        self._load_retention_form(self.retention_connection.currentData())
+
+    def _retention_payload(self) -> Dict[str, Any]:
+        self._flush_retention_form()
+        default = self._retention_state["default"]
+        return {
+            "enabled": bool(default["enabled"]),
+            "keep_daily": int(default["keep_daily"]),
+            "keep_monthly": int(default["keep_monthly"]),
+            "connections": {
+                str(key): {
+                    "enabled": bool(value["enabled"]),
+                    "keep_daily": int(value["keep_daily"]),
+                    "keep_monthly": int(value["keep_monthly"]),
+                }
+                for key, value in self._retention_state["connections"].items()
+            },
+        }
 
     def _save_settings(self):
         """Save settings"""
@@ -935,8 +1129,9 @@ class SettingsWidget(QWidget):
             "notification_timeout_seconds": int(
                 self.notification_timeout_spin.value()
             ),
-            "update_channel": self.update_channel_combo.currentData()
-            or existing.get("update_channel", DEFAULT_SETTINGS.get("update_channel")),
+            "update_channel": self.updates_panel.selected_channel(),
+            "update_auto_check": self.updates_panel.auto_check_enabled(),
+            "retention": self._retention_payload(),
             "telemetry": self.telemetry_check.isChecked(),
             "rbac": rbac,
             "experimental": experimental,

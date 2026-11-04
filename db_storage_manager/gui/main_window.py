@@ -33,7 +33,6 @@ from ..security.store import SecureStore
 from ..i18n.manager import get_i18n_manager
 from ..themes.manager import get_theme_manager
 from .tray import AppTray, clamp_notification_seconds
-from .updates import UpdatesDialog
 from .icons import refresh_icons
 from .utils import apply_glassmorphism, apply_theme_to_app
 from ..resources import apply_app_icon
@@ -110,8 +109,10 @@ class MainWindow(QMainWindow):
         self.settings_widget.theme_changed.connect(self._on_theme_changed)
         self.settings_widget.language_changed.connect(self._on_language_changed)
         self.settings_widget.users_admin.users_changed.connect(self.apply_rbac)
-        self.settings_widget.updates_requested.connect(self.show_updates)
         self.settings_widget.settings_saved.connect(self._on_settings_saved)
+        self.settings_widget.updates_panel.update_available.connect(
+            self._on_update_available
+        )
 
         self.tab_widget.addTab(self.dashboard, "")
         self.tab_widget.addTab(self.connections_widget, "")
@@ -150,6 +151,8 @@ class MainWindow(QMainWindow):
         self.apply_rbac()
         # Monitoring users get live alerts without clicking Start (opt-in in Settings).
         QTimer.singleShot(0, self.monitoring_widget.autostart_if_configured)
+        # Opt-in update check (default off, rate-limited, never installs).
+        QTimer.singleShot(1500, self.settings_widget.updates_panel.maybe_auto_check)
 
     def _on_settings_saved(self) -> None:
         """Settings changed: re-read SMTP / S3 / experimental flags elsewhere."""
@@ -169,7 +172,8 @@ class MainWindow(QMainWindow):
             timeout_seconds=seconds,
             status_provider=self._tray_status,
             open_section=self.show_section,
-            open_updates=self.show_updates,
+            open_changelog=lambda: self.show_updates(check=False),
+            open_check_updates=lambda: self.show_updates(check=True),
         )
         self.tray.quit_requested.connect(self._quit_app)
         self.settings_widget.notification_timeout_changed.connect(
@@ -189,8 +193,20 @@ class MainWindow(QMainWindow):
         if key in self._nav_keys:
             self.tab_widget.setCurrentIndex(self._nav_keys.index(key))
 
-    def show_updates(self) -> None:
-        UpdatesDialog(self).exec()
+    def show_updates(self, check: bool = False) -> None:
+        """Open Settings → Updates. ``check`` runs the GitHub comparison."""
+        self.show_section("settings")
+        self.settings_widget.open_updates_tab(check=check)
+
+    def _on_update_available(self, message: str) -> None:
+        """Tray notice only after an opted-in check finds a newer release."""
+        if self.tray is None or not message:
+            return
+        self.tray.notify(
+            self.i18n.translate("updates.check", default="Check for updates"),
+            message,
+            "info",
+        )
 
     def _quit_app(self) -> None:
         """Quit from the tray menu. Closing the window only hides it."""
@@ -271,11 +287,16 @@ class MainWindow(QMainWindow):
         about_action = QAction(t("menu.about"), self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
-        updates_action = QAction(
-            t("updates.title", default="Changelog & Updates"), self
+        changelog_action = QAction(
+            t("menu.changelog", default="Changelog"), self
         )
-        updates_action.triggered.connect(self.show_updates)
-        help_menu.addAction(updates_action)
+        changelog_action.triggered.connect(lambda: self.show_updates(check=False))
+        help_menu.addAction(changelog_action)
+        check_action = QAction(
+            t("menu.check_updates", default="Check for updates"), self
+        )
+        check_action.triggered.connect(lambda: self.show_updates(check=True))
+        help_menu.addAction(check_action)
 
     def _show_about(self):
         """Show about dialog"""
@@ -307,6 +328,7 @@ class MainWindow(QMainWindow):
             t("nav.workspace", default="Workspace")
         )
         self.sidebar.brand.setText(t("app.title", default="DB Storage Manager"))
+        self.sidebar.caption.setText(t("app.vendor", default="VoxHash Suite"))
         if getattr(self, "tray", None) is not None:
             self.tray.retranslate()
 

@@ -2,8 +2,9 @@
 
 No private update server: the only endpoints are the public GitHub REST API
 and ``raw.githubusercontent.com`` for ``CHANGELOG.md``. Nothing is downloaded
-or installed automatically - the UI points the user at the release page (or a
-``pip`` command pinned to the release tag) and checks run only on demand.
+or installed automatically. A manual check runs when the user clicks the
+button. An automatic check exists only after Settings → Updates opts in
+(default off) and then at most once every ``AUTO_CHECK_INTERVAL``.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import json
 import re
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -28,6 +30,33 @@ _ALLOWED_URL_PREFIX = f"https://github.com/{GITHUB_REPO}/"
 CHANNEL_STABLE = "stable"
 CHANNEL_EXPERIMENTAL = "experimental"
 CHANNELS = (CHANNEL_STABLE, CHANNEL_EXPERIMENTAL)
+
+# Opt-in background check. The desktop never installs what it finds.
+AUTO_CHECK_INTERVAL = timedelta(hours=24)
+
+
+def auto_check_due(
+    last_iso: Optional[str],
+    now: datetime,
+    interval: timedelta = AUTO_CHECK_INTERVAL,
+) -> bool:
+    """True when an opted-in check has not run inside ``interval``.
+
+    A missing or unreadable timestamp is due, so the first opt-in run happens
+    once and then the stored timestamp holds the rate limit. ``now`` must be
+    timezone-aware.
+    """
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    if not last_iso:
+        return True
+    try:
+        then = datetime.fromisoformat(str(last_iso))
+    except ValueError:
+        return True
+    if then.tzinfo is None:
+        then = then.replace(tzinfo=timezone.utc)
+    return now - then >= interval
 
 _VERSION_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-.]?([0-9A-Za-z.-]+))?$")
 

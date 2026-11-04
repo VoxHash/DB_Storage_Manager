@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -27,8 +28,81 @@ from ..security.auth import (
     UserRole,
     get_auth_manager,
 )
+from ..security.mfa_qr import qr_png_bytes
 from ..security.bootstrap import bootstrap_admin
 from ..security.store import SecureStore
+
+
+def build_mfa_enroll_dialog(parent, secret: str, uri: str) -> QDialog:
+    """Enrolment dialog: QR of the otpauth URI, plus the manual key.
+
+    The caller enables MFA only after ``confirm_mfa`` accepts a code, and
+    cancels the pending secret when this dialog is dismissed.
+    """
+    t = get_i18n_manager().translate
+    dialog = QDialog(parent)
+    dialog.setWindowTitle(t("auth.mfa_setup", default="Authenticator"))
+    dialog.setMinimumWidth(420)
+    layout = QVBoxLayout(dialog)
+    help_label = QLabel(
+        t(
+            "auth.mfa_enroll_help",
+            default=(
+                "Scan the QR code or add the manual key to an authenticator "
+                "app, then enter the current 6-digit code. Sign-in keeps "
+                "working with the password until the code is accepted."
+            ),
+        )
+    )
+    help_label.setWordWrap(True)
+    layout.addWidget(help_label)
+
+    dialog.qr_label = QLabel()
+    dialog.qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+    dialog.qr_label.setAccessibleName(
+        t("auth.mfa_qr_label", default="Scan with an authenticator app")
+    )
+    try:
+        png = qr_png_bytes(uri)
+    except Exception:
+        png = b""
+    pixmap = QPixmap()
+    if png and pixmap.loadFromData(png):
+        dialog.qr_label.setPixmap(
+            pixmap.scaled(
+                220,
+                220,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        )
+    else:
+        dialog.qr_label.setText(
+            t("auth.mfa_qr_label", default="Scan with an authenticator app")
+        )
+    layout.addWidget(dialog.qr_label)
+
+    form = QFormLayout()
+    dialog.secret_edit = QLineEdit(secret)
+    dialog.secret_edit.setReadOnly(True)
+    form.addRow(
+        t("auth.mfa_secret_label", default="Manual entry key"), dialog.secret_edit
+    )
+    dialog.uri_edit = QLineEdit(uri)
+    dialog.uri_edit.setReadOnly(True)
+    form.addRow(t("auth.mfa_uri_label", default="otpauth link"), dialog.uri_edit)
+    dialog.code_edit = QLineEdit()
+    dialog.code_edit.setPlaceholderText(t("auth.mfa", default="MFA"))
+    form.addRow(t("auth.mfa", default="MFA"), dialog.code_edit)
+    layout.addLayout(form)
+
+    buttons = QDialogButtonBox(
+        QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+    )
+    layout.addWidget(buttons)
+    buttons.rejected.connect(dialog.reject)
+    buttons.accepted.connect(dialog.accept)
+    return dialog
 
 
 def role_label(role: UserRole) -> str:
@@ -48,6 +122,8 @@ class _UserDialog(QDialog):
         role: UserRole = UserRole.USER,
         username_editable: bool = True,
         require_password: bool = True,
+        show_password: bool = True,
+        show_role: bool = True,
         parent=None,
     ):
         super().__init__(parent)
@@ -68,10 +144,16 @@ class _UserDialog(QDialog):
         idx = self.role_combo.findData(role)
         if idx >= 0:
             self.role_combo.setCurrentIndex(idx)
-        layout.addRow(t("auth.role"), self.role_combo)
+        if show_role:
+            layout.addRow(t("auth.role"), self.role_combo)
+        else:
+            self.role_combo.hide()
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        layout.addRow(t("auth.password", default="Password"), self.password_edit)
+        if show_password:
+            layout.addRow(t("auth.password", default="Password"), self.password_edit)
+        else:
+            self.password_edit.hide()
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
@@ -133,6 +215,10 @@ class UsersAdminWidget(QWidget):
         self.add_btn.clicked.connect(self._add_user)
         actions.addWidget(self.add_btn)
 
+        self.edit_btn = QPushButton()
+        self.edit_btn.clicked.connect(self._edit_identity)
+        actions.addWidget(self.edit_btn)
+
         self.role_btn = QPushButton()
         self.role_btn.clicked.connect(self._change_role)
         actions.addWidget(self.role_btn)
@@ -178,6 +264,7 @@ class UsersAdminWidget(QWidget):
             t("auth.bootstrap", default="Bootstrap first admin…")
         )
         self.add_btn.setText(t("auth.add_user", default="Add user…"))
+        self.edit_btn.setText(t("auth.edit_account", default="Edit account…"))
         self.role_btn.setText(t("auth.change_role", default="Change role…"))
         self.password_btn.setText(
             t("auth.reset_password", default="Reset password…")
@@ -207,6 +294,7 @@ class UsersAdminWidget(QWidget):
         self.bootstrap_btn.setEnabled(not active)
         can_manage = auth.has_permission("users:manage")
         self.add_btn.setEnabled(active and can_manage)
+        self.edit_btn.setEnabled(active and can_manage)
         self.role_btn.setEnabled(active and can_manage)
         self.password_btn.setEnabled(active and can_manage)
         self.mfa_btn.setEnabled(active and can_manage)
@@ -283,6 +371,47 @@ class UsersAdminWidget(QWidget):
         except (ValueError, PermissionDenied) as exc:
             QMessageBox.warning(self, t("auth.add_user_title"), str(exc))
             return
+        self.refresh()
+        self.users_changed.emit()
+
+    def _edit_identity(self) -> None:
+        """Change the selected account's username and email. Role stays put."""
+        username = self._selected_username()
+        t = self.i18n.translate
+        if not username:
+            QMessageBox.information(
+                self, t("auth.users_title"), t("auth.select_user_first")
+            )
+            return
+        auth = get_auth_manager()
+        user = auth.get_user(username)
+        if user is None:
+            return
+        dlg = _UserDialog(
+            title=t("auth.edit_account_title", user=username),
+            username=username,
+            email=user.email,
+            role=user.role,
+            show_password=False,
+            show_role=False,
+            require_password=False,
+            parent=self,
+        )
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        vals = dlg.values()
+        try:
+            auth.update_user_identity(
+                username, new_username=vals["username"], email=vals["email"]
+            )
+        except (ValueError, PermissionDenied) as exc:
+            QMessageBox.warning(
+                self, t("auth.edit_account_title", user=username), str(exc)
+            )
+            return
+        QMessageBox.information(
+            self, t("auth.users_title"), t("auth.identity_updated")
+        )
         self.refresh()
         self.users_changed.emit()
 
@@ -393,44 +522,14 @@ class UsersAdminWidget(QWidget):
         except (ValueError, PermissionDenied) as exc:
             QMessageBox.warning(self, t("auth.users_title"), str(exc))
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle(t("auth.mfa_setup", default="Authenticator"))
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(
-            QLabel(
-                t(
-                    "auth.mfa_enroll_help",
-                    default=(
-                        "Add this key to an authenticator app, then enter "
-                        "the current 6-digit code. Sign-in keeps working "
-                        "with the password until the code is accepted."
-                    ),
-                )
-            )
-        )
-        secret_edit = QLineEdit(secret)
-        secret_edit.setReadOnly(True)
-        layout.addWidget(secret_edit)
-        uri_edit = QLineEdit(uri)
-        uri_edit.setReadOnly(True)
-        layout.addWidget(uri_edit)
-        code_edit = QLineEdit()
-        code_edit.setPlaceholderText(t("auth.mfa", default="MFA"))
-        layout.addWidget(code_edit)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok
-            | QDialogButtonBox.StandardButton.Cancel
-        )
-        layout.addWidget(buttons)
-        buttons.rejected.connect(dialog.reject)
-        buttons.accepted.connect(dialog.accept)
+        dialog = build_mfa_enroll_dialog(self, secret, uri)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             try:
                 auth.cancel_mfa_enrollment(username)
             except (ValueError, PermissionDenied):
                 pass
             return
-        if not auth.confirm_mfa(username, code_edit.text()):
+        if not auth.confirm_mfa(username, dialog.code_edit.text()):
             try:
                 auth.cancel_mfa_enrollment(username)
             except (ValueError, PermissionDenied):

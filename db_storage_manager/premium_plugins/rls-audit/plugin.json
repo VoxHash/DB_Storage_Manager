@@ -1,0 +1,21 @@
+{
+  "id": "rls-audit",
+  "name": "RLS audit",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Find PostgreSQL tables without row level security, permissive policies, and SECURITY DEFINER functions.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:RlsAuditPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "892f385a-b481-4179-a2ab-042ec325fe01",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Administrador de Almacenamiento de BD",
-    "version": "Versión {version}"
+    "version": "Versión {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&Archivo",
@@ -15,7 +16,9 @@
     "help": "&Ayuda",
     "about": "&Acerca de",
     "monitoring": "&Monitoreo",
-    "plugins": "&Complementos"
+    "plugins": "&Complementos",
+    "changelog": "Changelog",
+    "check_updates": "Buscar actualizaciones"
   },
   "tabs": {
     "dashboard": "Panel",
@@ -323,7 +326,15 @@
     "email_recipients": "Destinatarios (separados por comas)",
     "email_min_severity": "Gravedad mínima",
     "email_cooldown": "Espera entre repeticiones",
-    "minutes_suffix": "min"
+    "minutes_suffix": "min",
+    "retention_title": "Retención",
+    "retention_enable": "Eliminar copias antiguas según esta regla",
+    "retention_daily": "Conservar diarias",
+    "retention_monthly": "Conservar mensuales",
+    "retention_hint": "Apagado de forma predeterminada. Tras una copia programada se borran las copias locales, de Proton Drive y de S3 que excedan estas reglas. Google Drive no se recorta. Si ambos números son cero, no se borra nada.",
+    "retention_connection": "Conexión",
+    "retention_all": "Todas las conexiones (predeterminado)",
+    "retention_custom": "Reglas propias para la conexión seleccionada"
   },
   "about": {
     "title": "Acerca de DB Storage Manager",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "Ese código no coincide. El autenticador no se activó.",
     "mfa_disable_confirm": "¿Desactivar el autenticador de {user}?",
     "mfa_enabled_done": "El autenticador está activo. El próximo inicio de sesión pide el código.",
-    "mfa_enroll_help": "Añade esta clave a una app de autenticación y luego introduce el código de 6 dígitos actual. El inicio de sesión sigue funcionando con la contraseña hasta que se acepte el código.",
+    "mfa_enroll_help": "Escanea el código QR o añade la clave manual a una app de autenticación y luego introduce el código de 6 dígitos actual. El inicio de sesión sigue funcionando con la contraseña hasta que se acepte el código.",
     "mfa_setup": "Autenticador…",
     "password": "Contraseña",
     "rbac_active": "RBAC activo — se requiere iniciar sesión para acciones sensibles",
@@ -590,7 +601,13 @@
     "role_user": "Usuario (operador)",
     "role_viewer": "Lector",
     "role_guest": "Invitado",
-    "role_monitor": "Monitor"
+    "role_monitor": "Monitor",
+    "edit_account": "Editar cuenta…",
+    "edit_account_title": "Editar cuenta — {user}",
+    "identity_updated": "Nombre de usuario y correo guardados.",
+    "mfa_secret_label": "Clave de entrada manual",
+    "mfa_qr_label": "Escanear con una app de autenticación",
+    "mfa_uri_label": "Enlace otpauth"
   },
   "nav": {
     "workspace": "Espacio de trabajo"
@@ -604,7 +621,9 @@
     "monitoring_status": "Monitoreo: {connection} · {alerts} alerta(s)",
     "backups_status": "Copias de seguridad: {enabled}/{total} programación(es) habilitada(s) · {state}",
     "backups_job_running": "tarea en ejecución",
-    "backups_job_idle": "inactivo"
+    "backups_job_idle": "inactivo",
+    "changelog": "Changelog",
+    "check_updates": "Buscar actualizaciones"
   },
   "updates": {
     "title": "Registro de cambios y actualizaciones",
@@ -612,7 +631,7 @@
     "channel": "Canal de actualización:",
     "channel_stable": "Estable",
     "channel_experimental": "Experimental (versiones preliminares)",
-    "channel_hint": "Las comprobaciones solo se ejecutan al pulsar el botón y consultan la API pública de GitHub Releases. No se descarga ni instala nada automáticamente.",
+    "channel_hint": "Una comprobación contacta solo la API pública de GitHub Releases. No se descarga ni se instala nada. Las comprobaciones automáticas siguen apagadas hasta que las actives, y entonces ocurren como máximo una vez cada 24 horas.",
     "check": "Buscar actualizaciones",
     "idle": "Pulse “Buscar actualizaciones” para comparar con la última versión de GitHub.",
     "checking": "Comprobando GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "Todas las versiones",
     "changelog": "Registro de cambios",
     "changelog_loading": "Cargando registro de cambios…",
-    "changelog_failed": "No se pudo cargar el registro de cambios: {error}"
+    "changelog_failed": "No se pudo cargar el registro de cambios: {error}",
+    "auto_check": "Buscar actualizaciones automáticamente",
+    "auto_check_hint": "Apagado de forma predeterminada. Si lo activas, este equipo pregunta a GitHub como máximo una vez al día. La aplicación nunca instala una actualización por sí sola.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Confirmación final",

@@ -12,7 +12,9 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `auto_connect` | Connect on startup | `False` |
 | `notifications` | Desktop notifications | `True` |
 | `notification_timeout_seconds` | Seconds before a desktop notification auto-dismisses (clamped 2-60; some desktops treat it as a hint) | `5` |
-| `update_channel` | Channel used by **Help → Changelog & Updates**: `stable` or `experimental` (GitHub pre-releases) | `stable` |
+| `update_channel` | Channel used by Settings → Updates: `stable` or `experimental` (GitHub pre-releases) | `stable` |
+| `update_auto_check` | When true, ask the public GitHub Releases API at most once every 24 hours. Nothing is installed | `false` |
+| `retention` | `enabled`, `keep_daily`, `keep_monthly`, and optional `connections` overrides. Off deletes nothing. Prunes Local, Proton Drive and S3 after a scheduled backup | off, 7 daily, 6 monthly |
 | `telemetry` | Anonymous telemetry | `False` |
 | `experimental.restore` | Enables the experimental **Restore…** button (full restore). `DSM_EXPERIMENTAL=1` forces it on and locks the checkbox | `False` |
 | `email_alerts` | SMTP alert channel: `host`, `port`, `security` (`starttls` / `ssl` / `none`), `username`, `sender`, `recipients`, `min_severity` (`warning` / `critical`), `cooldown_minutes`. The password is stored encrypted | host empty (channel unavailable) |
@@ -60,21 +62,23 @@ Settings key `rbac.enabled` mirrors whether accounts exist (informational). Role
 
 Permission matrix (`db_storage_manager.security.auth.ROLE_PERMISSIONS`; `admin` holds `*`). The desktop UI and the REST API enforce the same permission strings:
 
-| Permission | admin | user | viewer | guest |
-|---|:-:|:-:|:-:|:-:|
-| `dashboard:read`, `connections:read`, `api:read` | yes | yes | yes | yes |
-| `backups:read`, `settings:read`, `plugins:read`, `monitoring:read` | yes | yes | yes | no |
-| `connections:write`, `connections:delete` | yes | yes | no | no |
-| `backups:create`, `backups:restore` | yes | yes | no | no |
-| `query:execute` (SELECT console) | yes | yes | no | no |
-| `query:write` (non-SELECT, Safe Mode off) | yes | yes | no | no |
-| `monitoring:write` (thresholds, channels, acknowledge) | yes | yes | no | no |
-| `api:write` | yes | yes | no | no |
-| `settings:write`, `plugins:manage`, `users:manage` | yes | no | no | no |
+| Permission | admin | user | monitor | viewer | guest |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `dashboard:read`, `connections:read`, `api:read` | yes | yes | yes | yes | yes |
+| `backups:read`, `settings:read`, `plugins:read`, `monitoring:read` | yes | yes | yes | yes | no |
+| `connections:write`, `connections:delete` | yes | yes | no | no | no |
+| `backups:create`, `backups:restore` | yes | yes | no | no | no |
+| `query:execute` (SELECT console) | yes | yes | no | no | no |
+| `query:write` (non-SELECT, Safe Mode off) | yes | yes | no | no | no |
+| `monitoring:write` (thresholds, channels, acknowledge) | yes | yes | yes | no | no |
+| `api:write` | yes | yes | no | no | no |
+| `settings:write`, `plugins:manage`, `users:manage` | yes | no | no | no | no |
+
+There is no separate `backups:delete`. Removing a backup in the UI uses `backups:create`. Retention pruning is not an interactive action: it follows a policy an admin saved (`settings:write`) and runs after a scheduled backup, including when nobody is signed in. A monitor cannot turn pruning on and cannot restore. Changing a username or email needs `users:manage` (admin). Guest can list connection names; passwords stay in SecureStore and are not part of the public user record.
 
 Failed sign-ins are throttled: after 5 failures within 60 seconds the username is locked out for the rest of that window (desktop sign-in dialog and API Basic auth).
 
-TOTP (authenticator app) is optional per user. Settings → Users & RBAC → **Authenticator…** shows a secret and an `otpauth://` URI and enables MFA only after a valid code. Until that code is accepted, password login still works. The sign-in dialog accepts the 6-digit code with or without spaces. The companion API sends the same code in the `X-DSM-MFA` header next to HTTP Basic; a password alone is rejected once MFA is on. There is no WebAuthn ceremony in this app.
+TOTP (authenticator app) is optional per user. Settings → Users & RBAC → **Authenticator…** shows a QR code of the `otpauth://` URI, the same URI as text, and the manual key. MFA is enabled only after a valid code. Until that code is accepted, password login still works; dismissing the dialog drops the pending secret. The sign-in dialog accepts the 6-digit code with or without spaces. The companion API sends the same code in the `X-DSM-MFA` header next to HTTP Basic; a password alone is rejected once MFA is on. There is no WebAuthn ceremony in this app. **Edit account…** changes username and email for an admin; the password hash and authenticator secret stay on that record.
 
 `.env.rbac.local` is a gitignored, mode `600` local file. It uses the keys `USERNAME` and `PASSWORD` (template: `.env.rbac.local.example`) and is read by the opt-in sign-in tests in `tests/test_gui_shell.py`. The application itself does not read it; to create the first admin use `db-storage-manager-bootstrap` (flags, or `DSM_BOOTSTRAP_USERNAME` / `DSM_BOOTSTRAP_PASSWORD`). Never commit it.
 

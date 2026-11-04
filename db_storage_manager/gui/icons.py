@@ -117,6 +117,13 @@ def _edit(p: QPainter) -> None:
     _line(p, 13.5, 6.5, 17.5, 10.5)
 
 
+def _save(p: QPainter) -> None:
+    _rect(p, 4, 3, 16, 18, 1.5)
+    _rect(p, 7, 3, 10, 6, 1)
+    _line(p, 8, 14, 16, 14)
+    _line(p, 8, 17, 16, 17)
+
+
 def _key(p: QPainter) -> None:
     p.drawEllipse(QPointF(7.5, 15.5), 5.0, 5.0)
     _line(p, 11.2, 11.8, 21, 2)
@@ -147,6 +154,7 @@ _DRAWERS: Dict[str, Callable[[QPainter], None]] = {
     "settings": _settings,
     "refresh": _refresh,
     "edit": _edit,
+    "save": _save,
     "key": _key,
     "external": _external,
 }

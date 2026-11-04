@@ -225,8 +225,7 @@ def build_app_stylesheet(
             color: {muted};
             font-size: 11px;
             font-weight: 600;
-            letter-spacing: 0.6px;
-            text-transform: uppercase;
+            letter-spacing: 0.2px;
             background: transparent;
             padding: 0 4px 8px 4px;
         }}

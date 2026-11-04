@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "Manajer Penyimpanan DB",
-    "version": "Versi {version}"
+    "version": "Versi {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&File",
@@ -15,7 +16,9 @@
     "help": "&Bantuan",
     "about": "&Tentang",
     "monitoring": "&Pemantauan",
-    "plugins": "&Plugin"
+    "plugins": "&Plugin",
+    "changelog": "Changelog",
+    "check_updates": "Periksa pembaruan"
   },
   "tabs": {
     "dashboard": "Dasbor",
@@ -323,7 +326,15 @@
     "email_recipients": "Penerima (pisahkan dengan koma)",
     "email_min_severity": "Tingkat keparahan minimum",
     "email_cooldown": "Jeda pengulangan",
-    "minutes_suffix": "mnt"
+    "minutes_suffix": "mnt",
+    "retention_title": "Retensi",
+    "retention_enable": "Hapus cadangan lama menurut aturan ini",
+    "retention_daily": "Simpan harian",
+    "retention_monthly": "Simpan bulanan",
+    "retention_hint": "Mati secara bawaan. Setelah cadangan terjadwal, salinan lokal, Proton Drive, dan S3 yang lebih lama dari aturan ini dihapus. Google Drive tidak dipangkas. Jika kedua angka nol, tidak ada yang dihapus.",
+    "retention_connection": "Koneksi",
+    "retention_all": "Semua koneksi (bawaan)",
+    "retention_custom": "Aturan khusus untuk koneksi yang dipilih"
   },
   "about": {
     "title": "Tentang Manajer Penyimpanan DB",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "Kode itu tidak cocok. Autentikator tidak diaktifkan.",
     "mfa_disable_confirm": "Matikan autentikator untuk {user}?",
     "mfa_enabled_done": "Autentikator aktif. Masuk berikutnya memerlukan kode.",
-    "mfa_enroll_help": "Tambahkan kunci ini ke aplikasi autentikator, lalu masukkan kode 6 digit saat ini. Masuk dengan kata sandi tetap berfungsi sampai kode diterima.",
+    "mfa_enroll_help": "Pindai kode QR atau tambahkan kunci manual ke aplikasi autentikator, lalu masukkan kode 6 digit saat ini. Masuk dengan kata sandi tetap berfungsi sampai kode diterima.",
     "mfa_setup": "Autentikator…",
     "password": "Kata sandi",
     "rbac_active": "RBAC aktif — masuk diperlukan untuk tindakan sensitif",
@@ -590,7 +601,13 @@
     "role_user": "Pengguna (operator)",
     "role_viewer": "Pelihat",
     "role_guest": "Tamu",
-    "role_monitor": "Pemantau"
+    "role_monitor": "Pemantau",
+    "edit_account": "Edit akun…",
+    "edit_account_title": "Edit akun — {user}",
+    "identity_updated": "Nama pengguna dan email disimpan.",
+    "mfa_secret_label": "Kunci entri manual",
+    "mfa_qr_label": "Pindai dengan aplikasi autentikator",
+    "mfa_uri_label": "Tautan otpauth"
   },
   "nav": {
     "workspace": "Ruang kerja"
@@ -604,7 +621,9 @@
     "monitoring_status": "Pemantauan: {connection} · {alerts} peringatan",
     "backups_status": "Cadangan: {enabled}/{total} jadwal aktif · {state}",
     "backups_job_running": "tugas berjalan",
-    "backups_job_idle": "menganggur"
+    "backups_job_idle": "menganggur",
+    "changelog": "Changelog",
+    "check_updates": "Periksa pembaruan"
   },
   "updates": {
     "title": "Changelog & Pembaruan",
@@ -612,7 +631,7 @@
     "channel": "Kanal pembaruan:",
     "channel_stable": "Stabil",
     "channel_experimental": "Eksperimental (pra-rilis)",
-    "channel_hint": "Pemeriksaan hanya berjalan saat Anda mengeklik tombol dan menghubungi API publik GitHub Releases. Tidak ada yang diunduh atau dipasang secara otomatis.",
+    "channel_hint": "Pemeriksaan hanya menghubungi API GitHub Releases publik. Tidak ada yang diunduh atau dipasang. Pemeriksaan otomatis tetap mati sampai Anda menyalakannya, lalu paling banyak sekali setiap 24 jam.",
     "check": "Periksa pembaruan",
     "idle": "Klik “Periksa pembaruan” untuk membandingkan dengan rilis GitHub terbaru.",
     "checking": "Memeriksa GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "Semua rilis",
     "changelog": "Changelog",
     "changelog_loading": "Memuat changelog…",
-    "changelog_failed": "Tidak dapat memuat changelog: {error}"
+    "changelog_failed": "Tidak dapat memuat changelog: {error}",
+    "auto_check": "Periksa pembaruan secara otomatis",
+    "auto_check_hint": "Mati secara bawaan. Jika dinyalakan, mesin ini bertanya ke GitHub paling banyak sekali sehari. Aplikasi tidak pernah memasang pembaruan sendiri.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Konfirmasi akhir",

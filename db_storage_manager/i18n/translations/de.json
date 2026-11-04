@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "DB-Speicher-Manager",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&Datei",
@@ -15,7 +16,9 @@
     "help": "&Hilfe",
     "about": "&Über",
     "monitoring": "&Überwachung",
-    "plugins": "&Plugins"
+    "plugins": "&Plugins",
+    "changelog": "Changelog",
+    "check_updates": "Nach Updates suchen"
   },
   "tabs": {
     "dashboard": "Dashboard",
@@ -323,7 +326,15 @@
     "email_recipients": "Empfänger (kommagetrennt)",
     "email_min_severity": "Mindestschweregrad",
     "email_cooldown": "Wiederholungspause",
-    "minutes_suffix": "Min."
+    "minutes_suffix": "Min.",
+    "retention_title": "Aufbewahrung",
+    "retention_enable": "Alte Sicherungen nach dieser Regel löschen",
+    "retention_daily": "Täglich behalten",
+    "retention_monthly": "Monatlich behalten",
+    "retention_hint": "Standardmäßig aus. Nach einer geplanten Sicherung werden lokale, Proton-Drive- und S3-Kopien gelöscht, die älter als diese Regeln sind. Google Drive wird nicht bereinigt. Sind beide Zahlen null, wird nichts gelöscht.",
+    "retention_connection": "Verbindung",
+    "retention_all": "Alle Verbindungen (Standard)",
+    "retention_custom": "Eigene Regeln für die gewählte Verbindung"
   },
   "about": {
     "title": "Über DB Storage Manager",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "Dieser Code stimmt nicht. Der Authenticator wurde nicht aktiviert.",
     "mfa_disable_confirm": "Authenticator für {user} ausschalten?",
     "mfa_enabled_done": "Der Authenticator ist aktiv. Die nächste Anmeldung verlangt den Code.",
-    "mfa_enroll_help": "Fügen Sie diesen Schlüssel einer Authenticator-App hinzu und geben Sie dann den aktuellen 6-stelligen Code ein. Die Anmeldung funktioniert weiter mit dem Passwort, bis der Code akzeptiert wird.",
+    "mfa_enroll_help": "Scannen Sie den QR-Code oder fügen Sie den manuellen Schlüssel einer Authenticator-App hinzu und geben Sie dann den aktuellen 6-stelligen Code ein. Die Anmeldung funktioniert weiter mit dem Passwort, bis der Code akzeptiert wird.",
     "mfa_setup": "Authenticator…",
     "password": "Passwort",
     "rbac_active": "RBAC aktiv — für sensible Aktionen ist eine Anmeldung erforderlich",
@@ -590,7 +601,13 @@
     "role_user": "Benutzer (Operator)",
     "role_viewer": "Betrachter",
     "role_guest": "Gast",
-    "role_monitor": "Überwachung"
+    "role_monitor": "Überwachung",
+    "edit_account": "Konto bearbeiten…",
+    "edit_account_title": "Konto bearbeiten — {user}",
+    "identity_updated": "Benutzername und E-Mail gespeichert.",
+    "mfa_secret_label": "Manueller Schlüssel",
+    "mfa_qr_label": "Mit einer Authenticator-App scannen",
+    "mfa_uri_label": "otpauth-Link"
   },
   "nav": {
     "workspace": "Arbeitsbereich"
@@ -604,7 +621,9 @@
     "monitoring_status": "Überwachung: {connection} · {alerts} Warnung(en)",
     "backups_status": "Backups: {enabled}/{total} Zeitplan/Zeitpläne aktiv · {state}",
     "backups_job_running": "Auftrag läuft",
-    "backups_job_idle": "im Leerlauf"
+    "backups_job_idle": "im Leerlauf",
+    "changelog": "Changelog",
+    "check_updates": "Nach Updates suchen"
   },
   "updates": {
     "title": "Änderungsprotokoll & Updates",
@@ -612,7 +631,7 @@
     "channel": "Update-Kanal:",
     "channel_stable": "Stabil",
     "channel_experimental": "Experimentell (Vorabversionen)",
-    "channel_hint": "Prüfungen laufen nur, wenn Sie auf die Schaltfläche klicken, und kontaktieren die öffentliche GitHub-Releases-API. Es wird nichts automatisch heruntergeladen oder installiert.",
+    "channel_hint": "Eine Prüfung kontaktiert nur die öffentliche GitHub-Releases-API. Es wird nichts heruntergeladen oder installiert. Automatische Prüfungen bleiben aus, bis Sie sie einschalten, und laufen dann höchstens einmal alle 24 Stunden.",
     "check": "Nach Updates suchen",
     "idle": "Klicken Sie auf „Nach Updates suchen“, um mit dem neuesten GitHub-Release zu vergleichen.",
     "checking": "GitHub Releases werden geprüft…",
@@ -627,7 +646,10 @@
     "open_releases": "Alle Releases",
     "changelog": "Änderungsprotokoll",
     "changelog_loading": "Änderungsprotokoll wird geladen…",
-    "changelog_failed": "Änderungsprotokoll konnte nicht geladen werden: {error}"
+    "changelog_failed": "Änderungsprotokoll konnte nicht geladen werden: {error}",
+    "auto_check": "Automatisch nach Updates suchen",
+    "auto_check_hint": "Standardmäßig aus. Wenn eingeschaltet, fragt dieser Rechner GitHub höchstens einmal am Tag. Die App installiert ein Update nie von selbst.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Letzte Bestätigung",

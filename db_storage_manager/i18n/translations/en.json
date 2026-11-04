@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "DB Storage Manager",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "vendor": "VoxHash Suite"
   },
   "menu": {
     "file": "&File",
@@ -15,7 +16,9 @@
     "plugins": "&Plugins",
     "settings": "&Settings",
     "help": "&Help",
-    "about": "&About"
+    "about": "&About",
+    "changelog": "Changelog",
+    "check_updates": "Check for updates"
   },
   "tabs": {
     "dashboard": "Dashboard",
@@ -372,7 +375,15 @@
     "email_recipients": "Recipients (comma-separated)",
     "email_min_severity": "Minimum severity",
     "email_cooldown": "Repeat cooldown",
-    "minutes_suffix": "min"
+    "minutes_suffix": "min",
+    "retention_title": "Retention",
+    "retention_enable": "Prune old backups for this rule",
+    "retention_daily": "Keep daily",
+    "retention_monthly": "Keep monthly",
+    "retention_hint": "Off by default. After a scheduled backup, Local, Proton Drive and S3 copies older than these rules are deleted. Google Drive is not pruned. If both counts are zero, nothing is deleted.",
+    "retention_connection": "Connection",
+    "retention_all": "All connections (default)",
+    "retention_custom": "Custom rules for the selected connection"
   },
   "about": {
     "title": "About DB Storage Manager",
@@ -558,7 +569,7 @@
     "mfa_code_rejected": "That code did not match. The authenticator was not enabled.",
     "mfa_disable_confirm": "Turn off the authenticator for {user}?",
     "mfa_enabled_done": "Authenticator is on. The next sign-in needs the code.",
-    "mfa_enroll_help": "Add this key to an authenticator app, then enter the current 6-digit code. Sign-in keeps working with the password until the code is accepted.",
+    "mfa_enroll_help": "Scan the QR code or add the manual key to an authenticator app, then enter the current 6-digit code. Sign-in keeps working with the password until the code is accepted.",
     "mfa_setup": "Authenticator…",
     "password": "Password",
     "rbac_active": "RBAC active — sign in required for sensitive actions",
@@ -590,7 +601,13 @@
     "role_user": "User (operator)",
     "role_viewer": "Viewer",
     "role_guest": "Guest",
-    "role_monitor": "Monitor"
+    "role_monitor": "Monitor",
+    "edit_account": "Edit account…",
+    "edit_account_title": "Edit account — {user}",
+    "identity_updated": "Username and email saved.",
+    "mfa_secret_label": "Manual entry key",
+    "mfa_qr_label": "Scan with an authenticator app",
+    "mfa_uri_label": "otpauth link"
   },
   "nav": {
     "workspace": "Workspace"
@@ -604,7 +621,9 @@
     "monitoring_status": "Monitoring: {connection} · {alerts} alert(s)",
     "backups_status": "Backups: {enabled}/{total} schedule(s) enabled · {state}",
     "backups_job_running": "job running",
-    "backups_job_idle": "idle"
+    "backups_job_idle": "idle",
+    "changelog": "Changelog",
+    "check_updates": "Check for updates"
   },
   "updates": {
     "title": "Changelog & Updates",
@@ -612,7 +631,7 @@
     "channel": "Update channel:",
     "channel_stable": "Stable",
     "channel_experimental": "Experimental (pre-releases)",
-    "channel_hint": "Checks run only when you click the button and contact the public GitHub Releases API. Nothing is downloaded or installed automatically.",
+    "channel_hint": "A check contacts only the public GitHub Releases API. Nothing is downloaded or installed. Automatic checks stay off until you turn them on, and then run at most once every 24 hours.",
     "check": "Check for updates",
     "idle": "Click “Check for updates” to compare with the latest GitHub release.",
     "checking": "Checking GitHub Releases…",
@@ -627,7 +646,10 @@
     "open_releases": "All releases",
     "changelog": "Changelog",
     "changelog_loading": "Loading changelog…",
-    "changelog_failed": "Could not load the changelog: {error}"
+    "changelog_failed": "Could not load the changelog: {error}",
+    "auto_check": "Check for updates automatically",
+    "auto_check_hint": "Off by default. When on, this machine asks GitHub at most once a day. The app never installs an update by itself.",
+    "changelog_menu": "Changelog"
   },
   "restore": {
     "final_title": "Final confirmation",

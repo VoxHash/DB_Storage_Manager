@@ -29,7 +29,7 @@ pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Mana
 db-storage-manager
 ```
 
-The wheel includes the translation JSON files and the REST companion's static Web UI. The in-app **Changelog & Updates** dialog prints this command pinned to the newest tag it finds.
+The wheel includes the translation JSON files and the REST companion's static Web UI. Settings → Updates prints this command pinned to the newest tag it finds. Nothing is installed from that tab.
 
 Optional: install `~/.local/bin` shims that point only at this repo’s `.venv` (after removing any other `db-storage-manager*` scripts on `PATH`):
 

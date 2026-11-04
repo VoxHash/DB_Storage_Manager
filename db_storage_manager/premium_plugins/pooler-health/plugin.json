@@ -1,0 +1,21 @@
+{
+  "id": "pooler-health",
+  "name": "Pooler health",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Compare a direct PostgreSQL connection with a pooled one: latency, pool mode, and max_connections headroom.",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:PoolerHealthPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "d9f24bbd-e3a1-4d08-905b-6784635bb43d",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

@@ -351,13 +351,25 @@ class ScheduledBackupManager:
                 )
                 return
 
-            asyncio.run(
+            results = asyncio.run(
                 self.backup_manager.create_batch_backups(
                     target_connections,
                     adapter,
                     options,
                 )
             )
+            try:
+                from .retention import prune_scheduled
+
+                asyncio.run(
+                    prune_scheduled(
+                        adapter, item.adapter_type, results, self.secure_store
+                    )
+                )
+            except Exception:
+                logger.exception(
+                    "Retention prune failed after scheduled backup %s", item.name
+                )
 
             item.last_run = datetime.now()
             self.save_schedules()

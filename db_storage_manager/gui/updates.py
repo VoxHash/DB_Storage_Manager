@@ -1,30 +1,36 @@
-"""Changelog + manual update check dialog (GitHub Releases, no auto-install)."""
+"""Updates tab: changelog, channel, and a manual GitHub release check.
+
+The controls live on Settings → Updates. Nothing is downloaded or installed.
+An automatic check is a separate opt-in (default off, at most once a day).
+"""
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices, QGuiApplication
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
-    QDialog,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QTextBrowser,
     QVBoxLayout,
+    QWidget,
 )
 
 from ..config import APP_VERSION
 from ..i18n.manager import get_i18n_manager
-from ..security.auth import get_auth_manager
 from ..security.store import SecureStore
 from ..updates import (
     CHANNEL_EXPERIMENTAL,
     CHANNEL_STABLE,
     RELEASES_PAGE,
     ReleaseInfo,
+    auto_check_due,
     check_for_update,
     is_trusted_release_url,
     load_changelog,
@@ -32,8 +38,10 @@ from ..updates import (
 from .jobs import JobRunner
 
 
-class UpdatesDialog(QDialog):
-    """Show CHANGELOG.md and check GitHub Releases on demand."""
+class UpdatesPanel(QWidget):
+    """Changelog and update check embedded in Settings."""
+
+    update_available = pyqtSignal(str)
 
     def __init__(
         self,
@@ -55,17 +63,15 @@ class UpdatesDialog(QDialog):
         self._release: Optional[ReleaseInfo] = None
         t = self.i18n.translate
 
-        self.setWindowTitle(t("updates.title", default="Changelog & Updates"))
-        self.setMinimumSize(640, 520)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
 
-        self.current_label = QLabel(
-            t("updates.current", version=APP_VERSION)
-        )
+        self.current_label = QLabel(t("updates.current", version=APP_VERSION))
         layout.addWidget(self.current_label)
 
         row = QHBoxLayout()
-        row.addWidget(QLabel(t("updates.channel")))
+        self.channel_label = QLabel(t("updates.channel"))
+        row.addWidget(self.channel_label)
         self.channel_combo = QComboBox()
         self.channel_combo.addItem(t("updates.channel_stable"), CHANNEL_STABLE)
         self.channel_combo.addItem(
@@ -74,18 +80,26 @@ class UpdatesDialog(QDialog):
         saved = self._saved_channel()
         idx = self.channel_combo.findData(saved)
         self.channel_combo.setCurrentIndex(max(idx, 0))
-        self.channel_combo.currentIndexChanged.connect(self._persist_channel)
         row.addWidget(self.channel_combo)
         self.check_button = QPushButton(t("updates.check"))
         self.check_button.setObjectName("PrimaryButton")
-        self.check_button.clicked.connect(self.check_updates)
+        self.check_button.clicked.connect(lambda: self.check_updates(notify=False))
         row.addWidget(self.check_button)
         row.addStretch()
         layout.addLayout(row)
 
         self.hint_label = QLabel(t("updates.channel_hint"))
         self.hint_label.setWordWrap(True)
+        self.hint_label.setObjectName("SettingsHint")
         layout.addWidget(self.hint_label)
+
+        self.auto_check = QCheckBox(t("updates.auto_check"))
+        self.auto_check.setChecked(self._saved_auto_check())
+        layout.addWidget(self.auto_check)
+        self.auto_hint = QLabel(t("updates.auto_check_hint"))
+        self.auto_hint.setWordWrap(True)
+        self.auto_hint.setObjectName("SettingsHint")
+        layout.addWidget(self.auto_hint)
 
         self.result_label = QLabel(t("updates.idle"))
         self.result_label.setWordWrap(True)
@@ -101,29 +115,45 @@ class UpdatesDialog(QDialog):
         self.copy_pip_button.setEnabled(False)
         actions.addWidget(self.copy_pip_button)
         self.releases_button = QPushButton(t("updates.open_releases"))
-        self.releases_button.clicked.connect(
-            lambda: self._open_url(RELEASES_PAGE)
-        )
+        self.releases_button.clicked.connect(lambda: self._open_url(RELEASES_PAGE))
         actions.addWidget(self.releases_button)
         actions.addStretch()
         layout.addLayout(actions)
 
-        layout.addWidget(QLabel(t("updates.changelog")))
+        self.changelog_label = QLabel(t("updates.changelog"))
+        layout.addWidget(self.changelog_label)
         self.changelog_view = QTextBrowser()
         self.changelog_view.setOpenExternalLinks(False)
         self.changelog_view.setPlainText(t("updates.changelog_loading"))
         layout.addWidget(self.changelog_view, 1)
 
-        close = QPushButton(t("common.close", default="Close"))
-        close.clicked.connect(self.accept)
-        layout.addWidget(close)
-
         self.load_changelog()
 
-    # -- channel preference --------------------------------------------
+    def retranslate(self) -> None:
+        t = self.i18n.translate
+        self.current_label.setText(t("updates.current", version=APP_VERSION))
+        self.channel_label.setText(t("updates.channel"))
+        self.channel_combo.setItemText(0, t("updates.channel_stable"))
+        self.channel_combo.setItemText(1, t("updates.channel_experimental"))
+        self.check_button.setText(t("updates.check"))
+        self.hint_label.setText(t("updates.channel_hint"))
+        self.auto_check.setText(t("updates.auto_check"))
+        self.auto_hint.setText(t("updates.auto_check_hint"))
+        self.download_button.setText(t("updates.open_download"))
+        self.copy_pip_button.setText(t("updates.copy_pip"))
+        self.releases_button.setText(t("updates.open_releases"))
+        self.changelog_label.setText(t("updates.changelog"))
 
     def selected_channel(self) -> str:
         return str(self.channel_combo.currentData() or CHANNEL_STABLE)
+
+    def auto_check_enabled(self) -> bool:
+        return self.auto_check.isChecked()
+
+    def set_editable(self, editable: bool) -> None:
+        """Channel and the opt-in are preferences. The check button stays usable."""
+        self.channel_combo.setEnabled(editable)
+        self.auto_check.setEnabled(editable)
 
     @staticmethod
     def _saved_channel() -> str:
@@ -133,37 +163,35 @@ class UpdatesDialog(QDialog):
             value = None
         return value if value in (CHANNEL_STABLE, CHANNEL_EXPERIMENTAL) else CHANNEL_STABLE
 
-    def _persist_channel(self) -> None:
-        """Remember the channel when the signed-in role may write settings."""
-        if not get_auth_manager().has_permission("settings:write"):
-            return
+    @staticmethod
+    def _saved_auto_check() -> bool:
         try:
-            store = SecureStore()
-            settings = store.get_settings()
-            settings["update_channel"] = self.selected_channel()
-            store.set_settings(settings)
+            return bool(SecureStore().get_settings().get("update_auto_check"))
         except Exception:
-            pass
-
-    # -- changelog ------------------------------------------------------
+            return False
 
     def load_changelog(self) -> None:
-        def on_ok(result: Any) -> None:
-            text, source = result
-            self.changelog_view.setMarkdown(text)
-            self.changelog_view.setToolTip(source)
+        """Read the local changelog on this thread.
 
-        def on_fail(message: str) -> None:
+        The file is small. A background job outlives Settings when tests (and
+        window close) delete the panel, and the callback then touches a dead
+        widget.
+        """
+        try:
+            text, source = self._changelog_fn()
+        except Exception as exc:  # noqa: BLE001 — shown in the changelog view
             self.changelog_view.setPlainText(
-                self.i18n.translate("updates.changelog_failed", error=message)
+                self.i18n.translate(
+                    "updates.changelog_failed",
+                    error=str(exc) or type(exc).__name__,
+                )
             )
+            return
+        self.changelog_view.setMarkdown(text)
+        self.changelog_view.setToolTip(source)
 
-        self._jobs.submit("changelog", self._changelog_fn, on_ok, on_fail)
-
-    # -- update check ---------------------------------------------------
-
-    def check_updates(self) -> None:
-        channel = self.selected_channel()
+    def check_updates(self, *, notify: bool = False, channel: Optional[str] = None) -> None:
+        channel = channel or self.selected_channel()
         t = self.i18n.translate
         self._release = None
         self.download_button.setEnabled(False)
@@ -189,6 +217,8 @@ class UpdatesDialog(QDialog):
                         kind=kind,
                     )
                 )
+                if notify:
+                    self.update_available.emit(self.result_label.text())
             elif latest is not None:
                 self.result_label.setText(
                     t("updates.up_to_date", version=APP_VERSION, latest=latest.label)
@@ -210,13 +240,33 @@ class UpdatesDialog(QDialog):
             ),
         )
 
+    def maybe_auto_check(self) -> None:
+        """One public GitHub request when the user opted in and the interval elapsed."""
+        try:
+            store = SecureStore()
+            settings = store.get_settings()
+        except Exception:
+            return
+        if not settings.get("update_auto_check"):
+            return
+        now = datetime.now(timezone.utc)
+        if not auto_check_due(settings.get("update_auto_check_at"), now):
+            return
+        settings["update_auto_check_at"] = now.replace(microsecond=0).isoformat()
+        try:
+            store.set_settings(settings)
+        except Exception:
+            return
+        channel = settings.get("update_channel")
+        if channel not in (CHANNEL_STABLE, CHANNEL_EXPERIMENTAL):
+            channel = CHANNEL_STABLE
+        self.check_updates(notify=True, channel=channel)
+
     def _sync_check_button(self) -> None:
         self.check_button.setEnabled(not self._jobs.is_busy("check"))
 
     def open_download_page(self) -> None:
-        if self._release is not None and is_trusted_release_url(
-            self._release.html_url
-        ):
+        if self._release is not None and is_trusted_release_url(self._release.html_url):
             self._open_url(self._release.html_url)
 
     def copy_pip_command(self) -> None:

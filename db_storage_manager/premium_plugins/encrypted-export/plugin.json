@@ -1,0 +1,21 @@
+{
+  "id": "encrypted-export",
+  "name": "Encrypted export",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Export one table to CSV, SQL or Parquet inside a DSMENC1 file, with optional column redaction.",
+  "plugin_type": "custom",
+  "api_version": "1.0",
+  "entry": "plugin:EncryptedExportPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "d7d9d5ae-898c-46c4-a7a6-a1af6dc671cf",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

@@ -90,6 +90,18 @@ def test_language_switch_retranslates_all_tabs_and_users_panel(settings_widget, 
     assert settings_widget.save_button.text() != "Save Settings"
 
 
+def test_save_button_is_hidden_on_the_users_tab(settings_widget):
+    settings_widget.tabs.setCurrentIndex(0)
+    assert settings_widget.save_button.isVisible()
+    settings_widget.tabs.setCurrentIndex(1)
+    assert settings_widget.save_button.isVisible()
+    settings_widget.tabs.setCurrentIndex(3)
+    assert not settings_widget.save_button.isVisible()
+    settings_widget.tabs.setCurrentIndex(4)
+    assert settings_widget.save_button.isVisible()
+    assert settings_widget.updates_panel.check_button.text()
+
+
 def test_save_merges_instead_of_dropping_other_tabs_settings(settings_widget, monkeypatch):
     store = settings_widget.secure_store
     stored = store.get_settings()

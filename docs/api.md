@@ -283,6 +283,24 @@ report = plugin.execute(connection, expected_retention_days=7)
 
 When `connection.config.extra["cloud_provider"]` is set, retention comes from the provider and the catalog is attached as extra checks. Supported values: `aws_rds` (Aurora PostgreSQL uses `DescribeDBClusters`), `gcp_cloudsql`, `azure_postgres` (flexible server; `resource_group` is required), `supabase` (`DSM_SUPABASE_ACCESS_TOKEN`), `neon` (`NEON_API_KEY`). `cloud_instance_id` is the instance, server, project ref or project id. Credentials are the operator's (SecureStore / environment); none are bundled. `azure_sql` is reported `not_available` because it is SQL Server.
 
+### RLS audit (`rls-audit`)
+
+PostgreSQL only. Reads `pg_class` (`relrowsecurity`), `pg_policies` and `pg_proc.prosecdef`. A table with row security off, a permissive policy whose expression is `true` (or missing), and a `SECURITY DEFINER` function outside `pg_catalog` / `information_schema` are findings. SQLite and MySQL return `not_available`. Install `bundled_plugin_dir("rls-audit")`. Running requires `monitoring:read`. `license.product_id` is `PREMIUM_PRODUCT_IDS["rls-audit"]["monthly"]`.
+
+### Pooler health (`pooler-health`)
+
+Pass the direct connection and, when you have one, the pooled connection. The plugin times `SELECT 1`, reads `max_connections` and `pg_stat_activity`, and tries `SHOW pool_mode`. It does not open a host you did not pass. No pooled connection means `status` `partial`. Running requires `monitoring:read`. `license.product_id` is `PREMIUM_PRODUCT_IDS["pooler-health"]["monthly"]`.
+
+### Encrypted export (`encrypted-export`)
+
+Exports one table (`csv`, `sql`, or `parquet`) and wraps the file in DSMENC1. `redact` names columns whose non-null values become `REDACTED` before encryption. The plaintext file is removed. Parquet is `not_available` when pandas has no parquet engine. Running requires `backups:create`. `license.product_id` is `PREMIUM_PRODUCT_IDS["encrypted-export"]["monthly"]`.
+
+```python
+report = plugin.execute(connection, table="people", dest="people.csv.enc", passphrase="…", format="csv", redact=["secret"])
+```
+
+`report["status"]` is `exported`, `fail` or `not_available`. The passphrase is not part of the report.
+
 ### Local marketplace
 
 ```python

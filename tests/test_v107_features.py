@@ -294,15 +294,15 @@ def test_check_for_update_uses_only_public_github_endpoint():
     )
 
 
-def test_updates_dialog_check_and_trusted_open(isolated_secure_store):
+def test_updates_panel_check_and_trusted_open(isolated_secure_store):
     app = _qapp()
     from db_storage_manager import updates
-    from db_storage_manager.gui.updates import UpdatesDialog
+    from db_storage_manager.gui.updates import UpdatesPanel
 
     opened = []
     releases = updates.parse_releases([_release("v3.0.0")])
 
-    dlg = UpdatesDialog(
+    dlg = UpdatesPanel(
         check_fn=lambda channel: {
             "current": "1.0.7",
             "channel": channel,
@@ -322,6 +322,31 @@ def test_updates_dialog_check_and_trusted_open(isolated_secure_store):
     dlg.open_download_page()
     assert opened == [releases[0].html_url]
     dlg.close()
+
+
+def test_auto_check_is_opt_in_and_rate_limited(isolated_secure_store):
+    from datetime import datetime, timedelta, timezone
+
+    from db_storage_manager.gui.updates import UpdatesPanel
+    from db_storage_manager.updates import auto_check_due
+
+    now = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    assert auto_check_due(None, now) is True
+    assert auto_check_due(now.isoformat(), now) is False
+    assert auto_check_due((now - timedelta(hours=25)).isoformat(), now) is True
+
+    app = _qapp()
+    calls = []
+    panel = UpdatesPanel(
+        check_fn=lambda channel: calls.append(channel)
+        or {"update": None, "latest": None},
+        changelog_fn=lambda: ("# Changelog", "local"),
+    )
+    panel.maybe_auto_check()
+    panel.wait_idle()
+    app.processEvents()
+    assert calls == []
+    panel.close()
 
 
 # --------------------------------------------------------------------- tray
@@ -353,6 +378,9 @@ def test_tray_clicks_and_notification_timeout():
     assert tray.icon.contextMenu() is tray.menu
     labels = [a.text() for a in tray.menu.actions() if a.text()]
     assert len(labels) >= 6
+    assert "Changelog" in labels
+    assert "Check for updates" in labels
+    assert "Changelog & Updates" not in labels
 
     shown = {}
     tray.icon.showMessage = lambda title, msg, icon, ms: shown.update(ms=ms)
