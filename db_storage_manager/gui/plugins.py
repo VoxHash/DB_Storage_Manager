@@ -112,9 +112,13 @@ class PluginsWidget(QWidget):
                 t("plugins.col_author", default="Author"),
             ]
         )
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
-        )
+        header = self.table.horizontalHeader()
+        # Equal stretch hides "connection-email-alerts" and
+        # "multi-connection-monitor" behind an ellipsis. Size to the text and
+        # give the leftover width to the name.
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        header.setMinimumSectionSize(64)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         configure_dense_table(self.table)
@@ -274,13 +278,22 @@ class PluginsWidget(QWidget):
                             f"{license_status.message} ({license_status.masked_key})"
                         )
                 self.table.setItem(row_idx, col, item)
-        self.status_label.setText(
-            t(
-                "plugins.status_count",
-                default="{count} plugin(s) in local registry",
-                count=len(self._rows),
-            )
+        status = t(
+            "plugins.status_count",
+            default="{count} plugin(s) in local registry",
+            count=len(self._rows),
         )
+        installed_ids = {row["id"] for row in self._rows}
+        if installed_ids & {"connection-email-alerts", "multi-connection-monitor"}:
+            status = status + " " + t(
+                "plugins.monitor_where",
+                default=(
+                    "Connection email and the multi-connection monitor "
+                    "are set on Monitoring → Channels."
+                ),
+            )
+        self.status_label.setWordWrap(True)
+        self.status_label.setText(status)
 
     def _selected_row(self) -> dict | None:
         rows = self.table.selectionModel().selectedRows()
@@ -707,16 +720,42 @@ class PluginsWidget(QWidget):
             return
         if installed is None:
             return
-        QMessageBox.information(
-            self,
-            t("plugins.install_ok", default="Plugin installed"),
-            t(
+        many = installed.get("installed") if installed.get("multiple") else None
+        if isinstance(many, list) and len(many) != 1:
+            names = ", ".join(
+                f"{row.get('name')} ({row.get('id')}) v{row.get('version')}"
+                for row in many
+            )
+            message = t(
+                "plugins.install_ok_many",
+                default="Installed {count}: {names}.",
+                count=len(many),
+                names=names,
+            )
+            skipped = installed.get("skipped") or []
+            if skipped:
+                message += "\n" + t(
+                    "plugins.install_skipped",
+                    default="Skipped: {names}.",
+                    names=", ".join(
+                        f"{item.get('id')}: {item.get('reason')}"
+                        if isinstance(item, dict)
+                        else str(item)
+                        for item in skipped
+                    ),
+                )
+        else:
+            message = t(
                 "plugins.install_ok_msg",
                 default="Installed {name} ({id}) v{version}",
                 name=installed.get("name"),
                 id=installed.get("id"),
                 version=installed.get("version"),
-            ),
+            )
+        QMessageBox.information(
+            self,
+            t("plugins.install_ok", default="Plugin installed"),
+            message,
         )
         self.refresh()
 

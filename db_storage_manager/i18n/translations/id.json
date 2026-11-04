@@ -458,7 +458,8 @@
     "install_none": "Tidak ada yang dipasang. Pilih folder yang berisi plugin.json, atau folder induk yang setiap subfoldernya berisi plugin.json.",
     "install_ok_many": "Terpasang {count}: {names}.",
     "install_skipped": "Dilewati: {names}.",
-    "pick_dir_tip": "Pilih direktori plugin, atau folder induk premium_plugins agar setiap subdirektori yang berisi plugin.json dipasang."
+    "pick_dir_tip": "Pilih direktori plugin, atau folder induk premium_plugins agar setiap subdirektori yang berisi plugin.json dipasang.",
+    "monitor_where": "Email per koneksi dan monitor multi-koneksi diatur di Pemantauan → Kanal."
   },
   "monitoring": {
     "page_subtitle": "Kesehatan langsung, peringatan, ambang batas, dan kanal notifikasi",
@@ -556,7 +557,18 @@
     "discord_ready": "Webhook Discord sudah dikonfigurasi.",
     "discord_not_ready": "Atur webhook Discord terlebih dahulu di Pengaturan → Notifikasi: {problems}",
     "telegram_ready": "Bot Telegram sudah dikonfigurasi.",
-    "telegram_not_ready": "Atur bot Telegram terlebih dahulu di Pengaturan → Notifikasi: {problems}"
+    "telegram_not_ready": "Atur bot Telegram terlebih dahulu di Pengaturan → Notifikasi: {problems}",
+    "conn_email_group": "Peringatan email per koneksi",
+    "conn_email_hint": "SMTP opsional untuk satu koneksi tersimpan. Terpisah dari profil seluruh stasiun kerja. Kata sandi tetap di SecureStore dan tidak ada yang terkirim sampai plugin terpasang dan profil diaktifkan.",
+    "conn_email_off": "not_available: pasang dan aktifkan connection-email-alerts di halaman Plugin.",
+    "conn_email_saved": "SMTP untuk {name} tersimpan. Kata sandi disimpan dan tidak ditampilkan lagi.",
+    "conn_email_enabled": "Kirim email untuk koneksi ini",
+    "conn_email_save": "Simpan email koneksi",
+    "multi_group": "Monitor multi-koneksi",
+    "multi_hint": "Memeriksa kesehatan koneksi yang Anda pilih. Jarak antarpemeriksaan minimal 60 detik dan hanya memakai kredensial yang sudah tersimpan.",
+    "multi_off": "not_available: pasang dan aktifkan multi-connection-monitor di halaman Plugin.",
+    "multi_save": "Simpan koneksi yang dipantau",
+    "multi_none": "Tidak ada koneksi yang dipilih."
   },
   "analysis": {
     "query_performance": "Kinerja Kueri",

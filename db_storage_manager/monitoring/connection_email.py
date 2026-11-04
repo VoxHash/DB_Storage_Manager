@@ -189,7 +189,7 @@ def send_plan(
 def _installed() -> bool:
     from pathlib import Path
 
-    from ..plugins.loader import load_plugin_from_directory
+    from ..plugins.loader import PluginLoadError, load_plugin_from_directory
     from ..plugins.marketplace import LocalPluginMarketplace
 
     market = LocalPluginMarketplace()
@@ -199,11 +199,40 @@ def _installed() -> bool:
         if not market.is_enabled(PLUGIN_ID):
             return False
         path = row.get("path")
-        if path and Path(path).is_dir():
-            # Touch the install so a broken copy is not treated as ready.
+        if not path or not Path(path).is_dir():
+            return False
+        # A copy that no longer imports is not ready. Do not raise into the
+        # alert dispatcher; other channels still have to run.
+        try:
             load_plugin_from_directory(Path(path))
-            return True
+        except PluginLoadError:
+            return False
+        return True
     return False
+
+
+def plugin_ready() -> bool:
+    """True when the operator installed and enabled this plugin."""
+    try:
+        return _installed()
+    except Exception:
+        return False
+
+
+def list_public_profiles() -> Dict[str, Dict[str, Any]]:
+    """Saved profiles without SMTP passwords.
+
+    ``password_set`` is true when a password is stored. The secret itself is
+    not copied into this dict.
+    """
+    found: Dict[str, Dict[str, Any]] = {}
+    for connection_id, raw in _settings()["connections"].items():
+        if not isinstance(raw, dict):
+            continue
+        public = _public_profile(raw)
+        public["password_set"] = bool(raw.get("password"))
+        found[str(connection_id)] = public
+    return found
 
 
 def deliver(alert: Alert, *, sender: Callable[..., None] = send_email) -> Dict[str, Any]:

@@ -264,6 +264,11 @@ def test_plugins_widget_offscreen_smoke(marketplace, monkeypatch):
     app = QApplication.instance() or QApplication([])
     widget = PluginsWidget(marketplace=mp)
     assert widget.table.columnCount() == 8  # incl. License column
+    from PyQt6.QtWidgets import QHeaderView
+
+    header = widget.table.horizontalHeader()
+    assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.ResizeToContents
+    assert header.sectionResizeMode(1) == QHeaderView.ResizeMode.Stretch
     assert widget.table.rowCount() >= 2
     assert "hello_echo" not in _plugins_table_ids(widget)
 
@@ -305,5 +310,72 @@ def test_plugins_widget_offscreen_smoke(marketplace, monkeypatch):
     widget.install_path_btn.click()
     app.processEvents()
     assert "hello_echo" in _plugins_table_ids(widget)
+    assert mp.is_enabled("hello_echo") is True
     widget.close()
     app.processEvents()
+
+
+def test_reinstall_after_disable_starts_enabled(marketplace):
+    mp, store, _plugins = marketplace
+    mp.install_from_path(EXAMPLE_PLUGIN)
+    mp.set_enabled("hello_echo", False)
+    assert mp.uninstall("hello_echo") is True
+    assert "hello_echo" not in store.get_settings()["plugins"]["enabled"]
+    again = mp.install_from_path(EXAMPLE_PLUGIN)
+    assert again["id"] == "hello_echo"
+    assert mp.is_enabled("hello_echo") is True
+
+
+def test_install_from_url_parent_marks_every_plugin_as_url(marketplace, tmp_path: Path):
+    """A zip of several plugin folders is one URL install, not a path install."""
+    mp, _store, plugins_dir = marketplace
+    parent = tmp_path / "pack"
+    parent.mkdir()
+    for plugin_id in ("hello_one", "hello_two"):
+        dest = parent / plugin_id
+        dest.mkdir()
+        for path in EXAMPLE_PLUGIN.iterdir():
+            if path.is_file():
+                target = dest / path.name
+                target.write_bytes(path.read_bytes())
+        manifest_path = dest / "plugin.json"
+        text = manifest_path.read_text(encoding="utf-8").replace(
+            "hello_echo", plugin_id
+        )
+        manifest_path.write_text(text, encoding="utf-8")
+        source = dest / "plugin.py"
+        source.write_text(
+            source.read_text(encoding="utf-8").replace(
+                'plugin_id="hello_echo"', f'plugin_id="{plugin_id}"'
+            ),
+            encoding="utf-8",
+        )
+
+    zip_path = tmp_path / "pack.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for path in parent.rglob("*"):
+            if path.is_file():
+                zf.write(path, arcname=str(path.relative_to(parent)))
+
+    class _Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(tmp_path), **kwargs)
+
+        def log_message(self, format, *args):  # noqa: A003
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        installed = mp.install_from_url(f"http://127.0.0.1:{port}/pack.zip")
+    finally:
+        server.shutdown()
+    assert installed["multiple"] is True
+    assert {row["id"] for row in installed["installed"]} == {"hello_one", "hello_two"}
+    rows = {row["id"]: row for row in mp.list_installed()}
+    assert rows["hello_one"]["source"] == "url"
+    assert rows["hello_two"]["source"] == "url"
+    assert (plugins_dir / "installed" / "hello_one" / "plugin.json").is_file()
+    assert (plugins_dir / "installed" / "hello_two" / "plugin.json").is_file()

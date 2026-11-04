@@ -458,7 +458,8 @@
     "install_none": "Rien n'a été installé. Choisissez un dossier qui contient plugin.json, ou un dossier parent dont chaque sous-dossier contient plugin.json.",
     "install_ok_many": "{count} installés : {names}.",
     "install_skipped": "Ignorés : {names}.",
-    "pick_dir_tip": "Sélectionnez un dossier de plugin, ou le dossier parent premium_plugins pour installer chaque sous-dossier qui contient plugin.json."
+    "pick_dir_tip": "Sélectionnez un dossier de plugin, ou le dossier parent premium_plugins pour installer chaque sous-dossier qui contient plugin.json.",
+    "monitor_where": "L'e-mail par connexion et le moniteur multi-connexions se règlent dans Surveillance → Canaux."
   },
   "monitoring": {
     "page_subtitle": "État en direct, alertes, seuils et canaux de notification",
@@ -556,7 +557,18 @@
     "discord_ready": "Le webhook Discord est configuré.",
     "discord_not_ready": "Configurez d'abord le webhook Discord dans Réglages → Notifications : {problems}",
     "telegram_ready": "Le bot Telegram est configuré.",
-    "telegram_not_ready": "Configurez d'abord le bot Telegram dans Réglages → Notifications : {problems}"
+    "telegram_not_ready": "Configurez d'abord le bot Telegram dans Réglages → Notifications : {problems}",
+    "conn_email_group": "Alertes e-mail par connexion",
+    "conn_email_hint": "SMTP facultatif pour une connexion enregistrée. Distinct du profil de tout le poste. Le mot de passe reste dans SecureStore et rien n'est envoyé tant que le plugin n'est pas installé et que le profil n'est pas activé.",
+    "conn_email_off": "not_available : installez et activez connection-email-alerts dans Plugins.",
+    "conn_email_saved": "SMTP enregistré pour {name}. Le mot de passe est stocké et n'est plus affiché.",
+    "conn_email_enabled": "Envoyer un e-mail pour cette connexion",
+    "conn_email_save": "Enregistrer l'e-mail de la connexion",
+    "multi_group": "Moniteur multi-connexions",
+    "multi_hint": "Contrôle l'état des connexions que vous choisissez. Au moins 60 secondes entre deux sondages, et seulement les identifiants déjà enregistrés.",
+    "multi_off": "not_available : installez et activez multi-connection-monitor dans Plugins.",
+    "multi_save": "Enregistrer les connexions surveillées",
+    "multi_none": "Aucune connexion n'est incluse."
   },
   "analysis": {
     "query_performance": "Performances des requêtes",

@@ -458,7 +458,8 @@
     "install_none": "Nada foi instalado. Escolha uma pasta que contenha plugin.json, ou uma pasta superior cujas subpastas contenham cada uma plugin.json.",
     "install_ok_many": "Instalados {count}: {names}.",
     "install_skipped": "Ignorados: {names}.",
-    "pick_dir_tip": "Selecione um diretório de plugin, ou a pasta superior premium_plugins para instalar cada subdiretório que tenha plugin.json."
+    "pick_dir_tip": "Selecione um diretório de plugin, ou a pasta superior premium_plugins para instalar cada subdiretório que tenha plugin.json.",
+    "monitor_where": "O e-mail por conexão e o monitor de várias conexões ficam em Monitoramento → Canais."
   },
   "monitoring": {
     "page_subtitle": "Integridade ao vivo, alertas, limites e canais de notificação",
@@ -556,7 +557,18 @@
     "discord_ready": "O webhook do Discord está configurado.",
     "discord_not_ready": "Configure primeiro o webhook do Discord em Definições → Notificações: {problems}",
     "telegram_ready": "O bot do Telegram está configurado.",
-    "telegram_not_ready": "Configure primeiro o bot do Telegram em Definições → Notificações: {problems}"
+    "telegram_not_ready": "Configure primeiro o bot do Telegram em Definições → Notificações: {problems}",
+    "conn_email_group": "Alertas de e-mail por conexão",
+    "conn_email_hint": "SMTP opcional para uma conexão salva. Separado do perfil de toda a estação. A senha fica no SecureStore e nada é enviado até o plugin estar instalado e o perfil ativado.",
+    "conn_email_off": "not_available: instale e ative connection-email-alerts em Plugins.",
+    "conn_email_saved": "SMTP salvo para {name}. A senha fica armazenada e não é mostrada de novo.",
+    "conn_email_enabled": "Enviar e-mail para esta conexão",
+    "conn_email_save": "Salvar e-mail da conexão",
+    "multi_group": "Monitor de várias conexões",
+    "multi_hint": "Verifica a saúde das conexões que você escolher. O intervalo mínimo é de 60 segundos e usa só as credenciais já salvas.",
+    "multi_off": "not_available: instale e ative multi-connection-monitor em Plugins.",
+    "multi_save": "Salvar conexões vigiadas",
+    "multi_none": "Nenhuma conexão foi incluída."
   },
   "analysis": {
     "query_performance": "Desempenho de consultas",

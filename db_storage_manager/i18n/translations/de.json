@@ -458,7 +458,8 @@
     "install_none": "Nichts wurde installiert. Wählen Sie einen Ordner mit plugin.json oder einen übergeordneten Ordner, dessen Unterordner jeweils eine plugin.json enthalten.",
     "install_ok_many": "{count} installiert: {names}.",
     "install_skipped": "Übersprungen: {names}.",
-    "pick_dir_tip": "Wählen Sie ein Plugin-Verzeichnis oder den übergeordneten Ordner premium_plugins, damit jedes Unterverzeichnis mit plugin.json installiert wird."
+    "pick_dir_tip": "Wählen Sie ein Plugin-Verzeichnis oder den übergeordneten Ordner premium_plugins, damit jedes Unterverzeichnis mit plugin.json installiert wird.",
+    "monitor_where": "Verbindungs-E-Mail und der Mehrfachverbindungs-Monitor werden unter Überwachung → Kanäle eingerichtet."
   },
   "monitoring": {
     "page_subtitle": "Live-Zustand, Warnungen, Schwellenwerte und Benachrichtigungskanäle",
@@ -556,7 +557,18 @@
     "discord_ready": "Der Discord-Webhook ist eingerichtet.",
     "discord_not_ready": "Richten Sie den Discord-Webhook zuerst unter Einstellungen → Benachrichtigungen ein: {problems}",
     "telegram_ready": "Der Telegram-Bot ist eingerichtet.",
-    "telegram_not_ready": "Richten Sie den Telegram-Bot zuerst unter Einstellungen → Benachrichtigungen ein: {problems}"
+    "telegram_not_ready": "Richten Sie den Telegram-Bot zuerst unter Einstellungen → Benachrichtigungen ein: {problems}",
+    "conn_email_group": "E-Mail-Alarme je Verbindung",
+    "conn_email_hint": "Optionales SMTP für eine gespeicherte Verbindung. Getrennt vom arbeitsplatzweiten Profil. Das Passwort bleibt im SecureStore, und es wird nichts gesendet, bis das Plugin installiert und das Profil aktiviert ist.",
+    "conn_email_off": "not_available: connection-email-alerts auf der Seite Plugins installieren und aktivieren.",
+    "conn_email_saved": "SMTP für {name} gespeichert. Das Passwort ist gespeichert und wird nicht erneut angezeigt.",
+    "conn_email_enabled": "E-Mail für diese Verbindung senden",
+    "conn_email_save": "Verbindungs-E-Mail speichern",
+    "multi_group": "Monitor für mehrere Verbindungen",
+    "multi_hint": "Prüft den Zustand der Verbindungen, die Sie auswählen. Mindestens 60 Sekunden Abstand, und nur die bereits gespeicherten Zugangsdaten.",
+    "multi_off": "not_available: multi-connection-monitor auf der Seite Plugins installieren und aktivieren.",
+    "multi_save": "Beobachtete Verbindungen speichern",
+    "multi_none": "Keine Verbindung ist ausgewählt."
   },
   "analysis": {
     "query_performance": "Abfrageleistung",

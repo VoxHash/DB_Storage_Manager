@@ -458,7 +458,8 @@
     "install_none": "没有安装任何插件。请选择包含 plugin.json 的文件夹，或每个子文件夹都含有 plugin.json 的上级文件夹。",
     "install_ok_many": "已安装 {count} 个：{names}。",
     "install_skipped": "已跳过：{names}。",
-    "pick_dir_tip": "选择插件目录，或选择 premium_plugins 上级文件夹，以安装每个含有 plugin.json 的子目录。"
+    "pick_dir_tip": "选择插件目录，或选择 premium_plugins 上级文件夹，以安装每个含有 plugin.json 的子目录。",
+    "monitor_where": "连接邮件和多连接监控在监控 → 渠道中设置。"
   },
   "monitoring": {
     "page_subtitle": "实时健康状况、告警、阈值和通知渠道",
@@ -556,7 +557,18 @@
     "discord_ready": "Discord Webhook 已配置。",
     "discord_not_ready": "请先在设置 → 通知中配置 Discord Webhook：{problems}",
     "telegram_ready": "Telegram 机器人已配置。",
-    "telegram_not_ready": "请先在设置 → 通知中配置 Telegram 机器人：{problems}"
+    "telegram_not_ready": "请先在设置 → 通知中配置 Telegram 机器人：{problems}",
+    "conn_email_group": "按连接的邮件警报",
+    "conn_email_hint": "为一条已保存的连接可选启用 SMTP。与整台电脑的配置分开。密码留在 SecureStore 中，在插件已安装且该配置已启用之前不会发送。",
+    "conn_email_off": "not_available：请在插件页安装并启用 connection-email-alerts。",
+    "conn_email_saved": "已保存 {name} 的 SMTP。密码已存储，不会再次显示。",
+    "conn_email_enabled": "为此连接发送邮件",
+    "conn_email_save": "保存连接邮件",
+    "multi_group": "多连接监控",
+    "multi_hint": "对你选中的连接做健康检查。两次轮询至少间隔 60 秒，并且只使用已经保存的凭据。",
+    "multi_off": "not_available：请在插件页安装并启用 multi-connection-monitor。",
+    "multi_save": "保存受监视的连接",
+    "multi_none": "没有连接被纳入。"
   },
   "analysis": {
     "query_performance": "查询性能",

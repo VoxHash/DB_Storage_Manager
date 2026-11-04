@@ -458,7 +458,8 @@
     "install_none": "何もインストールされませんでした。plugin.json を含むフォルダ、または各サブフォルダに plugin.json がある親フォルダを選んでください。",
     "install_ok_many": "{count} 件をインストールしました: {names}。",
     "install_skipped": "スキップ: {names}。",
-    "pick_dir_tip": "プラグインディレクトリ、または premium_plugins の親フォルダを選ぶと、plugin.json を持つ各サブディレクトリがインストールされます。"
+    "pick_dir_tip": "プラグインディレクトリ、または premium_plugins の親フォルダを選ぶと、plugin.json を持つ各サブディレクトリがインストールされます。",
+    "monitor_where": "接続ごとのメールと複数接続モニターはモニタリング → チャネルで設定します。"
   },
   "monitoring": {
     "page_subtitle": "ライブのヘルス、アラート、しきい値、通知チャネル",
@@ -556,7 +557,18 @@
     "discord_ready": "Discord の Webhook は構成済みです。",
     "discord_not_ready": "先に設定 → 通知で Discord の Webhook を構成してください: {problems}",
     "telegram_ready": "Telegram ボットは構成済みです。",
-    "telegram_not_ready": "先に設定 → 通知で Telegram ボットを構成してください: {problems}"
+    "telegram_not_ready": "先に設定 → 通知で Telegram ボットを構成してください: {problems}",
+    "conn_email_group": "接続ごとのメール通知",
+    "conn_email_hint": "保存済みの接続ひとつに対する任意の SMTP です。ワークステーション全体のプロファイルとは別です。パスワードは SecureStore に残り、プラグインをインストールしてプロファイルを有効にするまで送信されません。",
+    "conn_email_off": "not_available: プラグインページで connection-email-alerts をインストールして有効にしてください。",
+    "conn_email_saved": "{name} の SMTP を保存しました。パスワードは保存され、再表示されません。",
+    "conn_email_enabled": "この接続のメールを送る",
+    "conn_email_save": "接続メールを保存",
+    "multi_group": "複数接続モニター",
+    "multi_hint": "選んだ接続の健全性を確認します。間隔は 60 秒以上で、保存済みの資格情報だけを使います。",
+    "multi_off": "not_available: プラグインページで multi-connection-monitor をインストールして有効にしてください。",
+    "multi_save": "監視する接続を保存",
+    "multi_none": "対象の接続がありません。"
   },
   "analysis": {
     "query_performance": "クエリパフォーマンス",

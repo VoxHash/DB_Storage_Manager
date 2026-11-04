@@ -458,7 +458,8 @@
     "install_none": "설치된 항목이 없습니다. plugin.json이 있는 폴더나, 각 하위 폴더에 plugin.json이 있는 상위 폴더를 선택하세요.",
     "install_ok_many": "{count}개 설치됨: {names}.",
     "install_skipped": "건너뜀: {names}.",
-    "pick_dir_tip": "플러그인 디렉터리를 선택하거나, plugin.json이 있는 모든 하위 디렉터리를 설치하려면 premium_plugins 상위 폴더를 선택하세요."
+    "pick_dir_tip": "플러그인 디렉터리를 선택하거나, plugin.json이 있는 모든 하위 디렉터리를 설치하려면 premium_plugins 상위 폴더를 선택하세요.",
+    "monitor_where": "연결별 메일과 다중 연결 모니터는 모니터링 → 채널에서 설정합니다."
   },
   "monitoring": {
     "page_subtitle": "실시간 상태, 경고, 임계값 및 알림 채널",
@@ -556,7 +557,18 @@
     "discord_ready": "Discord 웹후크가 구성되었습니다.",
     "discord_not_ready": "먼저 설정 → 알림에서 Discord 웹후크를 구성하세요: {problems}",
     "telegram_ready": "Telegram 봇이 구성되었습니다.",
-    "telegram_not_ready": "먼저 설정 → 알림에서 Telegram 봇을 구성하세요: {problems}"
+    "telegram_not_ready": "먼저 설정 → 알림에서 Telegram 봇을 구성하세요: {problems}",
+    "conn_email_group": "연결별 메일 알림",
+    "conn_email_hint": "저장된 연결 하나에 대한 선택적 SMTP입니다. 워크스테이션 전체 프로필과 분리됩니다. 비밀번호는 SecureStore에 남고, 플러그인을 설치하고 프로필을 켜기 전에는 보내지 않습니다.",
+    "conn_email_off": "not_available: 플러그인 페이지에서 connection-email-alerts를 설치하고 사용하세요.",
+    "conn_email_saved": "{name}의 SMTP를 저장했습니다. 비밀번호는 저장되며 다시 표시되지 않습니다.",
+    "conn_email_enabled": "이 연결의 메일 보내기",
+    "conn_email_save": "연결 메일 저장",
+    "multi_group": "다중 연결 모니터",
+    "multi_hint": "선택한 연결의 상태를 확인합니다. 간격은 최소 60초이며 이미 저장된 자격 증명만 사용합니다.",
+    "multi_off": "not_available: 플러그인 페이지에서 multi-connection-monitor를 설치하고 사용하세요.",
+    "multi_save": "감시할 연결 저장",
+    "multi_none": "선택된 연결이 없습니다."
   },
   "analysis": {
     "query_performance": "쿼리 성능",

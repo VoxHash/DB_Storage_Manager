@@ -106,6 +106,7 @@ async def _health(raw: Dict[str, Any]) -> Dict[str, Any]:
 def _installed() -> bool:
     from pathlib import Path
 
+    from ..plugins.loader import PluginLoadError, load_plugin_from_directory
     from ..plugins.marketplace import LocalPluginMarketplace
 
     market = LocalPluginMarketplace()
@@ -115,8 +116,27 @@ def _installed() -> bool:
         if not market.is_enabled(PLUGIN_ID):
             return False
         path = row.get("path")
-        return bool(path and Path(path).is_dir())
+        if not path or not Path(path).is_dir():
+            return False
+        try:
+            load_plugin_from_directory(Path(path))
+        except PluginLoadError:
+            return False
+        return True
     return False
+
+
+def plugin_ready() -> bool:
+    """True when the operator installed and enabled this plugin."""
+    try:
+        return _installed()
+    except Exception:
+        return False
+
+
+def configured() -> Dict[str, Any]:
+    """Opt-in connection ids and the poll interval. No credentials."""
+    return _load()
 
 
 def watch(

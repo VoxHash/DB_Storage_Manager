@@ -84,7 +84,8 @@
     "install_none": "Nothing was installed. Choose a folder that contains plugin.json, or a parent folder whose subfolders each contain plugin.json.",
     "install_ok_many": "Installed {count}: {names}.",
     "install_skipped": "Skipped: {names}.",
-    "pick_dir_tip": "Select a plugin directory, or the premium_plugins parent so every subdirectory with plugin.json is installed."
+    "pick_dir_tip": "Select a plugin directory, or the premium_plugins parent so every subdirectory with plugin.json is installed.",
+    "monitor_where": "Connection email and the multi-connection monitor are set on Monitoring → Channels."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -556,7 +557,18 @@
     "discord_ready": "Discord webhook is configured.",
     "discord_not_ready": "Configure the Discord webhook under Settings → Notifications first: {problems}",
     "telegram_ready": "Telegram bot is configured.",
-    "telegram_not_ready": "Configure the Telegram bot under Settings → Notifications first: {problems}"
+    "telegram_not_ready": "Configure the Telegram bot under Settings → Notifications first: {problems}",
+    "conn_email_group": "Connection email alerts",
+    "conn_email_hint": "Opt-in SMTP for one saved connection. Separate from the workstation-wide profile. The password stays in SecureStore and nothing is sent until this plugin is installed and the profile is enabled.",
+    "conn_email_off": "not_available: install and enable connection-email-alerts on the Plugins page.",
+    "conn_email_saved": "Saved SMTP for {name}. The password is stored and is not shown again.",
+    "conn_email_enabled": "Send email for this connection",
+    "conn_email_save": "Save connection email",
+    "multi_group": "Multi-connection monitor",
+    "multi_hint": "Health-check the connections you opt in. Polls at least 60 seconds apart and uses only the stored credentials.",
+    "multi_off": "not_available: install and enable multi-connection-monitor on the Plugins page.",
+    "multi_save": "Save watched connections",
+    "multi_none": "No connection is opted in."
   },
   "analysis": {
     "query_performance": "Query Performance",

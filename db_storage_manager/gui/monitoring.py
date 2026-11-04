@@ -19,8 +19,12 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QTabWidget,
@@ -42,6 +46,7 @@ from ..db.session import ensure_tunnel_for_connection
 from ..i18n.manager import get_i18n_manager
 from ..monitoring import Alert, AlertSeverity, DatabaseMonitor, NotificationDispatcher
 from ..monitoring.notifications import (
+    EMAIL_SECURITY_MODES,
     resolve_email_config,
     resolve_discord_config,
     resolve_slack_config,
@@ -116,6 +121,16 @@ def _format_metric_value(key: str, value: Any) -> str:
 
 _GROUP_START = "monitor-start"
 _GROUP_POLL = "monitor-poll"
+_GROUP_MULTI = "multi-watch"
+
+
+def _execute_installed(plugin_id: str, **kwargs: Any) -> Any:
+    """Run an installed, enabled plugin. ``None`` when it is not loaded."""
+    from ..plugins.marketplace import LocalPluginMarketplace
+
+    market = LocalPluginMarketplace()
+    market.load_into_manager(only_enabled=True)
+    return market.manager.execute_plugin(plugin_id, **kwargs)
 
 
 class MonitoringWidget(QWidget):
@@ -149,10 +164,16 @@ class MonitoringWidget(QWidget):
         self._can_read = True
         self._can_write = True
         self._email_ready = False
+        self._conn_email_ready = False
+        self._conn_email_password_set = False
+        self._multi_ready = False
+        self._multi_status_by_id: Dict[str, str] = {}
+        self._plugin_snapshot: Optional[Tuple[Any, ...]] = None
         self._threshold_spins: Dict[str, Dict[str, QDoubleSpinBox]] = {}
         self.setObjectName("glassmorphism")
         self.init_ui()
         self._load_alert_prefs()
+        self._reload_plugin_forms()
         self.alert_raised.connect(self._handle_alert)
         apply_glassmorphism(self)
         self.apply_rbac()
@@ -415,6 +436,11 @@ class MonitoringWidget(QWidget):
         channel_actions.addStretch()
         channels_layout.addLayout(channel_actions)
 
+        self._build_connection_email_group(t)
+        channels_layout.addWidget(self.conn_email_group)
+        self._build_multi_watch_group(t)
+        channels_layout.addWidget(self.multi_group)
+
         self.notification_log = QTableWidget()
         self.notification_log.setColumnCount(4)
         self.notification_log.setHorizontalHeaderLabels(
@@ -439,6 +465,511 @@ class MonitoringWidget(QWidget):
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self._poll_now)
         self.update_timer.setInterval(5000)
+
+        # The extra health check is its own job. It does not wait for Start
+        # on the connection combo, and it never runs on this thread.
+        self.multi_timer = QTimer(self)
+        self.multi_timer.timeout.connect(self._schedule_multi_watch)
+        self.multi_timer.setInterval(60_000)
+        self.multi_timer.start()
+
+    def _build_connection_email_group(self, t) -> None:
+        """Per-connection SMTP. The workstation-wide Settings profile is separate."""
+        self.conn_email_group = QGroupBox(
+            t("monitoring.conn_email_group", default="Connection email alerts")
+        )
+        form = QFormLayout(self.conn_email_group)
+        self.conn_email_status = QLabel(
+            t(
+                "monitoring.conn_email_hint",
+                default=(
+                    "Opt-in SMTP for one saved connection. Separate from the "
+                    "workstation-wide profile. The password stays in SecureStore "
+                    "and nothing is sent until this plugin is installed and the "
+                    "profile is enabled."
+                ),
+            )
+        )
+        self.conn_email_status.setWordWrap(True)
+        form.addRow(self.conn_email_status)
+        self.conn_email_combo = QComboBox()
+        self.conn_email_combo.currentIndexChanged.connect(
+            lambda _index: self._fill_connection_email()
+        )
+        form.addRow(
+            t("monitoring.connection", default="Connection"), self.conn_email_combo
+        )
+        self.conn_email_enabled = QCheckBox(
+            t(
+                "monitoring.conn_email_enabled",
+                default="Send email for this connection",
+            )
+        )
+        form.addRow(self.conn_email_enabled)
+        self.conn_email_host = QLineEdit()
+        self.conn_email_host.setPlaceholderText("smtp.example.com")
+        form.addRow(
+            t("settings.email_host", default="SMTP host"), self.conn_email_host
+        )
+        self.conn_email_port = QSpinBox()
+        self.conn_email_port.setRange(1, 65535)
+        self.conn_email_port.setValue(587)
+        form.addRow(t("settings.email_port", default="Port"), self.conn_email_port)
+        self.conn_email_security = QComboBox()
+        for mode in EMAIL_SECURITY_MODES:
+            self.conn_email_security.addItem(mode.upper(), mode)
+        form.addRow(
+            t("settings.email_security", default="Security"),
+            self.conn_email_security,
+        )
+        self.conn_email_user = QLineEdit()
+        form.addRow(
+            t("settings.email_username", default="Username"), self.conn_email_user
+        )
+        self.conn_email_password = QLineEdit()
+        self.conn_email_password.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow(
+            t("settings.email_password", default="Password"),
+            self.conn_email_password,
+        )
+        self.conn_email_sender = QLineEdit()
+        self.conn_email_sender.setPlaceholderText("alerts@example.com")
+        form.addRow(
+            t("settings.email_sender", default="From address"),
+            self.conn_email_sender,
+        )
+        self.conn_email_recipients = QLineEdit()
+        self.conn_email_recipients.setPlaceholderText(
+            "oncall@example.com, dba@example.com"
+        )
+        form.addRow(
+            t(
+                "settings.email_recipients",
+                default="Recipients (comma-separated)",
+            ),
+            self.conn_email_recipients,
+        )
+        self.conn_email_severity = QComboBox()
+        self.conn_email_severity.addItem(
+            t("settings.severity_critical", default="Critical only"), "critical"
+        )
+        self.conn_email_severity.addItem(
+            t("settings.severity_warning", default="Warning and critical"),
+            "warning",
+        )
+        form.addRow(
+            t("settings.email_min_severity", default="Minimum severity"),
+            self.conn_email_severity,
+        )
+        self.conn_email_cooldown = QSpinBox()
+        self.conn_email_cooldown.setRange(1, 24 * 60)
+        self.conn_email_cooldown.setValue(30)
+        self.conn_email_cooldown.setSuffix(
+            " " + t("settings.minutes_suffix", default="min")
+        )
+        form.addRow(
+            t("settings.email_cooldown", default="Repeat cooldown"),
+            self.conn_email_cooldown,
+        )
+        self.conn_email_save = QPushButton(
+            t("monitoring.conn_email_save", default="Save connection email")
+        )
+        self.conn_email_save.clicked.connect(self._save_connection_email)
+        form.addRow(self.conn_email_save)
+
+    def _build_multi_watch_group(self, t) -> None:
+        self.multi_group = QGroupBox(
+            t("monitoring.multi_group", default="Multi-connection monitor")
+        )
+        layout = QVBoxLayout(self.multi_group)
+        self.multi_status = QLabel(
+            t(
+                "monitoring.multi_hint",
+                default=(
+                    "Health-check the connections you opt in. Polls at least "
+                    "60 seconds apart and uses only the stored credentials."
+                ),
+            )
+        )
+        self.multi_status.setWordWrap(True)
+        layout.addWidget(self.multi_status)
+        self.multi_list = QListWidget()
+        self.multi_list.setMaximumHeight(120)
+        layout.addWidget(self.multi_list)
+        self.multi_save = QPushButton(
+            t("monitoring.multi_save", default="Save watched connections")
+        )
+        self.multi_save.clicked.connect(self._save_multi_watch)
+        layout.addWidget(self.multi_save)
+        self.multi_results = QTableWidget()
+        self.multi_results.setColumnCount(3)
+        self.multi_results.setHorizontalHeaderLabels(
+            [
+                t("monitoring.connection", default="Connection"),
+                t("monitoring.status", default="Status"),
+                t("monitoring.detail", default="Detail"),
+            ]
+        )
+        self.multi_results.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch
+        )
+        self.multi_results.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.multi_results.setMaximumHeight(140)
+        layout.addWidget(self.multi_results)
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt override
+        super().showEvent(event)
+        from ..monitoring.connection_email import plugin_ready as email_ready
+        from ..monitoring.multi_watch import plugin_ready as watch_ready
+
+        snapshot = (
+            email_ready(),
+            watch_ready(),
+            tuple(str(conn.get("id") or "") for conn in self.connections),
+        )
+        if snapshot != self._plugin_snapshot:
+            self._reload_plugin_forms()
+        else:
+            self._conn_email_ready = snapshot[0]
+            self._multi_ready = snapshot[1]
+        self.apply_rbac()
+
+    def _reload_plugin_forms(self) -> None:
+        from ..monitoring.connection_email import plugin_ready as email_ready
+        from ..monitoring.multi_watch import plugin_ready as watch_ready
+
+        self._plugin_snapshot = (
+            email_ready(),
+            watch_ready(),
+            tuple(str(conn.get("id") or "") for conn in self.connections),
+        )
+        self._reload_email_combo()
+        self._reload_multi_list()
+
+    def _reload_email_combo(self) -> None:
+        from ..monitoring.connection_email import plugin_ready
+
+        current = self.conn_email_combo.currentData()
+        current_id = current.get("id") if isinstance(current, dict) else None
+        self.conn_email_combo.blockSignals(True)
+        self.conn_email_combo.clear()
+        selected = 0
+        for index, conn in enumerate(self.connections):
+            self.conn_email_combo.addItem(
+                str(conn.get("name") or conn.get("id") or ""), conn
+            )
+            if current_id and conn.get("id") == current_id:
+                selected = index
+        if self.conn_email_combo.count():
+            self.conn_email_combo.setCurrentIndex(selected)
+        self.conn_email_combo.blockSignals(False)
+        self._conn_email_ready = plugin_ready()
+        self._fill_connection_email()
+
+    def _fill_connection_email(self) -> None:
+        from ..monitoring.connection_email import list_public_profiles
+
+        t = self.i18n.translate
+        conn = self.conn_email_combo.currentData()
+        connection_id = (
+            str(conn.get("id")) if isinstance(conn, dict) and conn.get("id") else ""
+        )
+        profile = list_public_profiles().get(connection_id) or {}
+        self.conn_email_enabled.setChecked(bool(profile.get("enabled")))
+        self.conn_email_host.setText(str(profile.get("host") or ""))
+        try:
+            port = int(profile.get("port") or 587)
+        except (TypeError, ValueError):
+            port = 587
+        self.conn_email_port.setValue(port if 1 <= port <= 65535 else 587)
+        security = self.conn_email_security.findData(profile.get("security") or "starttls")
+        self.conn_email_security.setCurrentIndex(max(security, 0))
+        self.conn_email_user.setText(str(profile.get("username") or ""))
+        self.conn_email_password.clear()
+        self._conn_email_password_set = bool(profile.get("password_set"))
+        self.conn_email_password.setPlaceholderText(
+            t(
+                "settings.email_password_set",
+                default="Stored — leave blank to keep",
+            )
+            if self._conn_email_password_set
+            else ""
+        )
+        self.conn_email_sender.setText(str(profile.get("sender") or ""))
+        self.conn_email_recipients.setText(
+            ", ".join(str(item) for item in (profile.get("recipients") or []))
+        )
+        severity = self.conn_email_severity.findData(
+            profile.get("min_severity") or "critical"
+        )
+        self.conn_email_severity.setCurrentIndex(max(severity, 0))
+        try:
+            cooldown = int(profile.get("cooldown_minutes") or 30)
+        except (TypeError, ValueError):
+            cooldown = 30
+        self.conn_email_cooldown.setValue(min(24 * 60, max(1, cooldown)))
+        if self._conn_email_ready:
+            self.conn_email_status.setText(
+                t(
+                    "monitoring.conn_email_hint",
+                    default=(
+                        "Opt-in SMTP for one saved connection. Separate from the "
+                        "workstation-wide profile. The password stays in SecureStore "
+                        "and nothing is sent until this plugin is installed and the "
+                        "profile is enabled."
+                    ),
+                )
+            )
+        else:
+            self.conn_email_status.setText(
+                t(
+                    "monitoring.conn_email_off",
+                    default=(
+                        "not_available: install and enable connection-email-alerts "
+                        "on the Plugins page."
+                    ),
+                )
+            )
+
+    def _save_connection_email(self) -> None:
+        if not self._require("settings:write"):
+            return
+        t = self.i18n.translate
+        conn = self.conn_email_combo.currentData()
+        if not isinstance(conn, dict) or not conn.get("id"):
+            self.conn_email_status.setText(
+                t(
+                    "monitoring.conn_email_off",
+                    default=(
+                        "not_available: install and enable connection-email-alerts "
+                        "on the Plugins page."
+                    ),
+                )
+            )
+            return
+        recipients = [
+            part.strip()
+            for part in self.conn_email_recipients.text().split(",")
+            if part.strip()
+        ]
+        profile: Dict[str, Any] = {
+            "enabled": self.conn_email_enabled.isChecked(),
+            "host": self.conn_email_host.text().strip(),
+            "port": int(self.conn_email_port.value()),
+            "security": self.conn_email_security.currentData(),
+            "username": self.conn_email_user.text().strip(),
+            "sender": self.conn_email_sender.text().strip(),
+            "recipients": recipients,
+            "min_severity": self.conn_email_severity.currentData(),
+            "cooldown_minutes": int(self.conn_email_cooldown.value()),
+        }
+        password = self.conn_email_password.text()
+        if password:
+            profile["password"] = password
+        if profile["enabled"]:
+            check = dict(profile)
+            if not password and self._conn_email_password_set:
+                check["password"] = "stored"
+            problems = validate_email_config(check)
+            if problems:
+                self.conn_email_status.setText("; ".join(problems))
+                return
+        try:
+            result = _execute_installed(
+                "connection-email-alerts",
+                connection_id=str(conn["id"]),
+                profile=profile,
+            )
+        except PermissionDenied as exc:
+            QMessageBox.warning(
+                self,
+                t("auth.denied", default="Access denied"),
+                str(exc),
+            )
+            return
+        if not isinstance(result, dict) or result.get("status") != "saved":
+            reason = result.get("reason") if isinstance(result, dict) else None
+            self.conn_email_status.setText(
+                str(
+                    reason
+                    or t(
+                        "monitoring.conn_email_off",
+                        default=(
+                            "not_available: install and enable "
+                            "connection-email-alerts on the Plugins page."
+                        ),
+                    )
+                )
+            )
+            return
+        self.conn_email_password.clear()
+        self._conn_email_password_set = True
+        self.conn_email_password.setPlaceholderText(
+            t(
+                "settings.email_password_set",
+                default="Stored — leave blank to keep",
+            )
+        )
+        self.conn_email_status.setText(
+            t(
+                "monitoring.conn_email_saved",
+                default="Saved SMTP for {name}. The password is stored and is not shown again.",
+                name=str(conn.get("name") or conn["id"]),
+            )
+        )
+
+    def _reload_multi_list(self) -> None:
+        from ..monitoring.multi_watch import configured, plugin_ready
+
+        t = self.i18n.translate
+        self._multi_ready = plugin_ready()
+        chosen = set(configured().get("connection_ids") or [])
+        self.multi_list.clear()
+        for conn in self.connections:
+            connection_id = str(conn.get("id") or "")
+            if not connection_id:
+                continue
+            item = QListWidgetItem(str(conn.get("name") or connection_id))
+            item.setData(Qt.ItemDataRole.UserRole, connection_id)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked
+                if connection_id in chosen
+                else Qt.CheckState.Unchecked
+            )
+            self.multi_list.addItem(item)
+        if not self._multi_ready:
+            self.multi_status.setText(
+                t(
+                    "monitoring.multi_off",
+                    default=(
+                        "not_available: install and enable multi-connection-monitor "
+                        "on the Plugins page."
+                    ),
+                )
+            )
+        elif not chosen:
+            self.multi_status.setText(
+                t(
+                    "monitoring.multi_none",
+                    default="No connection is opted in.",
+                )
+            )
+        else:
+            self.multi_status.setText(
+                t(
+                    "monitoring.multi_hint",
+                    default=(
+                        "Health-check the connections you opt in. Polls at least "
+                        "60 seconds apart and uses only the stored credentials."
+                    ),
+                )
+            )
+
+    def _save_multi_watch(self) -> None:
+        if not self._require("settings:write"):
+            return
+        ids: List[str] = []
+        for index in range(self.multi_list.count()):
+            item = self.multi_list.item(index)
+            if item.checkState() == Qt.CheckState.Checked:
+                ids.append(str(item.data(Qt.ItemDataRole.UserRole)))
+
+        def job():
+            result = _execute_installed(
+                "multi-connection-monitor", connection_ids=ids
+            )
+            if result is None:
+                return {
+                    "status": "not_available",
+                    "reason": "multi-connection-monitor is not installed or not enabled.",
+                    "connections": [],
+                }
+            return result
+
+        if not self._jobs.submit(
+            _GROUP_MULTI, job, self._show_multi_report, self._on_multi_fail
+        ):
+            self.multi_status.setText(
+                self.i18n.translate(
+                    "monitoring.status_connecting", default="Connecting…"
+                )
+            )
+
+    def _schedule_multi_watch(self) -> None:
+        if not self._can_read:
+            return
+
+        def job():
+            from ..monitoring.multi_watch import watch_if_installed
+
+            return watch_if_installed()
+
+        self._jobs.submit(
+            _GROUP_MULTI, job, self._show_multi_report, lambda _message: None
+        )
+
+    def _on_multi_fail(self, message: str) -> None:
+        self.multi_status.setText(message)
+
+    def _show_multi_report(self, report: Any) -> None:
+        if not isinstance(report, dict):
+            return
+        if report.get("reason") == "Rate limited.":
+            return
+        t = self.i18n.translate
+        rows = report.get("connections") or []
+        if not isinstance(rows, list):
+            rows = []
+        self.multi_results.setRowCount(len(rows))
+        seen: Dict[str, str] = {}
+        for index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            connection_id = str(row.get("id") or "")
+            status = str(row.get("status") or "not_available")
+            summary = str(row.get("summary") or "")
+            seen[connection_id] = status
+            self.multi_results.setItem(index, 0, QTableWidgetItem(connection_id))
+            self.multi_results.setItem(index, 1, QTableWidgetItem(status))
+            self.multi_results.setItem(index, 2, QTableWidgetItem(summary))
+            if status not in {"degraded", "unhealthy"}:
+                continue
+            if self._multi_status_by_id.get(connection_id) == status:
+                continue
+            severity = (
+                AlertSeverity.CRITICAL
+                if status == "unhealthy"
+                else AlertSeverity.WARNING
+            )
+            self.notification_dispatcher.notify(
+                Alert(
+                    "Connection health",
+                    summary or status,
+                    severity,
+                    "multi-connection-monitor",
+                    connection_id,
+                )
+            )
+        self._multi_status_by_id = seen
+        reason = str(report.get("reason") or "")
+        if reason:
+            self.multi_status.setText(reason)
+        elif rows:
+            self.multi_status.setText(
+                t(
+                    "monitoring.multi_hint",
+                    default=(
+                        "Health-check the connections you opt in. Polls at least "
+                        "60 seconds apart and uses only the stored credentials."
+                    ),
+                )
+            )
+        else:
+            self.multi_status.setText(
+                t("monitoring.multi_none", default="No connection is opted in.")
+            )
+        self._refresh_notification_log()
 
     def _on_connection_changed(self, index):
         """Handle connection selection change"""
@@ -727,6 +1258,26 @@ class MonitoringWidget(QWidget):
         self.telegram_channel_check.setEnabled(
             self._can_write and getattr(self, "_telegram_ready", False)
         )
+        can_settings = auth.has_permission("settings:write")
+        email_on = can_settings and self._conn_email_ready
+        for widget in (
+            self.conn_email_combo,
+            self.conn_email_enabled,
+            self.conn_email_host,
+            self.conn_email_port,
+            self.conn_email_security,
+            self.conn_email_user,
+            self.conn_email_password,
+            self.conn_email_sender,
+            self.conn_email_recipients,
+            self.conn_email_severity,
+            self.conn_email_cooldown,
+            self.conn_email_save,
+        ):
+            widget.setEnabled(email_on)
+        watch_on = can_settings and self._multi_ready
+        self.multi_list.setEnabled(watch_on)
+        self.multi_save.setEnabled(watch_on)
         for spins in self._threshold_spins.values():
             for spin in spins.values():
                 spin.setEnabled(self._can_write)
@@ -765,6 +1316,7 @@ class MonitoringWidget(QWidget):
     def shutdown(self) -> None:
         """Stop timers and wait briefly for in-flight polls (window close)."""
         self.update_timer.stop()
+        self.multi_timer.stop()
         self._jobs.wait_all(3000)
         # Let an in-flight alert email finish instead of dropping it on exit.
         self.notification_dispatcher.wait_email_idle(5.0)
@@ -793,12 +1345,9 @@ class MonitoringWidget(QWidget):
                         self._start_monitoring()
                         started = True
                         break
-        try:
-            from ..monitoring.multi_watch import watch_if_installed
-
-            watch_if_installed()
-        except Exception:
-            pass
+        # Off the GUI thread. A no-op until the plugin is installed and a
+        # connection was opted in on Monitoring → Channels.
+        self._schedule_multi_watch()
         return started
 
     def _start_monitoring(self):
@@ -913,14 +1462,15 @@ class MonitoringWidget(QWidget):
             try:
                 from ..monitoring.multi_watch import watch_if_installed
 
-                watch_if_installed()
+                return watch_if_installed()
             except Exception:
-                pass
+                return None
 
-        def on_ok(_result):
+        def on_ok(result):
             if self.monitor is monitor:
                 self._update_display()
                 self._refresh_notification_log()
+            self._show_multi_report(result)
 
         def on_fail(message):
             if self.monitor is monitor:
@@ -1133,3 +1683,5 @@ class MonitoringWidget(QWidget):
         self.connection_combo.setCurrentIndex(selected_index)
         self.connection_combo.blockSignals(False)
         self._on_connection_changed(selected_index)
+        self._reload_plugin_forms()
+        self.apply_rbac()

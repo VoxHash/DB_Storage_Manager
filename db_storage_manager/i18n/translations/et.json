@@ -458,7 +458,8 @@
     "install_none": "Midagi ei paigaldatud. Valige kaust, mis sisaldab plugin.json, või ülemkaust, mille alamkaustades on igaühes plugin.json.",
     "install_ok_many": "Paigaldatud {count}: {names}.",
     "install_skipped": "Vahele jäetud: {names}.",
-    "pick_dir_tip": "Valige plugina kataloog või ülemkaust premium_plugins, et paigaldada iga alamkataloog, milles on plugin.json."
+    "pick_dir_tip": "Valige plugina kataloog või ülemkaust premium_plugins, et paigaldada iga alamkataloog, milles on plugin.json.",
+    "monitor_where": "Ühenduse e-post ja mitme ühenduse jälgija seadistatakse jaotises Jälgimine → Kanalid."
   },
   "monitoring": {
     "page_subtitle": "Reaalajas seisund, hoiatused, läved ja teavituskanalid",
@@ -556,7 +557,18 @@
     "discord_ready": "Discordi veebihaak on seadistatud.",
     "discord_not_ready": "Seadistage Discordi veebihaak esmalt jaotises Sätted → Teavitused: {problems}",
     "telegram_ready": "Telegrami bot on seadistatud.",
-    "telegram_not_ready": "Seadistage Telegrami bot esmalt jaotises Sätted → Teavitused: {problems}"
+    "telegram_not_ready": "Seadistage Telegrami bot esmalt jaotises Sätted → Teavitused: {problems}",
+    "conn_email_group": "Ühenduse e-posti teavitused",
+    "conn_email_hint": "Valikuline SMTP ühe salvestatud ühenduse jaoks. Eraldi kogu tööjaama profiilist. Parool jääb SecureStore'i ja midagi ei saadeta, kuni plugin on paigaldatud ja profiil on lubatud.",
+    "conn_email_off": "not_available: paigaldage ja lubage connection-email-alerts lehel Pluginad.",
+    "conn_email_saved": "SMTP ühendusele {name} on salvestatud. Parool on talletatud ja seda ei näidata uuesti.",
+    "conn_email_enabled": "Saada selle ühenduse e-kiri",
+    "conn_email_save": "Salvesta ühenduse e-post",
+    "multi_group": "Mitme ühenduse jälgija",
+    "multi_hint": "Kontrollib valitud ühenduste seisundit. Küsitluste vahe on vähemalt 60 sekundit ja kasutatakse ainult juba salvestatud mandaate.",
+    "multi_off": "not_available: paigaldage ja lubage multi-connection-monitor lehel Pluginad.",
+    "multi_save": "Salvesta jälgitavad ühendused",
+    "multi_none": "Ühtegi ühendust ei ole valitud."
   },
   "analysis": {
     "query_performance": "Päringute jõudlus",

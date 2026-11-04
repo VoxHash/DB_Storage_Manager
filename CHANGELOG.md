@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Connection email and the multi-connection monitor** are configured on Monitoring → Channels. Enabled on the Plugins page no longer stops there. Per-connection SMTP is saved in SecureStore; the password is not shown again and is not written to the notification log. The monitor health-checks the connections you opt in (at least 60 seconds apart) and a degraded or unhealthy result uses the alert channels already turned on. A missing or broken install is `not_available`
+- **Install from URL** of a folder of plugins marks every installed plugin as source `url`. Uninstalling a plugin clears its saved enabled flag, so installing it again starts enabled
+- Plugin ids and names in the Plugins table use the width of the text, so `connection-email-alerts` and `multi-connection-monitor` stay readable
+
 ## [1.0.8] - 2026-11-04
 
 Stable channel. The release workflow publishes every `v*` tag as a full release (`prerelease: false`), so this tag is stable. No experimental pre-release tag is cut.

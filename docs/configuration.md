@@ -20,8 +20,8 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `experimental.restore` | Shows **Restore…**. Uncheck to hide it. A missing key is on. `DSM_EXPERIMENTAL=1` forces it on | `True` |
 | `discord_alerts` | Discord webhook `url`, `min_severity`, `cooldown_minutes`. Secret stays in SecureStore. Off until Monitoring enables Discord | empty URL |
 | `telegram_alerts` | `bot_token`, `chat_id`, `min_severity`, `cooldown_minutes`. Posts only to `api.telegram.org`. Off until Monitoring enables Telegram | empty |
-| `connection_email_alerts` | Per-connection SMTP for `connection-email-alerts`. Passwords stay here | `connections` empty |
-| `multi_connection_monitor` | Connection ids and `min_interval_seconds` for `multi-connection-monitor`. An empty list does not poll | `[]`, 60 seconds |
+| `connection_email_alerts` | Per-connection SMTP for `connection-email-alerts`, edited on Monitoring → Channels. Passwords stay here | `connections` empty |
+| `multi_connection_monitor` | Connection ids and `min_interval_seconds` for `multi-connection-monitor`, edited on Monitoring → Channels. An empty list does not poll | `[]`, 60 seconds |
 | `email_alerts` | SMTP alert channel: `host`, `port`, `security` (`starttls` / `ssl` / `none`), `username`, `sender`, `recipients`, `min_severity` (`warning` / `critical`), `cooldown_minutes`. The password is stored encrypted | host empty (channel unavailable) |
 | `monitoring.autostart_connection_id` | Connection watched automatically when the app opens (checkbox in Monitoring) | `None` |
 | `s3_backup` | `bucket`, `prefix`, `region`, `endpoint` (MinIO / R2 / B2) and optional access keys, stored encrypted | empty |

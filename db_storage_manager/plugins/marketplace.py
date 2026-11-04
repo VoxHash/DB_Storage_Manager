@@ -38,7 +38,6 @@ from .manifest import (
     LicenseRequirement,
     ManifestError,
     discover_plugin_roots,
-    find_plugin_root,
     load_manifest,
     parse_license_requirement,
 )
@@ -506,21 +505,37 @@ class LocalPluginMarketplace:
             except (zipfile.BadZipFile, tarfile.TarError) as exc:
                 raise ManifestError(f"invalid plugin archive: {exc}") from exc
 
-            root = find_plugin_root(extract_dir)
             row = self.install_from_path(
-                root,
+                extract_dir,
                 replace=replace,
                 license_key=license_key,
                 license_email=license_email,
             )
-            # Re-stamp source/origin for URL installs
+            # A parent archive installs every child. Each one came from this
+            # URL, including the ones after the first.
             data = self._read_registry()
-            entry = data["plugins"][row["id"]]
-            entry["source"] = "url"
-            entry["origin"] = url
-            data["plugins"][row["id"]] = entry
+            installed_rows = row.get("installed") if row.get("multiple") else None
+            if isinstance(installed_rows, list) and installed_rows:
+                ids = [item.get("id") for item in installed_rows if item.get("id")]
+            else:
+                ids = [row["id"]] if row.get("id") else []
+            stamped: List[Dict[str, Any]] = []
+            for plugin_id in ids:
+                entry = data["plugins"].get(plugin_id)
+                if not isinstance(entry, dict):
+                    continue
+                entry["source"] = "url"
+                entry["origin"] = url
+                stamped.append(self._row_from_entry(entry))
             self._write_registry(data)
-            return self._row_from_entry(entry)
+            if len(stamped) == 1 and not row.get("multiple"):
+                return stamped[0]
+            summary = dict(stamped[0]) if stamped else dict(row)
+            summary["installed"] = stamped or list(installed_rows or [])
+            summary["skipped"] = list(row.get("skipped") or [])
+            summary["multiple"] = True
+            summary["source"] = "url"
+            return summary
 
     def uninstall(self, plugin_id: str) -> bool:
         """Remove a user-installed plugin (builtins cannot be uninstalled)."""
@@ -545,7 +560,27 @@ class LocalPluginMarketplace:
         self._write_registry(data)
         if self.manager.get_plugin(plugin_id) is not None:
             self.manager.unregister_plugin(plugin_id)
+        self._forget_enabled_pref(plugin_id)
         return True
+
+    def _forget_enabled_pref(self, plugin_id: str) -> None:
+        """Drop a user plugin's enabled flag so the next install starts enabled.
+
+        Built-in defaults stay. A plugin that was disabled, uninstalled, and
+        installed again would otherwise stay off because the old flag remained.
+        """
+        if plugin_id in {item["id"] for item in BUILTIN_PLUGINS}:
+            return
+        from ..security.store import SecureStore
+
+        store = SecureStore()
+        settings = store.get_settings()
+        prefs = normalize_plugins_prefs(settings.get("plugins"))
+        if plugin_id not in prefs["enabled"]:
+            return
+        del prefs["enabled"][plugin_id]
+        settings["plugins"] = prefs
+        store.set_settings(settings)
 
     @staticmethod
     def _row_from_entry(entry: Dict[str, Any]) -> Dict[str, Any]:

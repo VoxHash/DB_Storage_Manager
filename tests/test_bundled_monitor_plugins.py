@@ -51,6 +51,11 @@ def test_connection_email_hides_the_password(isolated_secure_store):
     saved = handle("conn-1", profile=PROFILE)
     assert saved["status"] == "saved"
     assert "smtp-secret-value" not in json.dumps(saved)
+    from db_storage_manager.monitoring.connection_email import list_public_profiles
+
+    public = list_public_profiles()
+    assert public["conn-1"]["password_set"] is True
+    assert "smtp-secret-value" not in json.dumps(public)
     alert = Alert("Disk", "full", AlertSeverity.CRITICAL, "storage", "conn-1")
     result = handle("conn-1", alert, sender=sender, clock=lambda: 0.0)
     assert result == {"status": "sent", "connection_id": "conn-1"}
@@ -179,3 +184,128 @@ def test_monitor_role_cannot_save_the_watch_list(isolated_secure_store, monkeypa
     monkeypatch.setattr(auth_mod, "_auth_manager", auth)
     with pytest.raises(PermissionDenied):
         watch(connection_ids=["c1"], poll=lambda _cid: {"status": "healthy"})
+
+
+def test_broken_email_plugin_does_not_block_other_channels(
+    marketplace, isolated_secure_store
+):
+    reset_state()
+    mp, _store, plugins_dir = marketplace
+    from db_storage_manager.bundled_plugins import bundled_plugin_dir
+
+    mp.install_from_path(bundled_plugin_dir("connection-email-alerts"))
+    handle("conn-1", profile=PROFILE)
+    broken = plugins_dir / "installed" / "connection-email-alerts" / "plugin.py"
+    broken.write_text("raise RuntimeError('broken plugin')\n", encoding="utf-8")
+    dispatcher = NotificationDispatcher(
+        {"in_app": True, "desktop": False, "email": False},
+        clock=lambda: 0.0,
+    )
+    alert = Alert("Disk", "full", AlertSeverity.CRITICAL, "storage", "conn-1")
+    fired = dispatcher.notify(alert)
+    assert "connection_email" not in fired
+    assert dispatcher.in_app_log
+
+
+def test_channels_tab_saves_email_and_polls_opted_in_connections(
+    marketplace, isolated_secure_store, tmp_path, monkeypatch
+):
+    """The Plugins page Enable flag is not enough: Channels must save and run."""
+    import os
+    import time
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PyQt6.QtWidgets")
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication, QMessageBox
+
+    from db_storage_manager.bundled_plugins import bundled_plugin_dir
+    from db_storage_manager.gui.monitoring import MonitoringWidget
+    import db_storage_manager.monitoring.connection_email as email_mod
+
+    reset_state()
+    reset_watch()
+    mp, store, _plugins = marketplace
+    mp.install_from_path(bundled_plugin_dir("connection-email-alerts"))
+    mp.install_from_path(bundled_plugin_dir("multi-connection-monitor"))
+    database = tmp_path / "watched.db"
+    sqlite3.connect(database).close()
+    connection = {
+        "id": "c-mail",
+        "name": "watched",
+        "type": "sqlite",
+        "database": str(database),
+        "password": "db-secret-value",
+    }
+    store.save_connections([connection])
+    for name in ("information", "warning", "critical"):
+        monkeypatch.setattr(QMessageBox, name, staticmethod(lambda *a, **k: 0))
+
+    app = QApplication.instance() or QApplication([])
+    widget = MonitoringWidget([connection])
+    try:
+        assert widget.conn_email_save.isEnabled()
+        assert widget.multi_save.isEnabled()
+        widget.conn_email_enabled.setChecked(True)
+        widget.conn_email_host.setText(PROFILE["host"])
+        widget.conn_email_port.setValue(PROFILE["port"])
+        widget.conn_email_security.setCurrentIndex(
+            widget.conn_email_security.findData(PROFILE["security"])
+        )
+        widget.conn_email_user.setText(PROFILE["username"])
+        widget.conn_email_password.setText(PROFILE["password"])
+        widget.conn_email_sender.setText(PROFILE["sender"])
+        widget.conn_email_recipients.setText(", ".join(PROFILE["recipients"]))
+        widget.conn_email_severity.setCurrentIndex(
+            widget.conn_email_severity.findData(PROFILE["min_severity"])
+        )
+        widget.conn_email_save.click()
+        app.processEvents()
+        assert "smtp-secret-value" not in widget.conn_email_status.text()
+        assert widget.conn_email_password.text() == ""
+        stored = store.get_settings()["connection_email_alerts"]["connections"]["c-mail"]
+        assert stored["password"] == "smtp-secret-value"
+        assert stored["enabled"] is True
+
+        sent = []
+
+        def sender(cfg, message):
+            sent.append(cfg["password"])
+
+        original = email_mod.send_email
+        email_mod.send_email = sender
+        try:
+            alert = Alert("Disk", "full", AlertSeverity.WARNING, "storage", "c-mail")
+            assert "connection_email" in widget.notification_dispatcher.notify(alert)
+            assert widget.notification_dispatcher.wait_email_idle(5)
+        finally:
+            email_mod.send_email = original
+        assert sent == ["smtp-secret-value"]
+        assert "smtp-secret-value" not in json.dumps(
+            widget.notification_dispatcher.delivered
+        )
+
+        assert widget.multi_list.count() == 1
+        widget.multi_list.item(0).setCheckState(Qt.CheckState.Checked)
+        widget.multi_save.click()
+        deadline = time.monotonic() + 15
+        while widget.multi_results.rowCount() == 0 and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(0.01)
+        app.processEvents()
+        assert widget.multi_results.rowCount() == 1
+        shown = " ".join(
+            widget.multi_results.item(0, col).text()
+            for col in range(3)
+            if widget.multi_results.item(0, col) is not None
+        )
+        assert "c-mail" in shown
+        assert "db-secret-value" not in shown
+        assert "db-secret-value" not in widget.multi_status.text()
+        assert store.get_settings()["multi_connection_monitor"]["connection_ids"] == [
+            "c-mail"
+        ]
+    finally:
+        widget.shutdown()
+        widget.close()
+        app.processEvents()

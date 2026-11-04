@@ -458,7 +458,8 @@
     "install_none": "No se instaló nada. Elija una carpeta que contenga plugin.json, o una carpeta superior cuyos subdirectorios contengan cada uno plugin.json.",
     "install_ok_many": "Instalados {count}: {names}.",
     "install_skipped": "Omitidos: {names}.",
-    "pick_dir_tip": "Seleccione un directorio de plugin, o la carpeta superior premium_plugins para instalar cada subdirectorio que tenga plugin.json."
+    "pick_dir_tip": "Seleccione un directorio de plugin, o la carpeta superior premium_plugins para instalar cada subdirectorio que tenga plugin.json.",
+    "monitor_where": "El correo por conexión y el monitor de varias conexiones se configuran en Monitoreo → Canales."
   },
   "monitoring": {
     "page_subtitle": "Estado en vivo, alertas, umbrales y canales de notificación",
@@ -556,7 +557,18 @@
     "discord_ready": "El webhook de Discord está configurado.",
     "discord_not_ready": "Configure primero el webhook de Discord en Ajustes → Notificaciones: {problems}",
     "telegram_ready": "El bot de Telegram está configurado.",
-    "telegram_not_ready": "Configure primero el bot de Telegram en Ajustes → Notificaciones: {problems}"
+    "telegram_not_ready": "Configure primero el bot de Telegram en Ajustes → Notificaciones: {problems}",
+    "conn_email_group": "Alertas de correo por conexión",
+    "conn_email_hint": "SMTP opcional para una conexión guardada. Es distinto del perfil de todo el equipo. La contraseña permanece en SecureStore y no se envía nada hasta que el complemento esté instalado y el perfil esté activado.",
+    "conn_email_off": "not_available: instale y active connection-email-alerts en Complementos.",
+    "conn_email_saved": "SMTP guardado para {name}. La contraseña se almacena y no se vuelve a mostrar.",
+    "conn_email_enabled": "Enviar correo para esta conexión",
+    "conn_email_save": "Guardar correo de la conexión",
+    "multi_group": "Monitor de varias conexiones",
+    "multi_hint": "Comprueba el estado de las conexiones que elija. El intervalo mínimo es de 60 segundos y solo usa las credenciales ya guardadas.",
+    "multi_off": "not_available: instale y active multi-connection-monitor en Complementos.",
+    "multi_save": "Guardar conexiones vigiladas",
+    "multi_none": "Ninguna conexión está incluida."
   },
   "analysis": {
     "query_performance": "Rendimiento de consultas",
