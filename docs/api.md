@@ -249,6 +249,7 @@ A plugin without a `license` block is free. To sell a plugin through [LicenseCha
 
 - `product_id` is required; `purchase_url` defaults to `https://pay.licensechain.app/checkout/<product_id>`; `provider` must be `licensechain`. Unknown or malformed values reject the manifest (fail closed)
 - Provisioned LicenseChain product ids for the bundle and each planned premium plugin are in `db_storage_manager.plugins.pricing.PREMIUM_PRODUCT_IDS` (monthly, yearly, one-time per entry)
+- A licence for any bundle product (`PREMIUM_PRODUCT_IDS["bundle"]`: monthly, yearly or one-time) also unlocks every plugin whose `product_id` is one of the first-party ids in `PREMIUM_PRODUCT_IDS`; see `plugins.pricing.accepted_product_ids`. A plugin-only key unlocks only that plugin, and third-party `product_id`s are matched exactly
 - `pricing` is display-only (shown in the licence prompt); LicenseChain holds the authoritative price. Options: `monthly`, `yearly`, `one_time`, positive amounts, 3-letter uppercase `currency`. First-party plugins stay at or under `plugins.sdk.PRICING_TIERS["plugin"]`
 - The host checks the licence before importing plugin code (install), on enable and on every execution. Plugins never see the licence key. Built-in plugins ignore the block
 - Python: `LocalPluginMarketplace.activate_license(plugin_id, key, email=None)`, `deactivate_license`, `license_status`, `require_license`; `install_from_path(path, license_key=..., license_email=...)`. A missing licence raises `PluginLicenseRequired`

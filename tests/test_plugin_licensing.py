@@ -628,3 +628,142 @@ def test_activate_license_on_free_plugin_is_rejected(market):
     mp, _ = market
     with pytest.raises(PluginLicenseError):
         mp.activate_license("migration", GOOD_KEY)
+
+
+# --- bundle licences --------------------------------------------------------
+
+from db_storage_manager.plugins.manifest import LicenseRequirement  # noqa: E402
+from db_storage_manager.plugins.pricing import (  # noqa: E402
+    BUNDLE_PRODUCT_IDS,
+    PREMIUM_PRODUCT_IDS,
+    accepted_product_ids,
+)
+
+PLUGIN_ONLY_ID = PREMIUM_PRODUCT_IDS["pitr-verify"]["monthly"]
+BUNDLE_KEY = "LC-TEST-BUNDLE-KEY1"
+
+
+def _premium_requirements():
+    """(plugin, option, requirement) for every first-party premium product."""
+    return [
+        (plugin, option, LicenseRequirement(product_id=pid))
+        for plugin, options in PREMIUM_PRODUCT_IDS.items()
+        if plugin != "bundle"
+        for option, pid in options.items()
+    ]
+
+
+def _add_license(stub, key, product_id, **extra):
+    stub.licenses[key] = {
+        "id": f"lic_{key.lower()}",
+        "email": EMAIL,
+        "status": "ACTIVE",
+        "expiresAt": None,
+        "productId": product_id,
+        **extra,
+    }
+
+
+def test_accepted_product_ids_policy():
+    assert accepted_product_ids(PLUGIN_ONLY_ID) == {PLUGIN_ONLY_ID} | BUNDLE_PRODUCT_IDS
+    assert accepted_product_ids(PRODUCT_ID) == {PRODUCT_ID}  # third party: own id only
+    assert len(BUNDLE_PRODUCT_IDS) == 3
+
+
+def test_plugin_only_key_unlocks_just_that_plugin(gate, stub):
+    g, _ = gate
+    _add_license(stub, "LC-TEST-PITR-KEY1", PLUGIN_ONLY_ID)
+    req = LicenseRequirement(product_id=PLUGIN_ONLY_ID)
+    assert g.activate("pitr-verify", req, "LC-TEST-PITR-KEY1").allowed
+    assert g.status("pitr-verify", req).allowed
+
+    other = LicenseRequirement(product_id=PREMIUM_PRODUCT_IDS["schema-drift"]["monthly"])
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("schema-drift", other, "LC-TEST-PITR-KEY1")
+    assert exc.value.code == "mismatch"
+    assert not g.status("schema-drift", other).allowed
+
+
+@pytest.mark.parametrize("option", ["monthly", "yearly", "one_time"])
+def test_bundle_key_unlocks_every_premium_plugin(gate, stub, option):
+    g, _ = gate
+    _add_license(stub, BUNDLE_KEY, PREMIUM_PRODUCT_IDS["bundle"][option])
+    for plugin, _opt, req in _premium_requirements():
+        result = g.activate(plugin, req, BUNDLE_KEY)
+        assert result.allowed and result.state == "licensed", (plugin, _opt)
+        assert g.status(plugin, req, network=False).allowed
+    saved = g.store.get_plugin_licenses()["pitr-verify"]
+    assert saved["product_id"] == PREMIUM_PRODUCT_IDS["bundle"][option]
+
+
+def test_bundle_key_does_not_unlock_third_party_plugin(gate, stub):
+    g, _ = gate
+    _add_license(stub, BUNDLE_KEY, PREMIUM_PRODUCT_IDS["bundle"]["monthly"])
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pro_report", _requirement(), BUNDLE_KEY)
+    assert exc.value.code == "mismatch"
+
+
+def test_bundle_key_invalid_expired_revoked_still_block(gate, stub):
+    g, clock = gate
+    req = LicenseRequirement(product_id=PLUGIN_ONLY_ID)
+    bundle_id = PREMIUM_PRODUCT_IDS["bundle"]["yearly"]
+
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pitr-verify", req, "LC-NOPE-NOPE-NOPE")
+    assert exc.value.code == "invalid"
+
+    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    _add_license(stub, "LC-TEST-OLD-BUNDLE", bundle_id, expiresAt=past)
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pitr-verify", req, "LC-TEST-OLD-BUNDLE")
+    assert exc.value.code == "expired"
+
+    _add_license(stub, "LC-TEST-REVOKED-BDL", bundle_id, status="REVOKED")
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pitr-verify", req, "LC-TEST-REVOKED-BDL")
+    assert exc.value.code == "invalid"
+
+    # an active bundle key that is later revoked / expires stops unlocking
+    _add_license(stub, BUNDLE_KEY, bundle_id)
+    assert g.activate("pitr-verify", req, BUNDLE_KEY).allowed
+    stub.licenses[BUNDLE_KEY]["status"] = "REVOKED"
+    clock.advance(hours=25)
+    assert not g.status("pitr-verify", req).allowed
+    stub.licenses[BUNDLE_KEY]["status"] = "ACTIVE"
+    soon = clock.now + timedelta(days=2)
+    stub.licenses[BUNDLE_KEY]["expiresAt"] = soon.isoformat()
+    assert g.activate("pitr-verify", req, BUNDLE_KEY).allowed
+    clock.advance(days=3)
+    assert g.status("pitr-verify", req, network=False).state == "expired"
+
+
+def test_stored_license_for_other_product_is_still_a_mismatch(gate, stub):
+    g, _ = gate
+    _add_license(stub, "LC-TEST-OTHER-KEY1", OTHER_PRODUCT_ID)
+    req = LicenseRequirement(product_id=PLUGIN_ONLY_ID)
+    with pytest.raises(PluginLicenseError) as exc:
+        g.activate("pitr-verify", req, "LC-TEST-OTHER-KEY1")
+    assert exc.value.code == "mismatch"
+
+
+def test_bundle_key_unlocks_premium_plugin_via_marketplace(market, stub, tmp_path):
+    mp, _ = market
+    _add_license(stub, BUNDLE_KEY, PREMIUM_PRODUCT_IDS["bundle"]["monthly"])
+    manifest = _manifest_dict(license={"product_id": PLUGIN_ONLY_ID})
+    src = _write_plugin(tmp_path / "pro_report", manifest)
+    with pytest.raises(PluginLicenseRequired):
+        mp.install_from_path(src)
+    mp.install_from_path(src, license_key=BUNDLE_KEY)
+    assert mp.license_status("pro_report").allowed
+    assert mp.manager.execute_plugin("pro_report")["ran"] is True
+
+
+def test_free_builtins_never_contact_licensechain_even_with_bundle(market, stub):
+    mp, g = market
+    _add_license(stub, BUNDLE_KEY, PREMIUM_PRODUCT_IDS["bundle"]["monthly"])
+    stub.calls.clear()
+    for plugin_id in ("migration", "data_comparison"):
+        assert mp.license_status(plugin_id).state == "not_required"
+        assert g.status(plugin_id, None).allowed
+    assert stub.calls == []

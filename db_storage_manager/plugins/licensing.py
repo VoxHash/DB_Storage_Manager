@@ -8,7 +8,9 @@ plugin declares::
     "license": {"product_id": "<LicenseChain product id>"}
 
 and the host then requires an active LicenseChain license for that product
-before the plugin is installed, enabled, loaded or executed.
+before the plugin is installed, enabled, loaded or executed. A licence for any
+"all premium plugins" bundle product in ``pricing.PREMIUM_PRODUCT_IDS`` also
+satisfies every first-party premium plugin (``pricing.accepted_product_ids``).
 
 Verification uses only public LicenseChain endpoints, so no seller API key or
 callback secret ever ships in the desktop app:
@@ -42,6 +44,7 @@ from typing import Any, Callable, Dict, Optional
 from urllib.parse import urlparse
 
 from .manifest import LicenseRequirement
+from .pricing import accepted_product_ids
 
 DEFAULT_API_BASE = "https://api.licensechain.app/v1"
 DEFAULT_PAY_BASE = "https://pay.licensechain.app"
@@ -449,7 +452,8 @@ class PluginLicenseGate:
                 requirement=requirement,
             )
         info = purchase.get("purchase") or {}
-        if str(info.get("productId") or "") != requirement.product_id:
+        purchased_id = str(info.get("productId") or "")
+        if purchased_id not in accepted_product_ids(requirement.product_id):
             raise PluginLicenseError(
                 "This license is for a different product",
                 code="mismatch",
@@ -458,7 +462,7 @@ class PluginLicenseGate:
         return {
             "license_key": key,
             "email": buyer,
-            "product_id": requirement.product_id,
+            "product_id": purchased_id,
             "license_id": license_id or info.get("id"),
             "expires_at": _iso(expires_at) if expires_at else None,
             "verified_at": _iso(now),
@@ -532,7 +536,7 @@ class PluginLicenseGate:
             return LicenseStatus(
                 plugin_id, "missing", False, "License required"
             )
-        if record.get("product_id") != requirement.product_id:
+        if record.get("product_id") not in accepted_product_ids(requirement.product_id):
             return self._licensed(
                 plugin_id, record, "mismatch", "Stored license is for another product"
             )

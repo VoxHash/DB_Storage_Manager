@@ -61,6 +61,31 @@ PREMIUM_PRODUCT_IDS: Dict[str, Dict[str, str]] = {
     },
 }
 
+# A valid licence for any bundle product unlocks every first-party premium
+# plugin, i.e. every plugin whose ``license.product_id`` is listed under a
+# non-bundle entry of ``PREMIUM_PRODUCT_IDS``.
+BUNDLE_PRODUCT_IDS = frozenset(PREMIUM_PRODUCT_IDS["bundle"].values())
+FIRST_PARTY_PLUGIN_PRODUCT_IDS = frozenset(
+    product_id
+    for plugin, options in PREMIUM_PRODUCT_IDS.items()
+    if plugin != "bundle"
+    for product_id in options.values()
+)
+
+
+def accepted_product_ids(product_id: str) -> frozenset:
+    """Product ids whose licence unlocks a plugin that requires ``product_id``.
+
+    Always the plugin's own product. For first-party premium plugins (the id is
+    listed in ``PREMIUM_PRODUCT_IDS``) every bundle product is accepted as well.
+    Third-party plugins are never unlocked by a bundle.
+    """
+    accepted = {product_id}
+    if product_id in FIRST_PARTY_PLUGIN_PRODUCT_IDS or product_id in BUNDLE_PRODUCT_IDS:
+        accepted |= BUNDLE_PRODUCT_IDS
+    return frozenset(accepted)
+
+
 BILLING_OPTIONS = ("monthly", "yearly", "one_time")
 _MAX_AMOUNT = 10_000.0
 
