@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Experimental full Restore Backup**: **Restore…** on the Backups tab (hidden unless enabled in Settings → Backups & Adapters or `DSM_EXPERIMENTAL=1`; default off). Requires `backups:restore` when RBAC is active (checked in the manager as well as the UI), a typed confirmation of the target database name, a passphrase for encrypted backups, and an optional encrypted safety backup of the current state. A pre-flight (SHA-256, decrypt, unpack, engine match) runs before anything is overwritten. Every attempt is appended to `audit.log` (JSON lines, mode `600`, secrets stripped). Works from Local, Proton Drive and S3 backups. Covered end-to-end by tests on SQLite; other engines go through their existing driver `restore_backup` (PostgreSQL / MySQL tooling) and have not been integration-tested against live servers
+- **S3-compatible backup adapter** (AWS S3, MinIO, Cloudflare R2, Backblaze B2) via boto3: Backups adapter + **Configure S3…**, `DSM_S3_*` / `AWS_*` / SecureStore `s3_backup`, always DSMENC1-encrypted, checksum sidecars, verify / dry-run / restore parity with Proton Drive; tests run against a real moto S3 server
+- **Shared backup pipeline** (`backups/pipeline.py`): one compress / encrypt / checksum path for every adapter
+- **Backup size context**: backups record `dumpSize` and `sourceStorageBytes` (live database size at backup time). The Backups table has a **Source DB size** column, tooltips on size cells and a short explainer; the Dashboard **Total size** card explains that it is on-disk size including indexes and free space
+- **Email alerts**: real SMTP channel (STARTTLS / SSL; plain only for loopback), minimum severity, per-alert cooldown, asynchronous delivery, `DSM_SMTP_*` overrides, password encrypted in SecureStore. The Monitoring **Email** checkbox is enabled only when the configuration is complete
+- **`monitor` role**: on-call users with `monitoring:read` / `monitoring:write` and read access to connections, backups, settings and plugins, but no backup, restore or query rights
+- **Watch on launch**: optional per-connection auto-start of monitoring so alerts arrive without clicking Start
+- **Tests**: `tests/test_full_restore.py`, `tests/test_s3_backup.py`, `tests/test_email_alerts.py`, `tests/test_settings_ui.py`; `moto[server,s3]` added to the dev dependencies
+
+### Changed
+- **Settings** is now a tabbed page: General, Backups & Adapters, Notifications, Users & RBAC, Updates. Saving preserves keys owned by other tabs
+- **Signed-in indicator**: the redundant bottom status bar is removed; the sidebar footer is the single indicator
+- **Plugins**: built-in `data_comparison` and `migration` list **VoxHash** as author
+- **Adapters**: Local, Proton Drive and S3 are supported in the UI. Google Drive stays library-only (no desktop OAuth-token form); a plugin / rclone path is tracked in the roadmap
+- **Auto-restore on critical alerts** is deliberately not implemented (destructive, no safe unattended confirmation); rationale in the roadmap
+
+### Fixed
+- **Light theme**: the Settings RBAC panel no longer keeps the dark stylesheet it was built with; scroll areas, hint labels and the Plugins enabled colour follow theme changes
+- **Qt mnemonics**: labels such as "Backups & Adapters" and "Users & RBAC" no longer lose the ampersand
+- **Backup overwrite**: a second backup created in the same second no longer replaces the first (collision-safe file names)
+- **Stale connection pool**: editing a connection discards pooled sessions so restores and backups use the new settings
+
 ## [1.0.7] - 2026-11-03
 
 ### Added

@@ -1,97 +1,78 @@
 # Roadmap — DB Storage Manager
 
-Status as of **1.0.7** (2026-11-03). Items already shipped in-tree are marked accordingly; remaining work is prioritized for usability and reliability.
+Status: **1.0.7** released (2026-11-03); the next release is collected under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md). Legend: `[x]` shipped, `[ ]` planned, `[~]` deliberately deferred.
 
-## Now (1.x patch / minor)
+## In progress (next release)
 
-_(clear — promote from Next when starting the next deliverable)_
+- [x] Single signed-in indicator (sidebar footer); redundant status bar removed
+- [x] Tabbed Settings: General, Backups & Adapters, Notifications, Users & RBAC, Updates
+- [x] Backup vs live size explained in the UI (stored file, dump size, live size at backup time)
+- [x] Experimental full restore: off by default, `backups:restore`, typed confirmation, passphrase, safety backup, audit log
+- [x] S3-compatible adapter at parity with Local and Proton Drive (encrypted, verified, dry-run, restore)
+- [x] SMTP email alert channel, `monitor` role, watch-on-launch
+- [x] Theme fixes (Light RBAC panel, scroll areas, plugin status colours)
+- [ ] Rehearse full restore against live PostgreSQL and MySQL servers in CI (SQLite is covered today)
 
 ## Next
 
-### Plugin backlog: managed-database gaps (Supabase, DigitalOcean, RDS, ...)
+### Backups and recovery
 
-Managed platforms hide or limit parts of the database that a desktop storage tool still has to reason about (no superuser, pooled connections, vendor-controlled backups). These are planned as plugins on the existing `plugins.sdk` (API `1.0`) so they stay opt-in, run against real catalogs / provider APIs, and ship none of their own credentials. Each one reads only what the connected role is allowed to see and reports "not available on this plan/role" instead of guessing.
+- [ ] Google Drive as a plugin or an rclone `drive` remote (the library adapter stays out of the UI: a long-lived OAuth token in a desktop form is an opsec risk)
+- [ ] Retention rules per connection (keep N daily / M monthly) with pruning for Local, Proton Drive and S3
+- [ ] Restore into a scratch database for rehearsal before touching production
+- [ ] Promote full restore from experimental to stable after the live-engine rehearsals above
+- [~] Automatic restore on a critical alert — deferred. A restore replaces data, and an unattended trigger cannot tell a failing server from a failing probe. It would need opt-in per connection, a cooldown, a signed audit trail and a human confirmation path; manual experimental restore is the supported route until then
 
-| Plugin (working name) | What it does | Real data source | Gap it closes |
-|---|---|---|---|
-| `pitr-verify` | Checks that point-in-time recovery is actually enabled and that the restorable window matches the retention you expect; optional restore-to-scratch rehearsal | Provider backup/PITR APIs (Supabase management API, DigitalOcean databases API, RDS `describe-db-instances`), `pg_stat_archiver`, `pg_current_wal_lsn()` | A scheduled dump is not a recovery guarantee; managed PITR is often off or has a short window |
-| `schema-drift` | Snapshots `information_schema` / `pg_catalog` (tables, columns, indexes, constraints, functions, extensions) and diffs against a saved baseline or another connection | Catalog queries per engine | Silent dashboard edits and unreviewed migrations on shared projects |
-| `rls-audit` | Lists Postgres tables exposed through the API with row level security disabled, permissive policies (`USING (true)`), and `SECURITY DEFINER` functions; flags `anon` / `authenticated` grants | `pg_class.relrowsecurity`, `pg_policies`, `pg_proc`, `information_schema.role_table_grants` | Supabase tables reachable by the public API key without RLS |
-| `pooler-health` | Compares direct vs pooled endpoints (PgBouncer / Supavisor / DO connection pools): latency, pool mode, prepared-statement and session-feature compatibility, `max_connections` headroom | Live probes, `SHOW max_connections`, `pg_stat_activity`, pooler `SHOW POOLS` where the role may run it | Intermittent "too many connections" / prepared statement failures behind transaction pooling |
-| `encrypted-export` | Per-table or per-schema export (CSV / Parquet / SQL) encrypted with the existing DSMENC1 envelope, optional column redaction | Existing drivers + native AES-GCM helper | Sharing data from managed DBs without plaintext copies leaving the machine |
-| `retention-compliance` | Declares retention rules per connection (keep N daily / M monthly), prunes local and Proton Drive copies accordingly, and reports violations | Backup metadata sidecars, adapter listing | Provable retention for audits; stops unbounded backup growth |
-| `anomaly-alerts` | Learns a baseline of size growth, connection count, cache hit ratio and slow-query rate from stored monitoring samples and raises alerts on deviation | `DatabaseMonitor` samples (needs a small local sample history first) | Static thresholds miss slow drifts and weekly seasonality |
-| `multi-cloud-discovery` | Extends **Discover Cloud…** with DigitalOcean Managed Databases, Supabase projects, Neon, Aiven and Azure/GCP regions, importing profiles with the right SSL mode | Provider REST APIs with user-supplied tokens (stored in SecureStore, never in git) | Today only RDS / Cloud SQL / Azure SQL are discovered |
-| `extension-inventory` | Lists installed vs available Postgres extensions, versions and known-deprecated ones | `pg_extension`, `pg_available_extensions` | Upgrade surprises when the provider retires an extension |
-| `trusted-sources-check` | Verifies firewall / trusted-source / IP allow-list settings for a managed cluster against your current public IP and SSH bastion | Provider APIs (read-only) | Connection failures that look like database outages |
-| `maintenance-window-watch` | Surfaces upcoming provider maintenance and version end-of-life dates in the alerts feed | Provider APIs / release feeds | Unplanned restarts and forced upgrades |
+### Monitoring
 
-Plugin acceptance bar: unit tests against a real SQLite/Postgres fixture or recorded provider responses, a manifest entry, a documented permission requirement, and an RBAC permission (`plugins:manage` to install, `monitoring:*` / `backups:*` to run).
+- [ ] Anomaly alerts from a local sample history (growth, connections, cache hit ratio, slow queries)
+- [ ] Additional alert channels (webhook, Slack) with the same cooldown and severity rules as email
 
-### Agent / MCP / AI control surface (deferred)
+### Plugin backlog: managed-database gaps
 
-Decision for 1.0.7: **not shipped.** A model-facing control surface (MCP server or "ask the assistant to run a backup") would hold a path to credentials, backups and arbitrary SQL, which makes prompt injection a direct data-exfiltration and data-destruction risk, and the app already ships a read-only REST companion for glance use. It will only be considered as a thin, opt-in layer after the plugin backlog above lands, and only with: read-only tools first (health, backup list, verify, schema drift report), no raw SQL tool, no credential access, RBAC identity per session, per-call audit log, explicit confirmation for any write, and off by default. Until then, scripting goes through the existing CLI entry points and the REST API.
+Planned on the existing `plugins.sdk` (API `1.0`): opt-in, real catalogs or provider APIs, no bundled credentials, and a clear "not available on this plan/role" instead of guessing.
 
-### Other
+- [ ] `pitr-verify` — confirm point-in-time recovery is enabled and the window matches retention (provider APIs, `pg_stat_archiver`)
+- [ ] `schema-drift` — snapshot `information_schema` / `pg_catalog` and diff against a baseline or another connection
+- [ ] `rls-audit` — Postgres tables exposed without row level security, permissive policies, `SECURITY DEFINER` functions
+- [ ] `pooler-health` — compare direct and pooled endpoints (PgBouncer / Supavisor): latency, pool mode, `max_connections` headroom
+- [ ] `encrypted-export` — per-table export (CSV / Parquet / SQL) in the DSMENC1 envelope with optional redaction
+- [ ] `multi-cloud-discovery` — extend **Discover Cloud…** to DigitalOcean, Supabase, Neon, Aiven
+- [ ] `extension-inventory` — installed vs available Postgres extensions and deprecations
+- [ ] `trusted-sources-check` — firewall / allow-list settings versus the current public IP
+- [ ] `maintenance-window-watch` — provider maintenance and version end-of-life in the alerts feed
 
-- Meta Quest WebXR / Unity glance client after UX research — interim path documented in [docs/quest.md](docs/quest.md)
-- Android companion polish: F-Droid metadata / signed release APK (sideload debug foundation already shipped)
+Plugin acceptance bar: tests against a real SQLite/Postgres fixture or recorded provider responses, a manifest entry, a documented permission, and an RBAC permission (`plugins:manage` to install, `monitoring:*` / `backups:*` to run).
+
+### Agent / MCP control surface
+
+- [~] Deferred. A model-facing surface would hold a path to credentials, backups and arbitrary SQL, so prompt injection becomes data exfiltration or destruction. Only as an opt-in thin layer after the plugin backlog, read-only first, no raw SQL, no credential access, per-session RBAC identity, per-call audit log, confirmation for writes, off by default
 
 ## Later
 
-_(open — promote from Future platforms only when prerequisites land)_
+- [ ] Android / GrapheneOS companion: F-Droid metadata and signed release APK ([docs/android-grapheneos.md](docs/android-grapheneos.md))
+- [ ] Meta Quest glance client, only after UX research shows value over a phone ([docs/quest.md](docs/quest.md))
+- [ ] Optional TLS termination and richer alerts UI for companions
 
-## Future platforms (exploratory)
+Out of scope for the near term: renaming the product or package, a mobile rewrite of the desktop UI, native Quest apps before UX research, running arbitrary SQL or full restore from companions. Opsec: [docs/cross-platform.md](docs/cross-platform.md), [docs/privacy-companion.md](docs/privacy-companion.md).
 
-These are **not** near-term deliverables unless promoted above. Desktop (PyQt6) remains the product; mobile/XR are companion surfaces that reuse connection profiles and read-only monitoring where feasible. **Install/use guides** live under `docs/` (linked below). Opsec: [docs/cross-platform.md](docs/cross-platform.md), [docs/privacy-companion.md](docs/privacy-companion.md).
+## Shipped
 
-### Android / GrapheneOS companion
-
-- **Guide**: [docs/android-grapheneos.md](docs/android-grapheneos.md)
-- **Shipped (foundation)**: privacy / credential-export review; SecureStore pairing Bearer (SHA-256 only); sanitized `dsm-companion-export`; Kotlin sideload debug APK under `companions/android/` talking to health/connections/backups — no Play Services, no F-Droid listing yet
-- **Remaining**: F-Droid / signed release metadata; optional TLS termination; richer alerts UI
-- **Out of scope initially**: running arbitrary SQL, full backup restore, or embedding database engines on-device
-
-### Meta Quest 3 (OpenXR) companion
-
-- **Guide**: [docs/quest.md](docs/quest.md) (honest: no Quest Store / sideload app yet; interim = Quest Browser → companion API)
-- **Goal**: spatial “ops glance” panel for lab/workstation operators — dashboard metrics and backup health in VR, not a primary DBA workstation
-- **Prerequisites**: Web or lightweight companion backend from the shipped Web UI / REST companion; clear UX research that VR adds value over a phone glance view
-- **Approach (tentative)**: Unity or WebXR client talking to a local companion service; Quest Store packaging only after privacy review
-- **Out of scope initially**: immersive query editing, full schema management, or replacing the desktop app
-
-## Explicitly out of scope for near-term
-
-- Replacing the product name or Python package (`db_storage_manager` / `db-storage-manager`) — name is descriptive and already aligned with PyPI-style packaging
-- Full mobile rewrite of the PyQt6 desktop UI
-- Shipping Quest **native** apps before UX research (Web/REST companion foundation **already exists** — use it as the interim path)
-
-## Shipped recently
-
-- **1.0.7**: concurrent GUI job runner (Backups / Monitoring / updates never block the window); system tray with left / middle / right click behaviour and configurable notification auto-dismiss; Changelog & Updates dialog backed by GitHub Releases (stable / experimental, no auto-install); adapter-aware backup verification and dry-run passphrase prompt; encrypted scheduler passphrase vault; RBAC `query:write` + `monitoring:*` enforcement and login throttle; complete translations for all 11 locales; packaging fix so wheels include translations and the API web UI; MySQL / monitoring `InterfaceError` self-healing
-
-- **Android / GrapheneOS companion foundation**: privacy review ([docs/privacy-companion.md](docs/privacy-companion.md)); `db-storage-manager-pair` / `db-storage-manager-export`; API accepts SecureStore pairing Bearer; Kotlin sideload APK in `companions/android/` for health/connections/backups; tests in `tests/test_companion_export_pairing.py` (post-1.0.5)
-- **Per-tab content polish** on the modern desktop shell: page titles/subtitles, dashboard metric cards (caption + value), denser connection/inventory tables, shared page margins/spacing, Primary CTA object names; glassmorphism scoped to panel roots so nested cards are not double-boxed; offscreen smoke in `tests/test_tab_content_polish.py` (post-1.0.5)
-- **Platform guides + opsec**: desktop production client ([docs/desktop.md](docs/desktop.md)); Android/GrapheneOS and Quest interim browser→API guides; cross-platform companion trust model ([docs/cross-platform.md](docs/cross-platform.md)); linked from docs index / README / this roadmap (post-1.0.5)
-- **Cloud credential local setup**: gitignored `.env.cloud.local` via `scripts/setup-cloud-env.sh` (mode 600, default credential chains — no invented static keys); GCP extra package name corrected to PyPI `google-cloud-sql`; `pip install -e ".[cloud]"` install path verified (post-1.0.5)
-- **Cloud-managed databases (RDS / Cloud SQL / Azure SQL)**: real discovery via boto3 / googleapiclient|google-cloud-sql / azure-mgmt-sql; IAM auth tokens (RDS) and Entra ODBC tokens (Azure SQL); SSL guidance; `CloudManager` + SecureStore `cloud_managed` / `.env.cloud.local`; Connections **Discover Cloud…**; setup extras `aws`/`gcp`/`azure`/`cloud`; clear errors when SDKs/creds missing; mocked boundary tests in `tests/test_cloud_managed.py` (post-1.0.5)
-- **Proton Drive cloud backup**: `ProtonDriveBackupAdapter` uploads/lists/verifies/deletes via rclone `protondrive` remote; DSMENC1 encryption preferred before upload; credentials from SecureStore `proton_drive` / `.env.protondrive.local` / env (never committed); clear `ProtonDriveNotConfiguredError` when rclone or account is missing; Backups tab destination + **Refresh Proton Drive**; mocked rclone boundary tests in `tests/test_proton_drive_backup.py` (post-1.0.5)
-- Modern desktop shell: library-style left nav, Atmospheric dark theme tokens, cohesive PyQt6 stylesheet, polished RBAC sign-in card; offscreen smoke including post-sign-in click-through of all nav sections + theme rotation in `tests/test_gui_shell.py` (post-1.0.5)
-- Multi-user / RBAC for shared workstations: PBKDF2 password hashes in encrypted `users.enc`, roles (`admin` / `user` / `viewer` / `guest`) with real permission checks (not always-allow), SecureStore persistence, desktop login when accounts exist, Settings **Users & RBAC** admin UI, `db-storage-manager-bootstrap` / `python -m db_storage_manager.security.bootstrap`, API Basic auth + Bearer system-admin when RBAC active, enforcement on connections / backups / settings / plugins / companion endpoints; tests in `tests/test_rbac.py` (post-1.0.5)
-- Plugin marketplace and public SDK around `plugins/`: `plugins.sdk` (API `1.0`, `plugin.json` manifest), `LocalPluginMarketplace` (local registry, enable/disable via SecureStore, install from path or http(s) zip/tar.gz), desktop **Plugins** tab, example `examples/plugins/hello_echo/`, tests (`tests/test_plugins_marketplace.py`) (post-1.0.5)
-- Web UI / REST companion (`db_storage_manager.api`): stdlib `ThreadingHTTPServer` on `127.0.0.1:8765`, optional `DSM_API_TOKEN` Bearer auth, sanitized connections, local backup list/verify/dry-run, minimal glance Web UI; `db-storage-manager-api` / `python -m db_storage_manager.api` (`tests/test_api_companion.py`) (post-1.0.5)
-- Native zstd compress/decompress + optional backup-file encryption offload (`DSMENC1` AES-256-GCM + PBKDF2-HMAC-SHA256; Rust/PyO3 with `zstandard` / `cryptography` Python fallbacks); wired into local create/restore/verify/dry-run; `db_storage_native` 0.2.0 (`tests/test_backup_zstd_encrypt.py`, `tests/test_native.py`) (post-1.0.5)
-- Stronger backup verification UX: local `.meta.json` SHA-256 sidecars, `BackupManager.verify_backup_checksum` / `verify_backups_parallel` status fields, `dry_run_restore` (checksum → optional gzip decompress → SQLite header + `PRAGMA integrity_check`), Restore tab Verify Checksum / Verify All / Dry-run Restore with pass/fail coloring; unit + offscreen Qt smoke (`tests/test_backup_verification.py`) (post-1.0.5)
-- SQL engine connection pooling: `SQLEnginePool` with checkout/release, per-profile max size, close on app shutdown; wired through `DatabaseConnectionFactory.acquire` / `release` into dashboard, query, backups, monitoring, connections probe; real SQLite pool tests (`tests/test_connection_pool.py`) (post-1.0.5)
-- Dashboard customization: watched summary metrics + table column toggles, named saved layouts (Apply / Save / Save As / Delete / Reset), last-connection restore; SecureStore `dashboard_layout` prefs; unit + offscreen Qt restore-after-restart smoke (`tests/test_dashboard_layout.py`) (post-1.0.5)
-- Query Console optimization suggestions: **Analyze** button + suggestions table; SQL heuristics plus live EXPLAIN (SQLite `EXPLAIN QUERY PLAN`, Postgres/MySQL `EXPLAIN`) with Safe Mode SELECT-only respect; unit + offscreen Qt smoke (`tests/test_query_suggestions.py`) (post-1.0.5)
-- Monitoring notification channels + threshold editing UI: Thresholds/Channels tabs, SecureStore-persisted `alert_thresholds` / `alert_channels`, `NotificationDispatcher` (desktop tray + in-app log) wired to AlertManager callbacks, threshold validation, query-time/disk-usage checks, unit + offscreen Qt smoke (post-1.0.5)
-- Documentation kit synchronized with **1.0.5** release tags (README features/SSH/monitoring, docs index release alignment, i18n About strings, FAQ/configuration for optional live probes); gitignored sibling-DB fixture + `tests/test_real_connections.py` (post-1.0.5)
-- Monitoring/alerts UX: status banner with health + alert counts, severity-colored alerts table with acknowledge/refresh, health detail column, timer-driven `DatabaseMonitor.poll_once()` wired to real collectors, AlertManager id/dedupe/counts, unit + offscreen Qt smoke tests (post-1.0.5)
-- Connections UI SSH tunnel UX: bastion host/user/key/password/port fields, open/close status, Paramiko local port forward, encrypted `ssh_config` + SecureStore bastion index, unit tests with mocked network (post-1.0.5)
-- Hardened optional engine installs: `oracledb` (Thin default / Instant Client only for Thick via `ORACLE_CLIENT_LIB_DIR`), clearer missing-driver `ImportError`s pointing at setup extras, SQL Server ODBC Driver 18→17 selection, platform Instant Client / ODBC docs (incl. Arch/Garuda helper), extras + missing-driver tests (1.0.5)
-- Expanded automated tests: real SQLite driver/factory paths, SecureStore Fernet round-trips and failure cases, Safe Mode SELECT allow / non-SELECT block; CI `test` job runs `pytest -v tests/` as a hard gate (post-1.0.3)
-- Optional Rust/PyO3 native helpers (`native/db_storage_native`) with pure-Python fallbacks (post-1.0.2)
-- CI wheels for `db-storage-native` (Linux manylinux x86_64, Windows x64, macOS arm64) via `.github/workflows/native-wheels.yml`, attached to GitHub Releases on `v*` tags (1.0.3+; Intel macOS prebuilts dropped in 1.0.4 after macos-13 capacity stalls)
+- [x] **1.0.7** — concurrent GUI job runner, system tray, Changelog & Updates dialog, adapter-aware verification, encrypted scheduler passphrase vault, RBAC `query:write` and login throttle, 11 complete locales, packaging fixes
+- [x] Android / GrapheneOS companion foundation (pairing Bearer, sanitized export, sideload APK)
+- [x] Per-tab content polish and glassmorphism scoped to panel roots
+- [x] Platform guides and opsec ([docs/desktop.md](docs/desktop.md), [docs/cross-platform.md](docs/cross-platform.md))
+- [x] Cloud-managed discovery (RDS / Cloud SQL / Azure SQL) with IAM / Entra tokens
+- [x] Proton Drive backup adapter via rclone (DSMENC1 before upload)
+- [x] Multi-user RBAC with encrypted `users.enc` and Settings admin UI
+- [x] Plugin marketplace and public SDK (`plugins.sdk`, local registry)
+- [x] REST companion and glance web UI (`db_storage_manager.api`)
+- [x] Native zstd and optional AES-256-GCM backup encryption (Rust/PyO3 with Python fallbacks)
+- [x] Backup verification: SHA-256 sidecars, dry-run restore
+- [x] SQL engine connection pooling
+- [x] Dashboard customization and saved layouts
+- [x] Query Console optimization suggestions (heuristics plus live `EXPLAIN`)
+- [x] Monitoring thresholds, channels and alert UX
+- [x] SSH tunnel UX, hardened optional engine installs, expanded automated tests, native wheels in CI
 
 Feedback and proposals: https://github.com/VoxHash/DB_Storage_Manager/issues · contact@voxhash.dev

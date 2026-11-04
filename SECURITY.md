@@ -19,6 +19,9 @@ We will respond within 48 hours and work with you to address the issue responsib
 - Safe Mode blocks dangerous query operations by default
 - Local master key with restrictive Unix permissions
 - Optional engines and cloud adapters only load when used
+- Off-machine backups (Proton Drive, S3) are always AES-256-GCM encrypted before upload
+- Experimental full restore is off by default, requires `backups:restore`, typed confirmation and writes an `audit.log` (mode `600`, secrets stripped)
+- Email alert SMTP passwords are stored encrypted; plain SMTP is accepted only for loopback relays
 - Optional multi-user RBAC (encrypted `users.enc`, PBKDF2 password hashes, role permissions on sensitive desktop and API actions)
 
 ### Enabling multi-user RBAC (shared workstation)

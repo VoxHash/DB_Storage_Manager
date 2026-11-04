@@ -25,6 +25,18 @@ Encrypted with Fernet in `connections.enc` under the user data directory. The ma
 
 Both are Python/Qt GUIs. Without a unique FreeDesktop id, Wayland/KDE treats them as generic `python3` and stacks them under one icon. DSM uses `dev.voxhash.db-storage-manager` (`setDesktopFileName` + `StartupWMClass`). Re-run `./scripts/install-local-shims.sh`, fully quit both apps, and relaunch from the new `.desktop`. If Plasma still shows a stale group, restart the session. Stock launchers run separate processes — closing a ForexSmartBot/HandForge workspace *panel* does not kill DSM unless they share one process.
 
+## Why is my backup smaller than the Dashboard total size?
+
+The dashboard shows how much space the database occupies on disk (tables, indexes, TOAST, free space and bloat). A backup stores a logical dump of the data only, usually compressed. The Backups table shows both numbers and a tooltip explains the difference.
+
+## Can I restore a backup from the app?
+
+Yes, as an experimental opt-in feature: enable it in Settings → Backups & Adapters (or `DSM_EXPERIMENTAL=1`). It needs the `backups:restore` permission, a typed confirmation, passphrase for encrypted backups, and writes an audit log. It is off on stable by default. Automatic restore on a critical alert is intentionally not implemented; see [ROADMAP.md](../ROADMAP.md).
+
+## Why is Google Drive not in the Backups adapter list?
+
+It remains available as a library adapter only. Storing a long-lived OAuth token in a desktop form is riskier than S3 keys or an rclone remote, so Local, Proton Drive and S3 are the supported destinations.
+
 ## Is there a REST API or web UI?
 
 Not in the current release. The product is a desktop application with a Python package API for programmatic access. A web interface is on the longer-term roadmap.

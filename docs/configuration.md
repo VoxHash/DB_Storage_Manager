@@ -14,6 +14,12 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `notification_timeout_seconds` | Seconds before a desktop notification auto-dismisses (clamped 2-60; some desktops treat it as a hint) | `5` |
 | `update_channel` | Channel used by **Help → Changelog & Updates**: `stable` or `experimental` (GitHub pre-releases) | `stable` |
 | `telemetry` | Anonymous telemetry | `False` |
+| `experimental.restore` | Enables the experimental **Restore…** button (full restore). `DSM_EXPERIMENTAL=1` forces it on and locks the checkbox | `False` |
+| `email_alerts` | SMTP alert channel: `host`, `port`, `security` (`starttls` / `ssl` / `none`), `username`, `sender`, `recipients`, `min_severity` (`warning` / `critical`), `cooldown_minutes`. The password is stored encrypted | host empty (channel unavailable) |
+| `monitoring.autostart_connection_id` | Connection watched automatically when the app opens (checkbox in Monitoring) | `None` |
+| `s3_backup` | `bucket`, `prefix`, `region`, `endpoint` (MinIO / R2 / B2) and optional access keys, stored encrypted | empty |
+
+The **Settings** tab is split into **General**, **Backups & Adapters**, **Notifications**, **Users & RBAC** and **Updates**. Saving only changes the keys it shows, so values written by other tabs (S3, Proton Drive, alert channels) are preserved.
 
 Settings are persisted encrypted via `SecureStore.set_settings()` / `get_settings()`.
 
@@ -49,7 +55,7 @@ When `users.enc` contains at least one account, RBAC is active: desktop login is
 db-storage-manager-bootstrap --username admin --password '…'
 ```
 
-Settings key `rbac.enabled` mirrors whether accounts exist (informational). Roles: `admin`, `user`, `viewer`, `guest`.
+Settings key `rbac.enabled` mirrors whether accounts exist (informational). Roles: `admin`, `user`, `viewer`, `guest`, `monitor`. The `monitor` role is for on-call users: it can read dashboards, connections, backups, settings and plugins and may start monitoring, edit thresholds, channels and acknowledge alerts (`monitoring:read` / `monitoring:write`), but cannot create backups, restore, run queries or change connections.
 
 Permission matrix (`db_storage_manager.security.auth.ROLE_PERMISSIONS`; `admin` holds `*`). The desktop UI and the REST API enforce the same permission strings:
 
@@ -91,6 +97,10 @@ No required secrets for core operation. Useful optional variables:
 | `DSM_PROTONDRIVE_RCLONE` | rclone binary path (default `rclone` on `PATH`) |
 | `DSM_PROTONDRIVE_OTP_SECRET` / `DSM_PROTONDRIVE_2FA` | Optional TOTP secret or one-shot 2FA code |
 | `RCLONE_PROTONDRIVE_*` | Alternate env names accepted by rclone itself |
+| `DSM_EXPERIMENTAL` | `1` / `true` / `yes` / `on` enables every experimental feature (currently full restore) regardless of the saved setting |
+| `DSM_S3_BUCKET` / `DSM_S3_PREFIX` / `DSM_S3_REGION` / `DSM_S3_ENDPOINT` | S3-compatible backup destination (override SecureStore `s3_backup`) |
+| `DSM_S3_ACCESS_KEY_ID` / `DSM_S3_SECRET_ACCESS_KEY` | S3 credentials; otherwise `AWS_*` variables or the default boto3 chain (profile, instance role) |
+| `DSM_SMTP_HOST` / `DSM_SMTP_PORT` / `DSM_SMTP_SECURITY` / `DSM_SMTP_USERNAME` / `DSM_SMTP_PASSWORD` / `DSM_SMTP_FROM` / `DSM_SMTP_TO` | SMTP alert channel (override SecureStore `email_alerts`; `DSM_SMTP_TO` is a comma-separated list) |
 | LDAP / MFA related settings | Only when auth features are enabled |
 
 Database passwords belong in the encrypted connection store, not in `.env` files committed to git. `.env`, `.env.*.local` (including `.env.protondrive.local`, `.env.cloud.local`, `.env.rbac.local`, `.env.api.local`, `.env.e2e.local`), and `tests/fixtures/connections.local.json` are gitignored. Ship only `*.example` templates (empty password placeholders).
@@ -132,6 +142,22 @@ Optional pytest live probes: `DSM_E2E_IMPORT=1 pytest -v tests/test_import_conne
 4. Non-secret defaults (`remote`, `path`, `prefer_encryption`) live under SecureStore settings key `proton_drive`.
 5. Prefer encryption on: payloads are DSMENC1-encrypted and checksummed locally before upload.
 6. Ready when rclone is found **and** SecureStore/env has username+password **or** the rclone remote exists — the Backups orange banner clears.
+
+### S3-compatible backups
+
+1. Backups → Adapter **S3** → **Configure S3…** (bucket, prefix, region, optional endpoint for MinIO / Cloudflare R2 / Backblaze B2, optional access keys) or set `DSM_S3_*`. Without explicit keys the default boto3 credential chain is used.
+2. Uploads are always DSMENC1-encrypted (checkbox locked on) and checksummed before leaving the machine; objects carry a `.meta.json` sidecar.
+3. Google Drive stays a library-only adapter (`GoogleDriveBackupAdapter`) and is not offered in the desktop UI: an OAuth refresh token in a desktop form is a larger opsec risk than the benefit. Use S3 / Proton Drive, or an rclone `drive` remote through a plugin (see [ROADMAP.md](../ROADMAP.md)).
+
+### Email alerts (SMTP)
+
+Settings → Notifications → **Email alerts**: host, port, security (`starttls`, `ssl`, or `none` for loopback relays only), user, password, sender, recipients, minimum severity and per-alert cooldown. The **Email** checkbox in Monitoring → Channels is only enabled when the SMTP configuration is complete. A failed send is logged and does not start the cooldown, so the next occurrence is mailed again.
+
+### Experimental full restore and the audit log
+
+Off by default. Enable it in Settings → Backups & Adapters or run with `DSM_EXPERIMENTAL=1`. Requires the `backups:restore` permission when RBAC is active. Every attempt, successful or not, is appended to `audit.log` (JSON lines, mode `600`, secrets stripped) in the user data directory.
+
+End-to-end tests cover SQLite. Other engines use their driver's `restore_backup` and should be rehearsed against a scratch server first.
 
 ## Default ports
 

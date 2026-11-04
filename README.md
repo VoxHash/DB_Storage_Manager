@@ -16,10 +16,10 @@
 - **Secure Connection Management** — Fernet-encrypted credential storage; optional **Discover Cloud** for AWS RDS / GCP Cloud SQL / Azure SQL (IAM / Entra helpers)
 - **Multi-user / RBAC** — Optional local accounts (`users.enc`), roles, and permission checks for shared workstations
 - **SSH tunneling** — Paramiko bastion local port-forward from the Connections UI
-- **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh
+- **Monitoring & alerts** — Live health banner, threshold alerts, acknowledge/refresh; desktop, in-app and real SMTP email channels; dedicated `monitor` role; optional watch-on-launch
 - **Plugin marketplace (local)** — SDK + local registry: enable/disable, install from path or zip/tar.gz URL
 - **Query Console** — Multi-engine queries with Safe Mode for write protection
-- **Backup & Restore** — Local, S3, Google Drive, and Proton Drive (rclone) adapters with scheduling
+- **Backup & Restore** — Local, Proton Drive (rclone) and S3-compatible adapters with scheduling, SHA-256 verification, dry-run, and an opt-in experimental full restore (RBAC-gated, audited)
 - **Modern Desktop UI** — Cross-platform PyQt6 app with themes and i18n
 - **Optional Rust acceleration** — PyO3 helpers for backup gzip, SHA-256 verification, and parallel hashing (pure-Python fallback)
 
@@ -94,7 +94,8 @@ Developers building from source still need Rust + maturin (`pip install -e ".[na
 3. **Query Console** — run queries; keep Safe Mode on for production
 4. **Monitoring** — health metrics and acknowledgeable alerts
 5. **Plugins** — local marketplace: enable/disable, install from path or URL
-6. **Backups** — local/S3/Google Drive/Proton Drive with optional schedules
+6. **Backups** — local / Proton Drive / S3 with optional schedules; hover the size cells to see how the stored file relates to the live database
+7. **Settings** — tabs for General, Backups & Adapters, Notifications, Users & RBAC and Updates
 
 Details: [docs/usage.md](docs/usage.md)
 
@@ -109,6 +110,8 @@ Details: [docs/usage.md](docs/usage.md)
 | Notifications | Desktop notifications | Enabled |
 | Notification auto-dismiss | Seconds before a notification closes (clamped 2–60) | `5` |
 | Telemetry | Anonymous telemetry | Disabled |
+| Experimental full restore | Settings → Backups & Adapters, or `DSM_EXPERIMENTAL=1` | Off |
+| Email alerts | SMTP host / security / recipients / minimum severity / cooldown (Settings → Notifications) | Off |
 
 User data: `~/.config/db-storage-manager/` (Linux/macOS) or `%APPDATA%\DB Storage Manager\` (Windows).  
 Reference: [docs/configuration.md](docs/configuration.md)

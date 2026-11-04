@@ -40,8 +40,8 @@ Safe mode behavior (SQLite and SQL-like drivers): non-SELECT statements raise `V
 Adapters:
 
 - **Local** — files under the user data `backups/` directory
-- **S3** — requires AWS credentials and bucket configuration
-- **Google Drive** — requires Google API credentials
+- **S3** — S3-compatible (AWS, MinIO, R2, B2): bucket + credentials in Settings or `DSM_S3_*`; always encrypted
+- **Google Drive** — API-only adapter, not offered in the desktop UI (see [configuration.md](configuration.md#s3-compatible-backups))
 - **Proton Drive** — uploads via rclone `protondrive` remote (credentials from `.env.protondrive.local` / SecureStore / env; never commit secrets)
 
 On the **Backups** tab:
@@ -51,6 +51,8 @@ On the **Backups** tab:
 3. **Verify Checksum** / **Dry-run Restore** work on local rows; for Proton Drive rows the app downloads to a temp file, verifies SHA-256 against the `.meta.json` sidecar, then cleans up.
 4. **Scheduled Backups** — add interval jobs (connection + Local/Proton + passphrase), then enable/disable or remove them from the table. Each due schedule runs in its own worker thread (a schedule that is still running is skipped, at most two dumps run at once). Definitions live in `scheduled-backups.json`; passphrases are stored only in the encrypted `scheduled-backup-secrets.enc`.
 5. **Dry-run Restore** of an encrypted backup prompts for the passphrase (the encryption field is used first); it is not stored. **Verify All** checks local files natively and Proton Drive rows through the adapter.
+6. **Sizes** — the **Size** column is the stored file (compressed and possibly encrypted); **Source DB size** is the live database size when the backup ran. Hover either cell for the breakdown. They differ by design: the live size counts table pages, indexes, TOAST and free space, while a dump stores logical data only (no index pages, no bloat), so a backup smaller than the Dashboard **Total size** is normal.
+7. **Restore… (experimental)** — hidden unless enabled (Settings → Backups & Adapters, or `DSM_EXPERIMENTAL=1`) and needs `backups:restore`. Choose the target connection, type the database name to confirm, optionally keep an encrypted safety backup of the current state, and enter the passphrase for encrypted backups. A pre-flight check (checksum, decrypt, unpack) runs before anything is overwritten, and the outcome is written to the audit log.
 
 Proton Drive is not configured until rclone is installed and either an rclone remote exists, SecureStore has username+password (**Configure Proton Drive…**), or `DSM_PROTONDRIVE_USERNAME` + `DSM_PROTONDRIVE_PASSWORD` are set via `.env.protondrive.local` / `./scripts/setup-protondrive-env.sh` — the UI shows a clear status line (orange when not ready) instead of a fake local path. rclone transfers use `--protondrive-replace-existing-draft=true` and retry on draft/422 conflicts (Proton 502 spikes are retried with a longer timeout).
 
@@ -71,6 +73,8 @@ Use **Settings** to switch theme and language. Theme application goes through `t
 3. The status banner shows overall health and active alert counts (critical / warning / info)
 4. **Metrics**, **Alerts**, **Performance**, and **Health** tabs refresh every 5 seconds from the real `monitoring/` collectors (not placeholders)
 5. On **Alerts**, select rows and **Acknowledge Selected**, or **Acknowledge All**; **Refresh Now** forces an immediate poll
+
+6. **Channels**: desktop, in-app and **Email** (needs the SMTP settings from Settings → Notifications). Users with the `monitor` role can run all of this; enable **Start monitoring on launch** to watch a connection as soon as the app opens
 
 Thresholds (connection count, cache hit ratio, health failures) live in `AlertManager`. SQLite reports basic connectivity metrics; PostgreSQL / MySQL / SQL Server collect richer engine counters when connected.
 
