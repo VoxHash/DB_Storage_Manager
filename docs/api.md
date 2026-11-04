@@ -254,6 +254,24 @@ A plugin without a `license` block is free. To sell a plugin through [LicenseCha
 - The host checks the licence before importing plugin code (install), on enable and on every execution. Plugins never see the licence key. Built-in plugins ignore the block
 - Python: `LocalPluginMarketplace.activate_license(plugin_id, key, email=None)`, `deactivate_license`, `license_status`, `require_license`; `install_from_path(path, license_key=..., license_email=...)`. A missing licence raises `PluginLicenseRequired`
 
+### PITR Verify (`pitr-verify`)
+
+First premium plugin. It is not a built-in: install the directory from `db_storage_manager.premium_plugins.bundled_plugin_dir("pitr-verify")`. Installing requires `plugins:manage`. `execute` requires `monitoring:read`.
+
+`license.product_id` is `plugins.pricing.PREMIUM_PRODUCT_IDS["pitr-verify"]["monthly"]` (the products were created earlier; do not run `licensechain_products.py --apply` again for this plugin).
+
+```python
+from db_storage_manager.plugins.loader import load_plugin_from_directory
+from db_storage_manager.premium_plugins import bundled_plugin_dir
+
+plugin = load_plugin_from_directory(bundled_plugin_dir("pitr-verify"))
+report = plugin.execute(connection, expected_retention_days=7)
+```
+
+`report["status"]` is `ok`, `fail` or `not_available`. `pitr_enabled` is true, false, or null when the check could not be read (permission denied, provider 401/403, or a field the API did not return). Self-hosted PostgreSQL is decided from `wal_level`, `archive_mode`, `archive_command` / `archive_library` and `pg_stat_archiver`. That view does not include how long WAL is retained, so `expected_retention_days` on a self-hosted server is `not_available` rather than a guessed match.
+
+When `connection.config.extra["cloud_provider"]` is set, retention comes from the provider and the catalog is attached as extra checks. Supported values: `aws_rds` (Aurora PostgreSQL uses `DescribeDBClusters`), `gcp_cloudsql`, `azure_postgres` (flexible server; `resource_group` is required), `supabase` (`DSM_SUPABASE_ACCESS_TOKEN`), `neon` (`NEON_API_KEY`). `cloud_instance_id` is the instance, server, project ref or project id. Credentials are the operator's (SecureStore / environment); none are bundled. `azure_sql` is reported `not_available` because it is SQL Server.
+
 ### Local marketplace
 
 ```python

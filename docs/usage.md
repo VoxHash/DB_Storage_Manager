@@ -83,13 +83,13 @@ Thresholds (connection count, cache hit ratio, health failures) live in `AlertMa
 1. Open **Plugins** (View → Plugins, or Ctrl+6)
 2. Review built-in plugins (`migration`, `data_comparison`) and any user installs
 3. **Enable** / **Disable** — persisted in SecureStore (`settings.plugins.enabled`)
-4. **Install from Path…** — select a directory that contains `plugin.json` (see `examples/plugins/hello_echo/`)
+4. **Install from Path…** — select a directory that contains `plugin.json` (see `examples/plugins/hello_echo/`). The first premium plugin, PITR Verify, is bundled at the directory `bundled_plugin_dir("pitr-verify")` (`db_storage_manager/premium_plugins/pitr-verify`) and asks for a licence before install
 5. **Install from URL…** — http(s) URL to a `.zip` or `.tar.gz` archive with the same layout
 6. **Uninstall** — removes user-installed plugins only (built-ins can only be disabled)
 7. **Premium plugins** — the **License** column shows `Free`, `Licensed`, `Licensed (offline)`, `Not activated`, `Expired`, `Invalid` or `Wrong product`. Select a premium plugin and use **Get License** (opens its LicenseChain checkout), then **Activate License…** and paste the key (an email prompt appears only if the purchase needs it). **Deactivate License** removes the key from this computer. Installing a premium plugin from path or URL asks for the key first, before any of its code runs
 8. **Support DSM** — opens https://github.com/sponsors/VoxHash. Donations are optional and keep the free core and built-in plugins maintained
 
-Premium pricing (single plugin / all-plugins bundle): US$1.99 / US$4.99 per month, US$16 / US$39 per year, or US$24 / US$59 one-time for the current major version. Updates are included while a subscription is active, or for the major version of a one-time licence. An all-plugins bundle licence unlocks every first-party premium plugin once it is on sale. Discount requests: contact@voxhash.dev.
+Premium pricing (single plugin / all-plugins bundle): US$1.99 / US$4.99 per month, US$16 / US$39 per year, or US$24 / US$59 one-time for the current major version. Updates are included while a subscription is active, or for the major version of a one-time licence. An all-plugins bundle licence unlocks every first-party premium plugin. PITR Verify is the one on sale now; the others stay listed until they ship. Discount requests: contact@voxhash.dev.
 
 Settings → General has **Reduce transparency**, which swaps the glass surfaces for solid colours (also `DSM_REDUCE_TRANSPARENCY=1`).
 

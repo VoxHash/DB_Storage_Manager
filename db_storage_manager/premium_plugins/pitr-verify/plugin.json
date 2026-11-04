@@ -1,0 +1,21 @@
+{
+  "id": "pitr-verify",
+  "name": "PITR Verify",
+  "version": "1.0.0",
+  "author": "VoxHash",
+  "description": "Confirm PostgreSQL point-in-time recovery is enabled and that the configured retention matches the restorable window (pg_stat_archiver, or the provider API when the connection is a managed Postgres).",
+  "plugin_type": "performance_monitoring",
+  "api_version": "1.0",
+  "entry": "plugin:PitrVerifyPlugin",
+  "dependencies": [],
+  "license": {
+    "provider": "licensechain",
+    "product_id": "2e1b1388-5e8c-459d-a5e6-62ef146c4682",
+    "pricing": {
+      "currency": "USD",
+      "monthly": 1.99,
+      "yearly": 16.0,
+      "one_time": 24.0
+    }
+  }
+}

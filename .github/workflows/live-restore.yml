@@ -1,6 +1,7 @@
 name: Live restore rehearsal
 
-# Runs tests/test_live_restore.py against real PostgreSQL and MySQL servers:
+# Runs tests/test_live_restore.py against real PostgreSQL and MySQL servers,
+# and tests/test_pitr_verify.py against the PostgreSQL service (catalog PITR):
 # create a backup (pg_dump / mysqldump), drift the data, then run the
 # experimental full restore (pg_restore / mysql client) and compare the result.
 # SQLite is covered by tests/test_full_restore.py in the regular CI job.
@@ -15,6 +16,8 @@ on:
       - "db_storage_manager/db/pool.py"
       - "db_storage_manager/experimental.py"
       - "tests/test_live_restore.py"
+      - "tests/test_pitr_verify.py"
+      - "db_storage_manager/premium_plugins/**"
       - ".github/workflows/live-restore.yml"
   pull_request:
     branches: [ main, develop ]
@@ -25,6 +28,8 @@ on:
       - "db_storage_manager/db/pool.py"
       - "db_storage_manager/experimental.py"
       - "tests/test_live_restore.py"
+      - "tests/test_pitr_verify.py"
+      - "db_storage_manager/premium_plugins/**"
       - ".github/workflows/live-restore.yml"
   workflow_dispatch:
 
@@ -76,8 +81,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e . --no-deps
-      - name: Rehearse full restore against PostgreSQL ${{ matrix.version }}
-        run: pytest -v tests/test_live_restore.py -k postgresql
+      - name: Rehearse full restore and PITR verify against PostgreSQL ${{ matrix.version }}
+        run: pytest -v tests/test_live_restore.py -k postgresql tests/test_pitr_verify.py
 
   mysql:
     name: MySQL ${{ matrix.version }}

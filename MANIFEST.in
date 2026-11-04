@@ -1,2 +1,3 @@
 recursive-include db_storage_manager/resources *
+recursive-include db_storage_manager/premium_plugins *
 include packaging/linux/db-storage-manager.desktop

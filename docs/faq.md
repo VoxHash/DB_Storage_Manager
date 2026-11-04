@@ -39,7 +39,7 @@ It remains available as a library adapter only. Storing a long-lived OAuth token
 
 ## Is DB Storage Manager free? What do premium plugins cost?
 
-The app and the built-in `migration` and `data_comparison` plugins are free. Optional premium plugins are licensed through LicenseChain at deliberately low prices: US$1.99/month, US$16/year or US$24 one-time per plugin, and US$4.99/month, US$39/year or US$59 one-time for all of them. Updates are included while a subscription is active, or for the major version of a one-time licence. If the price is a barrier, write to contact@voxhash.dev. You can also donate at https://github.com/sponsors/VoxHash.
+The app and the built-in `migration` and `data_comparison` plugins are free. The first premium plugin, PITR Verify, and any later premium plugins are licensed through LicenseChain at deliberately low prices: US$1.99/month, US$16/year or US$24 one-time per plugin, and US$4.99/month, US$39/year or US$59 one-time for all of them. Updates are included while a subscription is active, or for the major version of a one-time licence. If the price is a barrier, write to contact@voxhash.dev. You can also donate at https://github.com/sponsors/VoxHash.
 
 ## Is there a REST API or web UI?
 

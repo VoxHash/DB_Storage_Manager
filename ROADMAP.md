@@ -14,7 +14,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 - [x] Premium plugin licensing through LicenseChain (core and built-ins stay free; see "Plugin pricing and sustainability")
 - [x] Liquid-glass tokens, icon-only buttons with accessible names, and a Reduce transparency switch
 - [x] Rehearse full restore against live PostgreSQL and MySQL servers in CI (`tests/test_live_restore.py`, `.github/workflows/live-restore.yml`: PostgreSQL 14/15/16, MySQL 8.0; MariaDB 11 verified locally). Finding: restore replaces backed-up objects but keeps target-only ones, and PostgreSQL `--clean` fails loudly when a target-only table depends on a backed-up one — rehearse into a scratch database
-- [ ] Publish the first premium plugin: create its LicenseChain products (`scripts/licensechain_products.py --apply`) and set `license.product_id`
+- [x] Publish the first premium plugin: `pitr-verify` (`db_storage_manager/premium_plugins/pitr-verify`). LicenseChain products were already created (`PREMIUM_PRODUCT_IDS["pitr-verify"]`); `license.product_id` is the monthly product. Install needs `plugins:manage`; running it needs `monitoring:read`
 
 ## Next
 
@@ -35,7 +35,7 @@ Status: **1.0.7** released (2026-11-03); the next release is collected under `[U
 
 Planned on the existing `plugins.sdk` (API `1.0`): opt-in, real catalogs or provider APIs, no bundled credentials, and a clear "not available on this plan/role" instead of guessing.
 
-- [ ] `pitr-verify` — confirm point-in-time recovery is enabled and the window matches retention (provider APIs, `pg_stat_archiver`)
+- [x] `pitr-verify` — confirm point-in-time recovery is enabled and the window matches retention (provider APIs, `pg_stat_archiver`). Shipped as the first premium plugin
 - [ ] `schema-drift` — snapshot `information_schema` / `pg_catalog` and diff against a baseline or another connection
 - [ ] `rls-audit` — Postgres tables exposed without row level security, permissive policies, `SECURITY DEFINER` functions
 - [ ] `pooler-health` — compare direct and pooled endpoints (PgBouncer / Supavisor): latency, pool mode, `max_connections` headroom
