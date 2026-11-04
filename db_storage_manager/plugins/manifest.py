@@ -12,15 +12,89 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .base import PluginType
+from .pricing import validate_pricing
 
 PLUGIN_API_VERSION = "1.0"
 MANIFEST_FILENAME = "plugin.json"
+
+# LicenseChain Pay hosted checkout for a product (public, no seller secrets).
+LICENSECHAIN_CHECKOUT_BASE = "https://pay.licensechain.app/checkout"
 
 _VALID_TYPES = {t.value for t in PluginType}
 
 
 class ManifestError(ValueError):
     """Raised when a plugin manifest is missing or invalid."""
+
+
+@dataclass
+class LicenseRequirement:
+    """Optional ``license`` block of ``plugin.json`` (premium plugins).
+
+    A plugin without this block is free. When ``required`` is true the host
+    only installs / enables / runs the plugin while a LicenseChain license for
+    ``product_id`` is active (see ``db_storage_manager.plugins.licensing``).
+    """
+
+    product_id: str
+    required: bool = True
+    purchase_url: str = ""
+    provider: str = "licensechain"
+    # Display-only mirror of the LicenseChain product price (see plugins.pricing).
+    pricing: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        data: Dict[str, Any] = {
+            "required": self.required,
+            "provider": self.provider,
+            "product_id": self.product_id,
+            "purchase_url": self.purchase_url,
+        }
+        if self.pricing:
+            data["pricing"] = dict(self.pricing)
+        return data
+
+
+def parse_license_requirement(raw: Any) -> Optional[LicenseRequirement]:
+    """Validate the optional ``license`` object; ``None`` means a free plugin."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ManifestError("license must be a JSON object")
+    required = raw.get("required", True)
+    if not isinstance(required, bool):
+        raise ManifestError("license.required must be true or false")
+    provider = raw.get("provider", "licensechain")
+    if provider != "licensechain":
+        raise ManifestError("license.provider must be 'licensechain'")
+    if not required:
+        return None
+    product_id = raw.get("product_id")
+    if not isinstance(product_id, str) or not product_id.strip():
+        raise ManifestError(
+            "license.product_id must be the LicenseChain product id"
+        )
+    product_id = product_id.strip()
+    if not all(ch.isalnum() or ch in "-_" for ch in product_id):
+        raise ManifestError("license.product_id contains invalid characters")
+    purchase_url = raw.get("purchase_url")
+    if purchase_url is None or purchase_url == "":
+        purchase_url = f"{LICENSECHAIN_CHECKOUT_BASE}/{product_id}"
+    if not isinstance(purchase_url, str) or not purchase_url.startswith(
+        "https://"
+    ):
+        raise ManifestError("license.purchase_url must be an https URL")
+    try:
+        pricing = validate_pricing(raw.get("pricing"))
+    except ValueError as exc:
+        raise ManifestError(str(exc)) from exc
+    return LicenseRequirement(
+        product_id=product_id,
+        required=True,
+        purchase_url=purchase_url,
+        provider=provider,
+        pricing=pricing,
+    )
 
 
 @dataclass
@@ -36,9 +110,10 @@ class PluginManifest:
     entry: str
     api_version: str = PLUGIN_API_VERSION
     dependencies: List[str] = field(default_factory=list)
+    license: Optional[LicenseRequirement] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "id": self.id,
             "name": self.name,
             "version": self.version,
@@ -49,6 +124,9 @@ class PluginManifest:
             "api_version": self.api_version,
             "dependencies": list(self.dependencies),
         }
+        if self.license is not None:
+            data["license"] = self.license.to_dict()
+        return data
 
 
 def _require_str(data: Dict[str, Any], key: str) -> str:
@@ -104,6 +182,7 @@ def validate_manifest(data: Dict[str, Any]) -> PluginManifest:
         entry=entry,
         api_version=api_version,
         dependencies=list(deps),
+        license=parse_license_requirement(data.get("license")),
     )
 
 

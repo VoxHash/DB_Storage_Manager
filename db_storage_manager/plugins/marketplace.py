@@ -28,7 +28,19 @@ from .loader import (
     load_builtin_plugin_class,
     load_plugin_from_directory,
 )
-from .manifest import ManifestError, find_plugin_root, load_manifest
+from .licensing import (
+    LicenseStatus,
+    PluginLicenseError,
+    PluginLicenseGate,
+    PluginLicenseRequired,
+)
+from .manifest import (
+    LicenseRequirement,
+    ManifestError,
+    find_plugin_root,
+    load_manifest,
+    parse_license_requirement,
+)
 
 BUILTIN_PLUGINS = (
     {
@@ -80,6 +92,7 @@ class LocalPluginMarketplace:
         self,
         plugins_dir: Optional[Path] = None,
         manager: Optional[PluginManager] = None,
+        license_gate: Optional[PluginLicenseGate] = None,
     ):
         from ..config import PLUGINS_DIR
 
@@ -88,6 +101,9 @@ class LocalPluginMarketplace:
         (self.plugins_dir / INSTALLED_SUBDIR).mkdir(parents=True, exist_ok=True)
         self.registry_path = self.plugins_dir / REGISTRY_FILENAME
         self.manager = manager or PluginManager()
+        self.license_gate = license_gate or PluginLicenseGate()
+        if self.manager.license_checker is None:
+            self.manager.license_checker = self.require_license
         self._ensure_registry()
 
     def _ensure_registry(self) -> None:
@@ -169,10 +185,66 @@ class LocalPluginMarketplace:
                     "origin": entry.get("origin"),
                     "installed_at": entry.get("installed_at"),
                     "manifest": manifest,
+                    "license": self._license_dict(entry),
                 }
             )
         rows.sort(key=lambda r: r["id"])
         return rows
+
+    # -- premium plugin licensing ----------------------------------------
+    @staticmethod
+    def _requirement_for_entry(entry: Dict[str, Any]) -> Optional[LicenseRequirement]:
+        """Built-ins are always free; others follow ``manifest.license``."""
+        if entry.get("source") == "builtin":
+            return None
+        raw = (entry.get("manifest") or {}).get("license")
+        try:
+            return parse_license_requirement(raw)
+        except ManifestError:
+            # A malformed block in the registry must fail closed, not run free.
+            return LicenseRequirement(product_id="invalid-license-block")
+
+    @staticmethod
+    def _license_dict(entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        requirement = LocalPluginMarketplace._requirement_for_entry(entry)
+        return requirement.to_dict() if requirement else None
+
+    def license_requirement(self, plugin_id: str) -> Optional[LicenseRequirement]:
+        """Return the plugin's LicenseChain requirement, or ``None`` if free."""
+        entry = self._read_registry()["plugins"].get(plugin_id)
+        if not isinstance(entry, dict):
+            return None
+        return self._requirement_for_entry(entry)
+
+    def license_status(self, plugin_id: str, *, network: bool = False) -> LicenseStatus:
+        """License state for one plugin (cache-only unless ``network=True``)."""
+        return self.license_gate.status(
+            plugin_id, self.license_requirement(plugin_id), network=network
+        )
+
+    def require_license(self, plugin_id: str, *, network: bool = True) -> LicenseStatus:
+        """Raise ``PluginLicenseError`` unless the plugin is free or licensed."""
+        return self.license_gate.require(
+            plugin_id, self.license_requirement(plugin_id), network=network
+        )
+
+    def activate_license(
+        self, plugin_id: str, license_key: str, email: Optional[str] = None
+    ) -> LicenseStatus:
+        """Verify + store a LicenseChain key for an installed premium plugin."""
+        requirement = self.license_requirement(plugin_id)
+        if requirement is None:
+            raise PluginLicenseError(
+                f"plugin '{plugin_id}' does not require a license", code="free"
+            )
+        return self.license_gate.activate(plugin_id, requirement, license_key, email)
+
+    def deactivate_license(self, plugin_id: str) -> bool:
+        """Forget the stored key; the plugin is unloaded from the live manager."""
+        removed = self.license_gate.deactivate(plugin_id)
+        if self.manager.get_plugin(plugin_id) is not None:
+            self.manager.set_enabled(plugin_id, False)
+        return removed
 
     def get_enabled_map(self) -> Dict[str, bool]:
         """Load enabled flags from SecureStore settings (with defaults)."""
@@ -183,8 +255,15 @@ class LocalPluginMarketplace:
         return dict(prefs["enabled"])
 
     def set_enabled(self, plugin_id: str, enabled: bool) -> None:
-        """Persist enable/disable for a plugin id and update the live manager."""
+        """Persist enable/disable for a plugin id and update the live manager.
+
+        Enabling a premium plugin requires an active LicenseChain license
+        (``PluginLicenseError`` otherwise); disabling is always allowed.
+        """
         from ..security.store import SecureStore
+
+        if enabled:
+            self.require_license(plugin_id)
 
         store = SecureStore()
         settings = store.get_settings()
@@ -206,6 +285,14 @@ class LocalPluginMarketplace:
             enabled = bool(enabled_map.get(plugin_id, True))
             if only_enabled and not enabled:
                 continue
+            requirement = self._requirement_for_entry(row)
+            if requirement is not None:
+                # Startup never blocks on the network: trust the cached verification
+                # (within the offline grace window) and revalidate on execute.
+                if not self.license_gate.status(
+                    plugin_id, requirement, network=False
+                ).allowed:
+                    continue
             if self.manager.get_plugin(plugin_id) is not None:
                 self.manager.set_enabled(plugin_id, enabled)
                 continue
@@ -238,11 +325,36 @@ class LocalPluginMarketplace:
             raise PluginLoadError(f"plugin {row['id']} has no install path")
         return load_plugin_from_directory(Path(path))
 
-    def install_from_path(self, source_path: Path, *, replace: bool = False) -> Dict[str, Any]:
-        """Copy a plugin directory into the local installed store and register it."""
+    def install_from_path(
+        self,
+        source_path: Path,
+        *,
+        replace: bool = False,
+        license_key: Optional[str] = None,
+        license_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Copy a plugin directory into the local installed store and register it.
+
+        Premium plugins (``plugin.json`` has a ``license`` block) are verified
+        against LicenseChain *before* any plugin code is imported: pass
+        ``license_key`` (and ``license_email`` if the license has none), or have
+        a valid license already stored. Otherwise ``PluginLicenseRequired`` /
+        ``PluginLicenseError`` is raised and nothing is installed.
+        """
         source_path = Path(source_path).resolve()
         root = find_plugin_root(source_path)
         manifest = load_manifest(root)
+        if manifest.license is not None:
+            if license_key:
+                self.license_gate.activate(
+                    manifest.id, manifest.license, license_key, license_email
+                )
+            else:
+                try:
+                    self.license_gate.require(manifest.id, manifest.license)
+                except PluginLicenseRequired as exc:
+                    exc.plugin_name = manifest.name
+                    raise
         # Verify the plugin loads before copying
         load_plugin_from_directory(root)
 
@@ -287,7 +399,14 @@ class LocalPluginMarketplace:
         self.manager.register_plugin(plugin)
         return self._row_from_entry(entry)
 
-    def install_from_url(self, url: str, *, replace: bool = False) -> Dict[str, Any]:
+    def install_from_url(
+        self,
+        url: str,
+        *,
+        replace: bool = False,
+        license_key: Optional[str] = None,
+        license_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Download a zip/tar.gz plugin archive from http(s) and install it."""
         parsed = urlparse(url)
         if parsed.scheme not in ("http", "https"):
@@ -326,7 +445,12 @@ class LocalPluginMarketplace:
                 raise ManifestError(f"invalid plugin archive: {exc}") from exc
 
             root = find_plugin_root(extract_dir)
-            row = self.install_from_path(root, replace=replace)
+            row = self.install_from_path(
+                root,
+                replace=replace,
+                license_key=license_key,
+                license_email=license_email,
+            )
             # Re-stamp source/origin for URL installs
             data = self._read_registry()
             entry = data["plugins"][row["id"]]
@@ -376,4 +500,5 @@ class LocalPluginMarketplace:
             "origin": entry.get("origin"),
             "installed_at": entry.get("installed_at"),
             "manifest": manifest,
+            "license": LocalPluginMarketplace._license_dict(entry),
         }

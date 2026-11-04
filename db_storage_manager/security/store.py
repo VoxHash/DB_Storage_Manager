@@ -11,6 +11,7 @@ import os
 
 from ..config import (
     CONNECTIONS_FILE,
+    PLUGIN_LICENSES_FILE,
     SCHEDULED_BACKUP_SECRETS_FILE,
     SETTINGS_FILE,
     SSH_KEYS_FILE,
@@ -244,6 +245,33 @@ class SecureStore:
         SCHEDULED_BACKUP_SECRETS_FILE.write_text(encrypted, encoding="utf-8")
         if os.name != "nt":
             os.chmod(SCHEDULED_BACKUP_SECRETS_FILE, 0o600)
+
+    def get_plugin_licenses(self) -> Dict[str, Dict[str, Any]]:
+        """Encrypted plugin id -> LicenseChain license record (keys never in plaintext)."""
+        if not PLUGIN_LICENSES_FILE.exists():
+            return {}
+        try:
+            data = self._decrypt(PLUGIN_LICENSES_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        if not isinstance(data, dict):
+            return {}
+        return {
+            str(k): dict(v)
+            for k, v in data.items()
+            if isinstance(v, dict) and v.get("license_key")
+        }
+
+    def save_plugin_licenses(self, licenses: Dict[str, Dict[str, Any]]) -> None:
+        """Persist plugin license records with restrictive permissions."""
+        body = {
+            str(k): dict(v)
+            for k, v in licenses.items()
+            if isinstance(v, dict) and v.get("license_key")
+        }
+        PLUGIN_LICENSES_FILE.write_text(self._encrypt(body), encoding="utf-8")
+        if os.name != "nt":
+            os.chmod(PLUGIN_LICENSES_FILE, 0o600)
 
     def get_users(self) -> Dict[str, Any]:
         """Load encrypted local user accounts (RBAC). Empty dict if missing."""

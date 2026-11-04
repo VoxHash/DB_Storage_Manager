@@ -13,13 +13,20 @@ Import from here (not from private modules) when writing plugins::
     )
 
 Manifest contract: a plugin directory must contain ``plugin.json`` and an
-entry module referenced as ``module:ClassName``. See docs/api.md.
+entry module referenced as ``module:ClassName``. Premium plugins add an optional
+``license`` block (LicenseChain product id); see docs/api.md.
 """
 
 from .base import Plugin, PluginManager, PluginMetadata, PluginType
+from .licensing import (
+    PluginLicenseError,
+    PluginLicenseRequired,
+)
+from .pricing import PRICING_TIERS, SPONSORS_URL
 from .manifest import (
     MANIFEST_FILENAME,
     PLUGIN_API_VERSION,
+    LicenseRequirement,
     ManifestError,
     PluginManifest,
     load_manifest,
@@ -29,10 +36,15 @@ from .manifest import (
 __all__ = [
     "PLUGIN_API_VERSION",
     "MANIFEST_FILENAME",
+    "PRICING_TIERS",
+    "SPONSORS_URL",
+    "LicenseRequirement",
     "ManifestError",
     "Plugin",
     "PluginManager",
     "PluginManifest",
+    "PluginLicenseError",
+    "PluginLicenseRequired",
     "PluginMetadata",
     "PluginType",
     "load_manifest",

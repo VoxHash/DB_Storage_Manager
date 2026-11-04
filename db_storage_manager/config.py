@@ -34,6 +34,11 @@ BACKUP_DIR = USER_DATA_DIR / "backups"
 # Append-only JSON-lines audit trail for destructive / security-relevant actions
 AUDIT_LOG_FILE = USER_DATA_DIR / "audit.log"
 PLUGINS_DIR = USER_DATA_DIR / "plugins"
+# Fernet-encrypted map of plugin id -> LicenseChain license record (key never in plaintext)
+PLUGIN_LICENSES_FILE = USER_DATA_DIR / "plugin-licenses.enc"
+# Optional donations that keep the free core and built-in tools maintained
+# (listed in .github/FUNDING.yml as github: voxhash)
+SPONSORS_URL = "https://github.com/sponsors/VoxHash"
 MASTER_KEY_FILE = USER_DATA_DIR / ".master-key"
 
 # Ensure backup directory exists

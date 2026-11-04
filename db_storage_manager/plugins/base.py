@@ -5,7 +5,7 @@ Base plugin system
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 
 class PluginType(Enum):
@@ -74,6 +74,9 @@ class PluginManager:
     def __init__(self):
         self.plugins: Dict[str, Plugin] = {}
         self.context: Dict[str, Any] = {}
+        # Optional gate (set by the marketplace): called with the plugin id before
+        # every execute and expected to raise when a premium plugin is unlicensed.
+        self.license_checker: Optional[Callable[[str], Any]] = None
 
     def register_plugin(self, plugin: Plugin) -> bool:
         """Register a plugin"""
@@ -109,6 +112,8 @@ class PluginManager:
         """Execute a plugin"""
         plugin = self.plugins.get(plugin_name)
         if plugin and plugin.enabled:
+            if self.license_checker is not None:
+                self.license_checker(plugin_name)
             return plugin.execute(*args, **kwargs)
         return None
 

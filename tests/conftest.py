@@ -42,6 +42,9 @@ def isolated_secure_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         "SCHEDULED_BACKUP_SECRETS_FILE",
         data_dir / "scheduled-backup-secrets.enc",
     )
+    monkeypatch.setattr(
+        store_mod, "PLUGIN_LICENSES_FILE", data_dir / "plugin-licenses.enc"
+    )
 
     import db_storage_manager.config as config_mod
 
