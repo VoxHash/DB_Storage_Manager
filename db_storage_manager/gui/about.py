@@ -22,7 +22,7 @@ from ..updates import CHANNEL_EXPERIMENTAL, CHANNEL_STABLE
 from .utils import apply_glassmorphism
 
 # Date of the published stable tag. The in-app version stays on that tag.
-RELEASED_ON = "2026-11-03"
+RELEASED_ON = "2026-11-04"
 
 
 def version_info_text(

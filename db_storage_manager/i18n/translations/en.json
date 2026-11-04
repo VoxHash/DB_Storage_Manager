@@ -663,7 +663,8 @@
     "backups_job_running": "job running",
     "backups_job_idle": "idle",
     "changelog": "Changelog",
-    "check_updates": "Check for updates"
+    "check_updates": "Check for updates",
+    "sign_out": "Sign out"
   },
   "updates": {
     "title": "Changelog & Updates",

@@ -663,7 +663,8 @@
     "backups_job_running": "任务运行中",
     "backups_job_idle": "空闲",
     "changelog": "更新日志",
-    "check_updates": "检查更新"
+    "check_updates": "检查更新",
+    "sign_out": "退出登录"
   },
   "updates": {
     "title": "更新日志与更新",

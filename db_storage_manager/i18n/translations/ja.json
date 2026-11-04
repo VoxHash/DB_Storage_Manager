@@ -663,7 +663,8 @@
     "backups_job_running": "ジョブ実行中",
     "backups_job_idle": "待機中",
     "changelog": "変更履歴",
-    "check_updates": "更新を確認"
+    "check_updates": "更新を確認",
+    "sign_out": "サインアウト"
   },
   "updates": {
     "title": "変更履歴とアップデート",

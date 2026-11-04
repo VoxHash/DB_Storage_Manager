@@ -36,7 +36,7 @@ Professional desktop application for visualizing and managing database storage, 
 
 ## Release alignment
 
-Package / docs target version **1.0.7** (`db_storage_manager.__version__`, `setup.py`, `db_storage_manager.config.APP_VERSION`). The latest published GitHub Release is `v1.0.6`; work after that tag is documented under **1.0.7** in [CHANGELOG.md](../CHANGELOG.md) until `v1.0.7` is tagged.
+Package / docs target version **1.0.8** (`db_storage_manager.__version__`, `setup.py`, `db_storage_manager.config.APP_VERSION`). Stable GitHub tag `v1.0.8` (2026-11-04). See [CHANGELOG.md](../CHANGELOG.md).
 
 ## Project links
 

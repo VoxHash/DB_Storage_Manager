@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Release decision
-The published stable tag remains **1.0.7**. This tree is not bumped to 1.0.8 and no experimental pre-release tag is cut. The in-app version is what GitHub Releases last published; a local version string ahead of that tag would make "Check for updates" treat the install as newer than every real release. Tag 1.0.8 when these unreleased notes are what you intend to publish.
+## [1.0.8] - 2026-11-04
+
+Stable channel. The release workflow publishes every `v*` tag as a full release (`prerelease: false`), so this tag is stable. No experimental pre-release tag is cut.
 
 ### Added
+- **Remember window size**: closing the window, whether that hides it to the tray or quits, stores width and height in SecureStore (`window.width`, `window.height`, mode `0600` with the rest of `settings.enc`). The next launch restores that size when it is at least 800×500. Position is not stored
+- **Tray Sign out**: while a local RBAC account is signed in, the tray menu includes **Sign out**. It calls `AuthenticationManager.logout` and then the same sign-in dialog used at startup. Cancelling that dialog quits. With no local accounts the item stays hidden
 - **Discord and Telegram alert channels**: same minimum severity and cooldown as email, Slack, and webhook. Discord accepts only `https://discord.com/api/webhooks/<id>/<token>` (also discordapp.com, canary, and ptb). Telegram stores a bot token and chat id in SecureStore and posts only to `https://api.telegram.org/bot<token>/sendMessage`. Nothing is bundled. The URL and token are not written to the notification log. Settings → Notifications holds the fields; Monitoring enables each box only when the configuration is valid
 - **Per-connection email plugin** (`bundled_plugins/connection-email-alerts`): opt-in SMTP for one saved connection, separate from the workstation-wide profile. The password stays in SecureStore and is not copied into the plugin directory, the audit log, or the notification log. Nothing is sent until the plugin is installed and that connection's profile is enabled
 - **Multi-connection monitor plugin** (`bundled_plugins/multi-connection-monitor`): one process health-checks the connections an operator opted into. Credentials already in SecureStore are used. The interval is at least 60 seconds. It runs `HealthChecker` only (no ad-hoc SQL) and does not add `query:*` or `backups:*` to the `monitor` role. A missing role or an unknown connection is `not_available`

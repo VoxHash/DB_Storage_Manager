@@ -1,6 +1,6 @@
 # Roadmap — DB Storage Manager
 
-Status: **1.0.7** released (2026-11-03); the next release is collected under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md). Legend: `[x]` shipped, `[ ]` planned, `[~]` deliberately deferred.
+Status: **1.0.8** released (2026-11-04). Legend: `[x]` shipped, `[ ]` planned, `[~]` deliberately deferred.
 
 ## In progress (next release)
 
@@ -77,6 +77,7 @@ Out of scope for the near term: renaming the product or package, a mobile rewrit
 
 ## Shipped
 
+- [x] **1.0.8** — last window size restored from SecureStore; tray **Sign out** reuses RBAC logout and the startup sign-in dialog
 - [x] **1.0.7** — concurrent GUI job runner, system tray, Changelog & Updates dialog, adapter-aware verification, encrypted scheduler passphrase vault, RBAC `query:write` and login throttle, 11 complete locales, packaging fixes
 - [x] Android / GrapheneOS companion foundation (pairing Bearer, sanitized export, sideload APK)
 - [x] Per-tab content polish and glassmorphism scoped to panel roots

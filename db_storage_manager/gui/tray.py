@@ -6,7 +6,8 @@ Behaviour (matches common desktop conventions and what Qt reports per platform):
 * **Double click** - always show and raise the window.
 * **Middle click** - jump to the Backups tab (quick backup status).
 * **Right click** - context menu: Show/Hide, Dashboard / Backups / Monitoring,
-  live status lines (monitoring + backups), Changelog, Check for updates, Quit.
+  live status lines (monitoring + backups), Changelog, Check for updates,
+  Sign out (only while an RBAC session is signed in), Quit.
 
 Desktop notifications use ``QSystemTrayIcon.showMessage`` with a configurable
 auto-dismiss timeout (Settings -> notification seconds, default 5, clamped
@@ -42,6 +43,7 @@ class AppTray(QObject):
     """System tray icon wired to a main window through simple callbacks."""
 
     quit_requested = pyqtSignal()
+    sign_out_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -52,6 +54,7 @@ class AppTray(QObject):
         open_section: Optional[Callable[[str], None]] = None,
         open_changelog: Optional[Callable[[], None]] = None,
         open_check_updates: Optional[Callable[[], None]] = None,
+        can_sign_out: Optional[Callable[[], bool]] = None,
         tray: Optional[QSystemTrayIcon] = None,
     ):
         super().__init__(window)
@@ -61,6 +64,7 @@ class AppTray(QObject):
         self._open_section = open_section
         self._open_changelog = open_changelog
         self._open_check_updates = open_check_updates
+        self._can_sign_out = can_sign_out
         self._timeout_seconds = clamp_notification_seconds(timeout_seconds)
         self.icon = tray or QSystemTrayIcon(self)
         icon = window.windowIcon()
@@ -118,6 +122,9 @@ class AppTray(QObject):
         self.check_updates_action = QAction(self.menu)
         self.check_updates_action.triggered.connect(self._show_check_updates)
         self.menu.addAction(self.check_updates_action)
+        self.sign_out_action = QAction(self.menu)
+        self.sign_out_action.triggered.connect(self.sign_out_requested.emit)
+        self.menu.addAction(self.sign_out_action)
         self.quit_action = QAction(self.menu)
         self.quit_action.triggered.connect(self.quit_requested.emit)
         self.menu.addAction(self.quit_action)
@@ -135,6 +142,7 @@ class AppTray(QObject):
         self.check_updates_action.setText(
             t("tray.check_updates", default="Check for updates")
         )
+        self.sign_out_action.setText(t("tray.sign_out", default="Sign out"))
         self.quit_action.setText(t("tray.quit"))
         self.refresh_status()
 
@@ -149,6 +157,8 @@ class AppTray(QObject):
         )
         self.monitoring_status_action.setText(monitoring or t("tray.monitoring_idle"))
         self.backups_status_action.setText(backups or t("tray.backups_idle"))
+        signed_in = bool(self._can_sign_out and self._can_sign_out())
+        self.sign_out_action.setVisible(signed_in)
         tooltip = t("app.title", default="DB Storage Manager")
         if monitoring or backups:
             tooltip = "\n".join(x for x in (tooltip, monitoring, backups) if x)

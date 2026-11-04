@@ -21,12 +21,18 @@ pip install -e ".[engines]"   # or: pip install -e .
 
 ### Install a tagged release with pip
 
-`db-storage-manager` is **not published on PyPI** and there is no npm package (the project has no JavaScript companion). To install a release without cloning, point pip at the Git tag of a [GitHub Release](https://github.com/VoxHash/DB_Storage_Manager/releases):
+`db-storage-manager` is published on PyPI. There is no npm package (the project has no JavaScript companion).
 
 ```bash
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@<tag>"   # e.g. v1.0.6
+pip install db-storage-manager
 db-storage-manager
+```
+
+A Git tag of a [GitHub Release](https://github.com/VoxHash/DB_Storage_Manager/releases) still installs without PyPI:
+
+```bash
+pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.8"
 ```
 
 The wheel includes the translation JSON files and the REST companion's static Web UI. Settings → Updates prints this command pinned to the newest tag it finds. Nothing is installed from that tab.

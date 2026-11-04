@@ -403,7 +403,7 @@ def test_tray_clicks_and_notification_timeout():
     app.processEvents()
 
 
-def test_closing_the_window_hides_to_tray_until_quit():
+def test_closing_the_window_hides_to_tray_until_quit(isolated_secure_store):
     """Offscreen: a tray object is enough. A real tray icon is not required."""
     app = _qapp()
     from db_storage_manager.gui.main_window import MainWindow
@@ -653,7 +653,7 @@ def test_about_text_version_year_and_no_built_with():
         assert "about.built_with" not in loc
         assert loc["about.copyright"] == "© 2026 VOXHASH LABS"
         assert "{version}" in loc["about.version"]
-    assert APP_VERSION == "1.0.7"
+    assert APP_VERSION == "1.0.8"
     blob = json.dumps(_load("en"))
     assert "Built with Python and PyQt6" not in blob
 
@@ -663,8 +663,8 @@ def test_version_is_synced_across_metadata():
     from db_storage_manager.config import APP_VERSION
 
     setup_py = (ROOT / "setup.py").read_text("utf-8")
-    assert db_storage_manager.__version__ == APP_VERSION == "1.0.7"
-    assert 'version="1.0.7"' in setup_py
+    assert db_storage_manager.__version__ == APP_VERSION == "1.0.8"
+    assert 'version="1.0.8"' in setup_py
 
 
 def test_package_data_ships_translations_and_api_static():

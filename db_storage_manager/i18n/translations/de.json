@@ -663,7 +663,8 @@
     "backups_job_running": "Auftrag läuft",
     "backups_job_idle": "im Leerlauf",
     "changelog": "Changelog",
-    "check_updates": "Nach Updates suchen"
+    "check_updates": "Nach Updates suchen",
+    "sign_out": "Abmelden"
   },
   "updates": {
     "title": "Änderungsprotokoll & Updates",

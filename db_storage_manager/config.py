@@ -9,7 +9,7 @@ from typing import Optional
 
 # Application paths
 APP_NAME = "DB Storage Manager"
-APP_VERSION = "1.0.7"
+APP_VERSION = "1.0.8"
 # Same leaf on every OS. The display name is not a stable directory id;
 # Linux already used this slug, and desktop-identity tests require it.
 _DATA_DIR_NAME = "db-storage-manager"

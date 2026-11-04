@@ -4,6 +4,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![PyQt6](https://img.shields.io/badge/PyQt6-6.6+-blue.svg)](https://www.riverbankcomputing.com/software/pyqt/)
 [![Release](https://img.shields.io/github/v/release/VoxHash/DB_Storage_Manager)](https://github.com/VoxHash/DB_Storage_Manager/releases)
+[![Downloads](https://img.shields.io/pypi/dm/db-storage-manager)](https://pypi.org/project/db-storage-manager/)
 [![CI](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml/badge.svg)](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/ci.yml)
 [![Native wheels](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/native-wheels.yml/badge.svg)](https://github.com/VoxHash/DB_Storage_Manager/actions/workflows/native-wheels.yml)
 
@@ -55,12 +56,18 @@ Full walkthrough: [docs/quick-start.md](docs/quick-start.md)
 See [docs/installation.md](docs/installation.md) for platform notes and optional engines.
 
 ```bash
+pip install db-storage-manager
+```
+
+From a clone:
+
+```bash
 pip install -r requirements.txt
 pip install -e .
 db-storage-manager
 ```
 
-Not on PyPI or npm (no JavaScript companion). To install a tagged release without cloning: `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.7"`. **Settings → Updates** checks GitHub Releases on demand (stable / experimental channel, no auto-install). An automatic check is off until you opt in.
+There is no npm package (no JavaScript companion). A tagged Git install still works: `pip install "db-storage-manager @ git+https://github.com/VoxHash/DB_Storage_Manager.git@v1.0.8"`. **Settings → Updates** checks GitHub Releases on demand (stable / experimental channel, no auto-install). An automatic check is off until you opt in.
 
 Optional engines:
 

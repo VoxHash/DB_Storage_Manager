@@ -663,7 +663,8 @@
     "backups_job_running": "tâche en cours",
     "backups_job_idle": "inactif",
     "changelog": "Changelog",
-    "check_updates": "Vérifier les mises à jour"
+    "check_updates": "Vérifier les mises à jour",
+    "sign_out": "Se déconnecter"
   },
   "updates": {
     "title": "Journal des modifications et mises à jour",

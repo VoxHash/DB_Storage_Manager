@@ -115,6 +115,7 @@ def test_save_merges_instead_of_dropping_other_tabs_settings(settings_widget, mo
         "secretAccessKey": "keep-secret",
     }
     stored["custom_unknown_key"] = {"x": 1}
+    stored["window"] = {"width": 1280, "height": 900}
     store.set_settings(stored)
 
     w = settings_widget
@@ -137,6 +138,7 @@ def test_save_merges_instead_of_dropping_other_tabs_settings(settings_widget, mo
     assert saved["alert_channels"]["desktop"] is False
     assert saved["s3_backup"]["bucket"] == "keep-me"
     assert saved["s3_backup"]["secretAccessKey"] == "keep-secret"
+    assert saved["window"] == {"width": 1280, "height": 900}
     assert saved["custom_unknown_key"] == {"x": 1}
     email = saved["email_alerts"]
     assert email["host"] == "smtp.example.com" and email["port"] == 465

@@ -663,7 +663,8 @@
     "backups_job_running": "töö käib",
     "backups_job_idle": "jõude",
     "changelog": "Muudatuste logi",
-    "check_updates": "Kontrolli uuendusi"
+    "check_updates": "Kontrolli uuendusi",
+    "sign_out": "Logi välja"
   },
   "updates": {
     "title": "Muudatuste logi ja uuendused",

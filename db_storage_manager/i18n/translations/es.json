@@ -663,7 +663,8 @@
     "backups_job_running": "tarea en ejecución",
     "backups_job_idle": "inactivo",
     "changelog": "Changelog",
-    "check_updates": "Buscar actualizaciones"
+    "check_updates": "Buscar actualizaciones",
+    "sign_out": "Cerrar sesión"
   },
   "updates": {
     "title": "Registro de cambios y actualizaciones",

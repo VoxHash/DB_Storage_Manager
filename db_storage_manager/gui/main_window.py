@@ -40,6 +40,64 @@ _MAIN_WINDOW_MIN_WIDTH = 800
 _MAIN_WINDOW_MIN_HEIGHT = 500
 _MAIN_WINDOW_DEFAULT_WIDTH = 1200
 _MAIN_WINDOW_DEFAULT_HEIGHT = 800
+# Reject corrupt stored sizes. Position is not stored: there is no
+# multi-monitor placement check in this app.
+_MAIN_WINDOW_MAX_WIDTH = 16384
+_MAIN_WINDOW_MAX_HEIGHT = 16384
+
+
+def saved_window_size(settings):
+    """Return ``(width, height)`` from SecureStore settings, or ``None``.
+
+    Only a size at or above the window minimum is restored. ``x`` / ``y``
+    are ignored.
+    """
+    if not isinstance(settings, dict):
+        return None
+    window = settings.get("window")
+    if not isinstance(window, dict):
+        return None
+    try:
+        width = int(window.get("width"))
+        height = int(window.get("height"))
+    except (TypeError, ValueError):
+        return None
+    if width < _MAIN_WINDOW_MIN_WIDTH or height < _MAIN_WINDOW_MIN_HEIGHT:
+        return None
+    if width > _MAIN_WINDOW_MAX_WIDTH or height > _MAIN_WINDOW_MAX_HEIGHT:
+        return None
+    return width, height
+
+
+def settings_with_window_size(settings, width, height):
+    """Copy ``settings`` with ``window.width`` / ``window.height`` only.
+
+    Returns ``None`` when the size is unusable or already stored, so a
+    close does not rewrite the encrypted settings file for no change.
+    A stored position is dropped.
+    """
+    if not isinstance(settings, dict):
+        return None
+    try:
+        width = int(width)
+        height = int(height)
+    except (TypeError, ValueError):
+        return None
+    if width < _MAIN_WINDOW_MIN_WIDTH or height < _MAIN_WINDOW_MIN_HEIGHT:
+        return None
+    if width > _MAIN_WINDOW_MAX_WIDTH or height > _MAIN_WINDOW_MAX_HEIGHT:
+        return None
+    current = settings.get("window")
+    if (
+        isinstance(current, dict)
+        and set(current.keys()) <= {"width", "height"}
+        and current.get("width") == width
+        and current.get("height") == height
+    ):
+        return None
+    updated = dict(settings)
+    updated["window"] = {"width": width, "height": height}
+    return updated
 
 
 class MainWindow(QMainWindow):
@@ -56,7 +114,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.i18n.translate("app.title"))
         apply_app_icon(self)
         self.setMinimumSize(_MAIN_WINDOW_MIN_WIDTH, _MAIN_WINDOW_MIN_HEIGHT)
-        self.resize(_MAIN_WINDOW_DEFAULT_WIDTH, _MAIN_WINDOW_DEFAULT_HEIGHT)
+        saved = saved_window_size(self.secure_store.get_settings())
+        if saved is None:
+            self.resize(
+                _MAIN_WINDOW_DEFAULT_WIDTH, _MAIN_WINDOW_DEFAULT_HEIGHT
+            )
+        else:
+            self.resize(saved[0], saved[1])
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
@@ -173,8 +237,10 @@ class MainWindow(QMainWindow):
             open_section=self.show_section,
             open_changelog=self.show_changelog,
             open_check_updates=lambda: self.show_updates(check=True),
+            can_sign_out=self._tray_can_sign_out,
         )
         self.tray.quit_requested.connect(self._quit_app)
+        self.tray.sign_out_requested.connect(self._sign_out)
         self.settings_widget.notification_timeout_changed.connect(
             self.tray.set_timeout_seconds
         )
@@ -213,6 +279,37 @@ class MainWindow(QMainWindow):
             "info",
         )
 
+    def _tray_can_sign_out(self) -> bool:
+        """Sign out exists only for an active RBAC session."""
+        auth = get_auth_manager()
+        return bool(auth.is_rbac_active() and auth.current_user is not None)
+
+    def _sign_out(self) -> None:
+        """End the RBAC session and show the startup sign-in dialog."""
+        auth = get_auth_manager()
+        if not self._tray_can_sign_out():
+            return
+        auth.logout()
+        self.apply_rbac()
+        if self.tray is not None:
+            self.tray.refresh_status()
+        self.hide()
+        from PyQt6.QtWidgets import QDialog
+
+        from .login import LoginDialog
+
+        login = LoginDialog()
+        if login.exec() != QDialog.DialogCode.Accepted:
+            self._quit_app()
+            return
+        self.apply_rbac()
+        if self.tray is not None:
+            self.tray.show_window()
+        else:
+            self.show()
+            self.raise_()
+            self.activateWindow()
+
     def _quit_app(self) -> None:
         """Quit from the tray menu. Closing the window only hides it."""
         self._quitting = True
@@ -220,6 +317,23 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    def _persist_window_size(self) -> None:
+        """Write the current size into SecureStore. Position is not stored."""
+        try:
+            if self.isMinimized():
+                geo = self.normalGeometry()
+                width, height = geo.width(), geo.height()
+            else:
+                width, height = self.width(), self.height()
+            updated = settings_with_window_size(
+                self.secure_store.get_settings(), width, height
+            )
+            if updated is None:
+                return
+            self.secure_store.set_settings(updated)
+        except Exception:
+            return
 
     def apply_rbac(self) -> None:
         """Refresh permission-gated controls after login / user changes."""
@@ -434,6 +548,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Hide to the tray. Quit (tray menu) shuts tunnels and the pool down."""
+        self._persist_window_size()
         tray = getattr(self, "tray", None)
         if tray is not None and not getattr(self, "_quitting", False):
             event.ignore()

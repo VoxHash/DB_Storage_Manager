@@ -27,6 +27,6 @@ print(w.windowTitle())
 "
 ```
 
-Expected: version `1.0.7` and window title `DB Storage Manager`.
+Expected: version `1.0.8` and window title `DB Storage Manager`.
 
 Optional engines are not in `requirements.txt`. Install via extras (`".[oracle]"`, `".[mssql]"`, …) when needed — see [installation.md](installation.md).

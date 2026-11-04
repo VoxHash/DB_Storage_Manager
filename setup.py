@@ -15,7 +15,7 @@ long_description = (
 
 setup(
     name="db-storage-manager",
-    version="1.0.7",
+    version="1.0.8",
     description="Professional desktop application for database storage management and backups",
     long_description=long_description,
     long_description_content_type="text/markdown",

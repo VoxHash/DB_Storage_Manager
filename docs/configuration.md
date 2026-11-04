@@ -12,6 +12,7 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `auto_connect` | Connect on startup | `False` |
 | `notifications` | Desktop notifications | `True` |
 | `notification_timeout_seconds` | Seconds before a desktop notification auto-dismisses (clamped 2-60; some desktops treat it as a hint) | `5` |
+| `window.width`, `window.height` | Last main-window size, written when the window closes (hide to tray or Quit) and restored on the next launch. Values below 800×500 are ignored. Position is not stored | unset (1200×800) |
 | `update_channel` | Channel used by Settings → Updates: `stable` or `experimental` (GitHub pre-releases) | `stable` |
 | `update_auto_check` | When true, ask the public GitHub Releases API at most once every 24 hours. Nothing is installed | `false` |
 | `retention` | `enabled`, `keep_daily`, `keep_monthly`, and optional `connections` overrides. Off deletes nothing. Prunes Local, Proton Drive and S3 after a scheduled backup | off, 7 daily, 6 monthly |

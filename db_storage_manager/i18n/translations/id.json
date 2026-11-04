@@ -663,7 +663,8 @@
     "backups_job_running": "tugas berjalan",
     "backups_job_idle": "menganggur",
     "changelog": "Changelog",
-    "check_updates": "Periksa pembaruan"
+    "check_updates": "Periksa pembaruan",
+    "sign_out": "Keluar akun"
   },
   "updates": {
     "title": "Changelog & Pembaruan",

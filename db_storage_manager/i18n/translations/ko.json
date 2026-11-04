@@ -663,7 +663,8 @@
     "backups_job_running": "작업 실행 중",
     "backups_job_idle": "유휴",
     "changelog": "변경 기록",
-    "check_updates": "업데이트 확인"
+    "check_updates": "업데이트 확인",
+    "sign_out": "로그아웃"
   },
   "updates": {
     "title": "변경 내역 및 업데이트",
