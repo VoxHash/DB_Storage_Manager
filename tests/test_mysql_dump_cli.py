@@ -1,5 +1,7 @@
 """MySQL dump CLI resolution: prefer mariadb-dump, fall back to mysqldump."""
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -8,6 +10,71 @@ from db_storage_manager.db.mysql import (
     require_mysql_cli,
     resolve_mysql_cli,
 )
+
+
+def _posix_script_result(path: Path) -> subprocess.CompletedProcess:
+    """Replay a ``#!/bin/sh`` stub the way ``sh`` would, without executing it.
+
+    Windows cannot CreateProcess a shell script (WinError 193), so the
+    ``--version`` probe never sees the script's stderr.
+    """
+    stdout_lines = []
+    stderr_lines = []
+    returncode = 0
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("echo ") and line.endswith(">&2"):
+            message = line[len("echo ") : -len(">&2")].strip()
+            if len(message) >= 2 and message[0] == message[-1] == "'":
+                message = message[1:-1]
+            stderr_lines.append(message)
+        elif line.startswith("echo "):
+            message = line[len("echo ") :].strip()
+            if len(message) >= 2 and message[0] == message[-1] == "'":
+                message = message[1:-1]
+            stdout_lines.append(message)
+        elif line.startswith("exit "):
+            returncode = int(line.split()[1])
+    stdout = "\n".join(stdout_lines)
+    stderr = "\n".join(stderr_lines)
+    if stdout_lines:
+        stdout += "\n"
+    if stderr_lines:
+        stderr += "\n"
+    return subprocess.CompletedProcess(
+        args=[str(path), "--version"],
+        returncode=returncode,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _windows_shell_cli_stubs(monkeypatch):
+    if os.name != "nt":
+        return
+    real_run = subprocess.run
+
+    def _run(args, *pos, **kwargs):
+        exe = None
+        if isinstance(args, (list, tuple)) and args:
+            exe = args[0]
+        if exe is not None:
+            path = Path(exe)
+            try:
+                shebang = path.is_file() and path.read_text(
+                    encoding="utf-8"
+                ).startswith("#!")
+            except OSError:
+                shebang = False
+            if shebang:
+                return _posix_script_result(path)
+        return real_run(args, *pos, **kwargs)
+
+    monkeypatch.setattr(
+        "db_storage_manager.db.mysql.subprocess.run",
+        _run,
+    )
 
 
 def test_resolve_prefers_mariadb_dump(monkeypatch, tmp_path: Path):
