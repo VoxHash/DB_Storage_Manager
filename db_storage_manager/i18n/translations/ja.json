@@ -157,7 +157,7 @@
     "last_run": "最終実行:",
     "next_run": "次回実行:",
     "run_now": "今すぐ実行",
-    "delete": "削除",
+    "delete": "削除…",
     "backup_created": "バックアップが正常に作成されました",
     "scratch_done": "リハーサル復元が {name} で完了しました。本番は変更されていません。",
     "backup_failed": "バックアップ作成に失敗しました",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "S3 バックアップを取得中…",
     "restore_done_safety": "復元が完了しました。安全バックアップ: {name}。",
     "restore_done": "復元が完了しました。",
-    "size_tip_raw": "生のダンプ"
+    "size_tip_raw": "生のダンプ",
+    "delete_tooltip": "選択したローカル、Proton Drive、または S3 のバックアップを削除します。backups:create 権限が必要です。",
+    "delete_title": "バックアップを削除",
+    "delete_body": "{where} のバックアップ {name} を削除しますか？アーカイブとチェックサムのメタデータが削除されます。元に戻せません。",
+    "delete_done": "{name} を削除しました。",
+    "delete_failed": "削除に失敗しました: {error}",
+    "delete_in_progress": "バックアップを削除しています…"
   },
   "settings": {
     "title": "設定",
@@ -348,7 +354,13 @@
     "telegram_title": "Telegram アラート",
     "telegram_hint": "公式 Bot API（api.telegram.org のみ）で投稿します。ボットトークンとチャット ID は SecureStore に残り、通知ログには書きません。監視タブで Telegram を有効にするまでオフです。",
     "telegram_token": "ボットトークン",
-    "telegram_chat_id": "チャット ID"
+    "telegram_chat_id": "チャット ID",
+    "local_backup_dir": "ローカルバックアップのフォルダ",
+    "local_backup_dir_browse": "参照…",
+    "local_backup_dir_browse_title": "ローカルバックアップのフォルダ",
+    "local_backup_dir_hint": "空のままにすると、アプリデータの既定フォルダを使います。作成、一覧、復元、ローカルのスケジュールはこのフォルダを使います。",
+    "local_backup_dir_invalid_title": "ローカルバックアップのフォルダ",
+    "local_backup_dir_invalid": "ローカルバックアップのフォルダは保存されませんでした: {reason}"
   },
   "about": {
     "title": "について",

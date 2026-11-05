@@ -157,7 +157,7 @@
     "last_run": "Última Ejecución:",
     "next_run": "Próxima Ejecución:",
     "run_now": "Ejecutar Ahora",
-    "delete": "Eliminar",
+    "delete": "Eliminar…",
     "backup_created": "Copia de seguridad creada exitosamente",
     "scratch_done": "La restauración de prueba terminó en {name}. La producción no se modificó.",
     "backup_failed": "Error al crear copia de seguridad",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "Listando copias de S3…",
     "restore_done_safety": "Restauración completada. Copia de seguridad previa: {name}.",
     "restore_done": "Restauración completada.",
-    "size_tip_raw": "volcado sin procesar"
+    "size_tip_raw": "volcado sin procesar",
+    "delete_tooltip": "Elimina la copia local, de Proton Drive o de S3 seleccionada. Requiere el permiso backups:create.",
+    "delete_title": "Eliminar copia",
+    "delete_body": "¿Eliminar la copia {where} {name}? Se quitan el archivo y sus metadatos de suma de comprobación. Esta acción no se puede deshacer.",
+    "delete_done": "Se eliminó {name}.",
+    "delete_failed": "Error al eliminar: {error}",
+    "delete_in_progress": "Eliminando copia…"
   },
   "settings": {
     "title": "Configuración",
@@ -348,7 +354,13 @@
     "telegram_title": "Alertas de Telegram",
     "telegram_hint": "Publica a través de la API oficial de bots (solo api.telegram.org). El token del bot y el id del chat permanecen en SecureStore y no se escriben en el registro de notificaciones. Desactivado hasta que active Telegram en la pestaña Supervisión.",
     "telegram_token": "Token del bot",
-    "telegram_chat_id": "Id del chat"
+    "telegram_chat_id": "Id del chat",
+    "local_backup_dir": "Directorio local de copias",
+    "local_backup_dir_browse": "Examinar…",
+    "local_backup_dir_browse_title": "Directorio local de copias",
+    "local_backup_dir_hint": "Déjelo vacío para usar la carpeta predeterminada de la aplicación. Crear, listar, restaurar y las copias locales programadas usan este directorio.",
+    "local_backup_dir_invalid_title": "Directorio local de copias",
+    "local_backup_dir_invalid": "No se guardó el directorio local de copias: {reason}"
   },
   "about": {
     "title": "Acerca de",

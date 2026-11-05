@@ -39,7 +39,7 @@ Safe mode behavior (SQLite and SQL-like drivers): non-SELECT statements raise `V
 
 Adapters:
 
-- **Local** — files under the user data `backups/` directory
+- **Local** — files under the user data `backups/` directory, or the directory set in Settings → Backups & Adapters
 - **S3** — S3-compatible (AWS, MinIO, R2, B2): bucket + credentials in Settings or `DSM_S3_*`; always encrypted
 - **Google Drive** — API-only adapter, not offered in the desktop UI (see [configuration.md](configuration.md#s3-compatible-backups))
 - **Proton Drive** — uploads via rclone `protondrive` remote (credentials from `.env.protondrive.local` / SecureStore / env; never commit secrets)
@@ -47,7 +47,7 @@ Adapters:
 On the **Backups** tab:
 
 1. **Create Backup** — pick a connection, adapter (Local or Proton Drive), compression, and encryption passphrase. Proton Drive **always** encrypts with DSMENC1 before rclone upload (enterprise opsec); Local can optionally encrypt. Create / refresh / verify / dry-run run on a background `QThread` so long SSH dumps and Proton uploads do not freeze the window.
-2. **Restore** — **Refresh** lists local backups; **Refresh Proton Drive** lists remote objects when rclone + account are configured.
+2. **Restore** — **Refresh** lists local backups; **Refresh Proton Drive** and **Refresh S3** list remote objects when that destination is configured. **Delete…** (or right-click the row) removes the selected local archive and its checksum sidecar, or the Proton Drive / S3 object. It asks for confirmation and needs `backups:create`.
 3. **Verify Checksum** / **Dry-run Restore** work on local rows; for Proton Drive rows the app downloads to a temp file, verifies SHA-256 against the `.meta.json` sidecar, then cleans up.
 4. **Scheduled Backups** — add interval jobs (connection + Local/Proton + passphrase), then enable/disable or remove them from the table. Each due schedule runs in its own worker thread (a schedule that is still running is skipped, at most two dumps run at once). Definitions live in `scheduled-backups.json`; passphrases are stored only in the encrypted `scheduled-backup-secrets.enc`.
 5. **Dry-run Restore** of an encrypted backup prompts for the passphrase (the encryption field is used first); it is not stored. **Verify All** checks local files natively and Proton Drive rows through the adapter.

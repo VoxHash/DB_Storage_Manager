@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -30,8 +31,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..audit import write_audit
 from ..backups.base import BackupInfo
-from ..backups.local import LocalBackupAdapter
+from ..backups.local import LocalBackupAdapter, resolve_local_backup_dir
 from ..backups.manager import ENCRYPTED_ADAPTERS, BackupManager
 from ..backups.protondrive import (
     ProtonDriveNotConfiguredError,
@@ -40,7 +42,6 @@ from ..backups.protondrive import (
 from ..backups.s3 import S3NotConfiguredError
 from ..backups.s3 import configuration_status as s3_status
 from ..backups.scheduler import ScheduledBackupManager
-from ..config import BACKUP_DIR
 from ..db.base import ConnectionConfig
 from ..experimental import is_restore_enabled
 from ..i18n.manager import get_i18n_manager
@@ -74,6 +75,7 @@ _GROUP_CREATE = "create"
 _GROUP_LIST = "list"
 _GROUP_VERIFY = "verify"
 _GROUP_RESTORE = "restore"
+_GROUP_DELETE = "delete"
 
 
 class BackupsWidget(QWidget):
@@ -85,7 +87,8 @@ class BackupsWidget(QWidget):
         self.i18n = get_i18n_manager()
         self.backup_manager = BackupManager()
         self.schedule_manager = ScheduledBackupManager()
-        self.backup_dir = backup_dir or BACKUP_DIR
+        self._backup_dir_explicit = backup_dir is not None
+        self.backup_dir = Path(backup_dir) if backup_dir is not None else resolve_local_backup_dir()
         self._backups: List[BackupInfo] = []
         self._verify_results: Dict[str, Dict[str, Any]] = {}
         self._list_source = "local"
@@ -117,6 +120,7 @@ class BackupsWidget(QWidget):
         busy_list = self._jobs.is_busy(_GROUP_LIST)
         busy_verify = self._jobs.is_busy(_GROUP_VERIFY)
         busy_restore = self._jobs.is_busy(_GROUP_RESTORE)
+        busy_delete = self._jobs.is_busy(_GROUP_DELETE)
         self.create_button.setEnabled(can_create and not busy_create)
         self.refresh_button.setEnabled(can_read and not busy_list)
         self.refresh_proton_button.setEnabled(can_read and not busy_list)
@@ -133,6 +137,12 @@ class BackupsWidget(QWidget):
             and not busy_restore
             and not busy_verify
         )
+        # Interactive delete uses backups:create (retention pruning follows a
+        # policy saved with settings:write). There is no backups:delete role.
+        if hasattr(self, "delete_button"):
+            self.delete_button.setEnabled(
+                can_create and not busy_delete and not busy_list
+            )
         can_settings = auth.has_permission("settings:write")
         for name in ("configure_proton_button", "configure_s3_button"):
             if hasattr(self, name):
@@ -321,6 +331,21 @@ class BackupsWidget(QWidget):
         )
         self.restore_button.clicked.connect(self.restore_selected)
         actions.addWidget(self.restore_button)
+
+        self.delete_button = QPushButton(
+            t("backups.delete", default="Delete…")
+        )
+        self.delete_button.setToolTip(
+            t(
+                "backups.delete_tooltip",
+                default=(
+                    "Deletes the selected local, Proton Drive, or S3 backup. "
+                    "Needs the backups:create permission."
+                ),
+            )
+        )
+        self.delete_button.clicked.connect(self.delete_selected)
+        actions.addWidget(self.delete_button)
         actions.addStretch()
         restore_layout.addLayout(actions)
 
@@ -360,6 +385,12 @@ class BackupsWidget(QWidget):
         )
         self.backups_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.backups_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.backups_table.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu
+        )
+        self.backups_table.customContextMenuRequested.connect(
+            self._backup_context_menu
+        )
         configure_dense_table(self.backups_table)
         restore_layout.addWidget(self.backups_table, 1)
         tabs.addTab(restore_widget, t("backups.restore_backup"))
@@ -532,9 +563,21 @@ class BackupsWidget(QWidget):
             self._refresh_proton_status()
 
     def refresh_destinations(self) -> None:
-        """Re-evaluate destination status and the Restore button."""
+        """Re-evaluate destination status, the local directory, and buttons."""
+        self._apply_configured_backup_dir()
         self._refresh_proton_status()
         self._refresh_job_buttons()
+
+    def _apply_configured_backup_dir(self) -> None:
+        """Follow Settings → local backup directory unless the caller overrode it."""
+        if self._backup_dir_explicit:
+            return
+        new_dir = resolve_local_backup_dir()
+        if Path(new_dir) == Path(self.backup_dir):
+            return
+        self.backup_dir = new_dir
+        if self._list_source == "local":
+            self.refresh_backups(queue=True)
 
     def _on_adapter_changed(self) -> None:
         """Off-machine backups must encrypt at rest before upload (opsec)."""
@@ -1024,6 +1067,144 @@ class BackupsWidget(QWidget):
             return None
         backup_id = item.data(Qt.ItemDataRole.UserRole)
         return next((b for b in self._backups if b.id == backup_id), None)
+
+    def _backup_context_menu(self, pos) -> None:
+        index = self.backups_table.indexAt(pos)
+        if not index.isValid():
+            return
+        self.backups_table.selectRow(index.row())
+        t = self.i18n.translate
+        menu = QMenu(self)
+        action = menu.addAction(t("backups.delete", default="Delete…"))
+        action.setEnabled(self.delete_button.isEnabled())
+        chosen = menu.exec(self.backups_table.viewport().mapToGlobal(pos))
+        if chosen is action:
+            self.delete_selected()
+
+    def _delete_target(self, backup: BackupInfo):
+        """Adapter that owns this row, and a short destination name for audit."""
+        destination = self.backup_manager.backup_destination(backup)
+        if destination is None and self._list_source in (
+            "protondrive",
+            "s3",
+            "googledrive",
+        ):
+            destination = self._list_source
+        if destination:
+            adapter = self.backup_manager.get_adapter(destination)
+            if adapter is None:
+                raise RuntimeError(f"{destination} adapter unavailable")
+            return adapter, destination
+        return LocalBackupAdapter(base_path=self.backup_dir), "local"
+
+    def delete_selected(self) -> None:
+        """Delete the selected local or cloud backup after confirmation."""
+        t = self.i18n.translate
+        try:
+            get_auth_manager().require("backups:create")
+        except PermissionDenied as exc:
+            self._set_status(str(exc), "fail")
+            return
+        backup = self._selected_backup()
+        if backup is None:
+            self._set_status(t("backups.no_backup_selected"), "missing_checksum")
+            return
+        try:
+            _adapter, destination = self._delete_target(backup)
+        except Exception as exc:
+            self._set_status(str(exc), "fail")
+            return
+        labels = {
+            "local": t("backups.local", default="Local"),
+            "protondrive": t("backups.proton_drive", default="Proton Drive"),
+            "s3": t("settings.adapter_s3", default="S3-compatible"),
+            "googledrive": "Google Drive",
+        }
+        where = labels.get(destination, destination)
+        confirm = QMessageBox.warning(
+            self,
+            t("backups.delete_title", default="Delete backup"),
+            t(
+                "backups.delete_body",
+                default=(
+                    "Delete {where} backup {name}? "
+                    "The archive and its checksum metadata are removed. "
+                    "This cannot be undone."
+                ),
+                where=where,
+                name=backup.name,
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        backup_id = backup.id
+        backup_name = backup.name
+        local_dir = self.backup_dir
+        list_source = self._list_source
+
+        def job() -> str:
+            adapter, dest = self._delete_target(backup)
+            if dest == "local":
+                adapter = LocalBackupAdapter(base_path=local_dir)
+            try:
+                asyncio.run(adapter.delete_backup(backup_id))
+            except Exception as exc:
+                write_audit(
+                    "backup.delete",
+                    "failed",
+                    backup_id=backup_id,
+                    name=backup_name,
+                    destination=dest,
+                    error=str(exc)[:400],
+                )
+                raise
+            write_audit(
+                "backup.delete",
+                "completed",
+                backup_id=backup_id,
+                name=backup_name,
+                destination=dest,
+            )
+            return dest
+
+        def on_ok(dest: str) -> None:
+            self._set_status(
+                t(
+                    "backups.delete_done",
+                    default="Deleted {name}.",
+                    name=backup_name,
+                ),
+                "pass",
+            )
+            if list_source == "local" or dest == "local":
+                self.refresh_backups(queue=True)
+            else:
+                self.refresh_remote_backups(list_source, queue=True)
+
+        def on_fail(message: str) -> None:
+            detail = (message or "").strip().replace("{", "{{").replace("}", "}}")
+            self._set_status(
+                t(
+                    "backups.delete_failed",
+                    default="Delete failed: {error}",
+                    error=detail or "unknown error",
+                ),
+                "fail",
+            )
+
+        self._run_backup_job(
+            job,
+            group=_GROUP_DELETE,
+            busy_message=t(
+                "backups.delete_in_progress",
+                default="Deleting backup…",
+            ),
+            on_ok=on_ok,
+            on_fail=on_fail,
+        )
 
     def verify_selected(self) -> None:
         """Verify SHA-256 for the selected backup (off GUI thread)."""

@@ -255,6 +255,9 @@ DEFAULT_SETTINGS = {
         "connections": {},
     },
     "telemetry": False,
+    # Empty keeps BACKUP_DIR. A non-empty value is an absolute directory
+    # chosen in Settings → Backups & Adapters.
+    "local_backup_dir": "",
     "alert_thresholds": copy.deepcopy(DEFAULT_ALERT_THRESHOLDS),
     "alert_channels": copy.deepcopy(DEFAULT_ALERT_CHANNELS),
     "dashboard_layout": copy.deepcopy(DEFAULT_DASHBOARD_LAYOUT),

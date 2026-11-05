@@ -4,12 +4,14 @@ Users & RBAC, Updates.
 """
 
 import importlib.util
+from pathlib import Path
 from typing import Any, Dict, List
 
 from PyQt6.QtCore import QSize, pyqtSignal
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -28,9 +30,10 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ..backups.local import local_backup_dir_problem
 from ..backups.protondrive import configuration_status as proton_drive_status
 from ..backups.s3 import configuration_status as s3_status
-from ..config import DEFAULT_SETTINGS
+from ..config import BACKUP_DIR, DEFAULT_SETTINGS
 from ..experimental import ENV_VAR as EXPERIMENTAL_ENV_VAR
 from ..experimental import env_forces_experimental
 from ..i18n.languages import SUPPORTED_LANGUAGES
@@ -258,6 +261,24 @@ class SettingsWidget(QWidget):
         buttons.addWidget(self.s3_configure_button)
         buttons.addStretch()
         g.addLayout(buttons)
+
+        path_form = QFormLayout()
+        path_form.setHorizontalSpacing(16)
+        self.local_backup_dir_label = QLabel()
+        path_row = QHBoxLayout()
+        self.local_backup_dir_edit = QLineEdit(
+            str(self.settings.get("local_backup_dir") or "")
+        )
+        self.local_backup_dir_edit.setPlaceholderText(str(BACKUP_DIR))
+        self.local_backup_dir_edit.setClearButtonEnabled(True)
+        path_row.addWidget(self.local_backup_dir_edit, 1)
+        self.local_backup_dir_browse = QPushButton()
+        self.local_backup_dir_browse.clicked.connect(self._browse_local_backup_dir)
+        path_row.addWidget(self.local_backup_dir_browse)
+        path_form.addRow(self.local_backup_dir_label, path_row)
+        g.addLayout(path_form)
+        self.local_backup_dir_hint = _hint_label()
+        g.addWidget(self.local_backup_dir_hint)
         # Kept for callers that read the Proton status text directly.
         self.proton_status_label = QLabel("")
         self.proton_status_label.setWordWrap(True)
@@ -585,6 +606,8 @@ class SettingsWidget(QWidget):
             self.telegram_chat_edit,
             self.telegram_severity_combo,
             self.telegram_cooldown_spin,
+            self.local_backup_dir_edit,
+            self.local_backup_dir_browse,
         ):
             widget.setEnabled(editable)
         self.updates_panel.set_editable(editable)
@@ -733,6 +756,21 @@ class SettingsWidget(QWidget):
             self._refresh_adapters()
             self.settings_saved.emit()
 
+    def _browse_local_backup_dir(self) -> None:
+        t = self.i18n.translate
+        current = self.local_backup_dir_edit.text().strip()
+        start = current or str(BACKUP_DIR)
+        path = QFileDialog.getExistingDirectory(
+            self,
+            t(
+                "settings.local_backup_dir_browse_title",
+                default="Local backup directory",
+            ),
+            start,
+        )
+        if path:
+            self.local_backup_dir_edit.setText(path)
+
     # -------------------------------------------------------------- email
 
     def _email_form_config(self) -> Dict[str, Any]:
@@ -865,6 +903,26 @@ class SettingsWidget(QWidget):
         )
         self.s3_configure_button.setText(
             t("settings.configure_s3", default="Configure S3…")
+        )
+        self.local_backup_dir_label.setText(
+            _colon(
+                t(
+                    "settings.local_backup_dir",
+                    default="Local backup directory",
+                )
+            )
+        )
+        self.local_backup_dir_browse.setText(
+            t("settings.local_backup_dir_browse", default="Browse…")
+        )
+        self.local_backup_dir_hint.setText(
+            t(
+                "settings.local_backup_dir_hint",
+                default=(
+                    "Leave empty to keep the default app data folder. "
+                    "Create, list, restore, and scheduled local backups use this directory."
+                ),
+            )
         )
         self.experimental_group.setTitle(
             t("settings.experimental_title", default="Full restore")
@@ -1331,6 +1389,28 @@ class SettingsWidget(QWidget):
                 self, t("auth.denied", default="Access denied"), str(exc)
             )
             return
+        raw_dir = self.local_backup_dir_edit.text().strip()
+        if raw_dir:
+            candidate = Path(raw_dir).expanduser()
+            problem = local_backup_dir_problem(candidate)
+            if problem:
+                QMessageBox.warning(
+                    self,
+                    t(
+                        "settings.local_backup_dir_invalid_title",
+                        default="Local backup directory",
+                    ),
+                    t(
+                        "settings.local_backup_dir_invalid",
+                        default="Local backup directory was not saved: {reason}",
+                        reason=problem,
+                    ),
+                )
+                return
+            local_backup_dir = str(candidate)
+        else:
+            local_backup_dir = ""
+
         existing = self.secure_store.get_settings()
         auth = get_auth_manager()
         rbac = dict(existing.get("rbac") or DEFAULT_SETTINGS.get("rbac") or {})
@@ -1416,6 +1496,7 @@ class SettingsWidget(QWidget):
             "update_auto_check": self.updates_panel.auto_check_enabled(),
             "retention": self._retention_payload(),
             "telemetry": self.telemetry_check.isChecked(),
+            "local_backup_dir": local_backup_dir,
             "rbac": rbac,
             "experimental": experimental,
             "email_alerts": email,

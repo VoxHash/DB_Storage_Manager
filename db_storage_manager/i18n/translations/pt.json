@@ -157,7 +157,7 @@
     "last_run": "Última Execução:",
     "next_run": "Próxima Execução:",
     "run_now": "Executar Agora",
-    "delete": "Excluir",
+    "delete": "Excluir…",
     "backup_created": "Backup criado com sucesso",
     "scratch_done": "A restauração de ensaio terminou em {name}. A produção não foi alterada.",
     "backup_failed": "Falha ao criar backup",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "Listando backups do S3…",
     "restore_done_safety": "Restauração concluída. Backup de segurança: {name}.",
     "restore_done": "Restauração concluída.",
-    "size_tip_raw": "dump bruto"
+    "size_tip_raw": "dump bruto",
+    "delete_tooltip": "Remove o backup local, do Proton Drive ou do S3 selecionado. Exige a permissão backups:create.",
+    "delete_title": "Excluir backup",
+    "delete_body": "Excluir o backup {where} {name}? O arquivo e os metadados de checksum são removidos. Isto não pode ser desfeito.",
+    "delete_done": "{name} foi excluído.",
+    "delete_failed": "Falha ao excluir: {error}",
+    "delete_in_progress": "Excluindo backup…"
   },
   "settings": {
     "title": "Configurações",
@@ -348,7 +354,13 @@
     "telegram_title": "Alertas do Telegram",
     "telegram_hint": "Publica pela API oficial de bots (apenas api.telegram.org). O token do bot e o id do chat ficam no SecureStore e não são escritos no registo de notificações. Desligado até ativar Telegram no separador Monitorização.",
     "telegram_token": "Token do bot",
-    "telegram_chat_id": "Id do chat"
+    "telegram_chat_id": "Id do chat",
+    "local_backup_dir": "Diretório local de backups",
+    "local_backup_dir_browse": "Procurar…",
+    "local_backup_dir_browse_title": "Diretório local de backups",
+    "local_backup_dir_hint": "Deixe vazio para manter a pasta padrão do aplicativo. Criar, listar, restaurar e os backups locais agendados usam este diretório.",
+    "local_backup_dir_invalid_title": "Diretório local de backups",
+    "local_backup_dir_invalid": "O diretório local de backups não foi salvo: {reason}"
   },
   "about": {
     "title": "Sobre",

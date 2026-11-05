@@ -157,7 +157,7 @@
     "last_run": "Letzte Ausführung:",
     "next_run": "Nächste Ausführung:",
     "run_now": "Jetzt ausführen",
-    "delete": "Löschen",
+    "delete": "Löschen…",
     "backup_created": "Backup erfolgreich erstellt",
     "scratch_done": "Die Probewiederherstellung in {name} ist abgeschlossen. Die Produktion wurde nicht geändert.",
     "backup_failed": "Backup-Erstellung fehlgeschlagen",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "S3-Backups werden aufgelistet…",
     "restore_done_safety": "Wiederherstellung abgeschlossen. Sicherheits-Backup: {name}.",
     "restore_done": "Wiederherstellung abgeschlossen.",
-    "size_tip_raw": "Roh-Dump"
+    "size_tip_raw": "Roh-Dump",
+    "delete_tooltip": "Löscht die ausgewählte lokale, Proton-Drive- oder S3-Sicherung. Erfordert die Berechtigung backups:create.",
+    "delete_title": "Sicherung löschen",
+    "delete_body": "{where}-Sicherung {name} löschen? Archiv und Prüfsummen-Metadaten werden entfernt. Das kann nicht rückgängig gemacht werden.",
+    "delete_done": "{name} wurde gelöscht.",
+    "delete_failed": "Löschen fehlgeschlagen: {error}",
+    "delete_in_progress": "Sicherung wird gelöscht…"
   },
   "settings": {
     "title": "Einstellungen",
@@ -348,7 +354,13 @@
     "telegram_title": "Telegram-Benachrichtigungen",
     "telegram_hint": "Sendet über die offizielle Bot-API (nur api.telegram.org). Bot-Token und Chat-ID bleiben im SecureStore und werden nicht ins Benachrichtigungsprotokoll geschrieben. Aus, bis Sie Telegram auf der Registerkarte Überwachung aktivieren.",
     "telegram_token": "Bot-Token",
-    "telegram_chat_id": "Chat-ID"
+    "telegram_chat_id": "Chat-ID",
+    "local_backup_dir": "Lokales Sicherungsverzeichnis",
+    "local_backup_dir_browse": "Durchsuchen…",
+    "local_backup_dir_browse_title": "Lokales Sicherungsverzeichnis",
+    "local_backup_dir_hint": "Leer lassen, um den Standardordner der App zu verwenden. Erstellen, Auflisten, Wiederherstellen und geplante lokale Sicherungen nutzen dieses Verzeichnis.",
+    "local_backup_dir_invalid_title": "Lokales Sicherungsverzeichnis",
+    "local_backup_dir_invalid": "Lokales Sicherungsverzeichnis wurde nicht gespeichert: {reason}"
   },
   "about": {
     "title": "Über",

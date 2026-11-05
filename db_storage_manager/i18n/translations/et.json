@@ -157,7 +157,7 @@
     "last_run": "Viimane käivitamine:",
     "next_run": "Järgmine käivitamine:",
     "run_now": "Käivita kohe",
-    "delete": "Kustuta",
+    "delete": "Kustuta…",
     "backup_created": "Varukoopia loodud edukalt",
     "scratch_done": "Proovitaaste lõppes andmebaasis {name}. Tootmist ei muudetud.",
     "backup_failed": "Varukoopia loomine ebaõnnestus",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "S3 varukoopiaid loetletakse…",
     "restore_done_safety": "Taastamine lõpetatud. Turvavarukoopia: {name}.",
     "restore_done": "Taastamine lõpetatud.",
-    "size_tip_raw": "töötlemata tõmmis"
+    "size_tip_raw": "töötlemata tõmmis",
+    "delete_tooltip": "Kustutab valitud kohaliku, Proton Drive’i või S3 varukoopia. Vaja on õigust backups:create.",
+    "delete_title": "Kustuta varukoopia",
+    "delete_body": "Kas kustutada {where} varukoopia {name}? Arhiiv ja kontrollsumma metaandmed eemaldatakse. Seda ei saa tagasi võtta.",
+    "delete_done": "{name} on kustutatud.",
+    "delete_failed": "Kustutamine ebaõnnestus: {error}",
+    "delete_in_progress": "Varukoopia kustutamine…"
   },
   "settings": {
     "title": "Seaded",
@@ -348,7 +354,13 @@
     "telegram_title": "Telegrami teavitused",
     "telegram_hint": "Saadab ametliku Bot API kaudu (ainult api.telegram.org). Boti token ja vestluse id jäävad SecureStore'i ega kirjutata teavituste logisse. Väljas, kuni lubate Telegrami vahekaardil Jälgimine.",
     "telegram_token": "Boti token",
-    "telegram_chat_id": "Vestluse id"
+    "telegram_chat_id": "Vestluse id",
+    "local_backup_dir": "Kohalik varukoopiate kaust",
+    "local_backup_dir_browse": "Sirvi…",
+    "local_backup_dir_browse_title": "Kohalik varukoopiate kaust",
+    "local_backup_dir_hint": "Jätke tühjaks, et kasutada rakenduse vaikekausta. Loomine, loend, taastamine ja ajastatud kohalikud varukoopiad kasutavad seda kausta.",
+    "local_backup_dir_invalid_title": "Kohalik varukoopiate kaust",
+    "local_backup_dir_invalid": "Kohalikku varukoopiate kausta ei salvestatud: {reason}"
   },
   "about": {
     "title": "Teave",

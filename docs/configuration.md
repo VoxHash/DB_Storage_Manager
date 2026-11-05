@@ -16,6 +16,7 @@ Open the **Settings** tab. Defaults from `db_storage_manager.config.DEFAULT_SETT
 | `update_channel` | Channel used by Settings → Updates: `stable` or `experimental` (GitHub pre-releases) | `stable` |
 | `update_auto_check` | When true, ask the public GitHub Releases API at most once every 24 hours. Nothing is installed | `false` |
 | `retention` | `enabled`, `keep_daily`, `keep_monthly`, and optional `connections` overrides. Off deletes nothing. Prunes Local, Proton Drive and S3 after a scheduled backup | off, 7 daily, 6 monthly |
+| `local_backup_dir` | Absolute directory for local backups. Empty uses the app data `backups/` folder. Settings rejects a path that does not exist or is not writable | empty |
 | `telemetry` | Anonymous telemetry | `False` |
 | `experimental.restore` | Shows **Restore…**. Uncheck to hide it. A missing key is on. `DSM_EXPERIMENTAL=1` forces it on | `True` |
 | `discord_alerts` | Discord webhook `url`, `min_severity`, `cooldown_minutes`. Secret stays in SecureStore. Off until Monitoring enables Discord | empty URL |

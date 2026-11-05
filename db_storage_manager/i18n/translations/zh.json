@@ -157,7 +157,7 @@
     "last_run": "上次运行:",
     "next_run": "下次运行:",
     "run_now": "立即运行",
-    "delete": "删除",
+    "delete": "删除…",
     "backup_created": "备份创建成功",
     "scratch_done": "演练还原已在 {name} 中完成。生产库未被修改。",
     "backup_failed": "备份创建失败",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "正在列出 S3 备份…",
     "restore_done_safety": "恢复完成。安全备份：{name}。",
     "restore_done": "恢复完成。",
-    "size_tip_raw": "原始转储"
+    "size_tip_raw": "原始转储",
+    "delete_tooltip": "删除所选的本地、Proton Drive 或 S3 备份。需要 backups:create 权限。",
+    "delete_title": "删除备份",
+    "delete_body": "删除 {where} 备份 {name}？归档文件及其校验元数据会被移除。此操作无法撤销。",
+    "delete_done": "已删除 {name}。",
+    "delete_failed": "删除失败：{error}",
+    "delete_in_progress": "正在删除备份…"
   },
   "settings": {
     "title": "设置",
@@ -348,7 +354,13 @@
     "telegram_title": "Telegram 警报",
     "telegram_hint": "通过官方 Bot API（仅 api.telegram.org）发送。机器人令牌和聊天 ID 保存在 SecureStore 中，不会写入通知日志。在监控选项卡启用 Telegram 之前保持关闭。",
     "telegram_token": "机器人令牌",
-    "telegram_chat_id": "聊天 ID"
+    "telegram_chat_id": "聊天 ID",
+    "local_backup_dir": "本地备份目录",
+    "local_backup_dir_browse": "浏览…",
+    "local_backup_dir_browse_title": "本地备份目录",
+    "local_backup_dir_hint": "留空则继续使用应用数据中的默认文件夹。创建、列出、恢复以及计划的本地备份都使用此目录。",
+    "local_backup_dir_invalid_title": "本地备份目录",
+    "local_backup_dir_invalid": "本地备份目录未保存：{reason}"
   },
   "about": {
     "title": "关于",

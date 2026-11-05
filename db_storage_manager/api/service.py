@@ -9,9 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from .. import __version__
 from ..backups.base import BackupInfo
-from ..backups.local import LocalBackupAdapter
+from ..backups.local import LocalBackupAdapter, resolve_local_backup_dir
 from ..backups.manager import BackupManager
-from ..config import APP_NAME, APP_VERSION, BACKUP_DIR
+from ..config import APP_NAME, APP_VERSION
 from ..native import backend_info
 from ..security.store import SecureStore
 from .sanitize import sanitize_connections
@@ -39,7 +39,7 @@ def info_payload() -> Dict[str, Any]:
         "version": APP_VERSION,
         "package_version": __version__,
         "native": native,
-        "backup_dir": str(BACKUP_DIR),
+        "backup_dir": str(resolve_local_backup_dir()),
         "companion": "rest+web",
         "desktop_primary": True,
     }
@@ -115,7 +115,7 @@ def list_import_platform_guides() -> Dict[str, Any]:
 
 
 def list_backups(backup_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
-    adapter = LocalBackupAdapter(base_path=backup_dir or BACKUP_DIR)
+    adapter = LocalBackupAdapter(base_path=backup_dir or resolve_local_backup_dir())
     backups = _run_async(adapter.list_backups())
     return [_backup_to_dict(b) for b in backups]
 
@@ -220,7 +220,7 @@ def _resolve_backup(
             return None
         return _info_from_dict(data)
     if path:
-        adapter = LocalBackupAdapter(base_path=backup_dir or BACKUP_DIR)
+        adapter = LocalBackupAdapter(base_path=backup_dir or resolve_local_backup_dir())
         backups = _run_async(adapter.list_backups())
         for item in backups:
             if item.path == path or Path(item.path).name == Path(path).name:

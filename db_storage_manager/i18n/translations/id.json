@@ -157,7 +157,7 @@
     "last_run": "Jalankan Terakhir:",
     "next_run": "Jalankan Berikutnya:",
     "run_now": "Jalankan Sekarang",
-    "delete": "Hapus",
+    "delete": "Hapus…",
     "backup_created": "Cadangan berhasil dibuat",
     "scratch_done": "Pemulihan latihan selesai di {name}. Produksi tidak diubah.",
     "backup_failed": "Pembuatan cadangan gagal",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "Mencantumkan cadangan S3…",
     "restore_done_safety": "Pemulihan selesai. Cadangan pengaman: {name}.",
     "restore_done": "Pemulihan selesai.",
-    "size_tip_raw": "dump mentah"
+    "size_tip_raw": "dump mentah",
+    "delete_tooltip": "Menghapus cadangan lokal, Proton Drive, atau S3 yang dipilih. Memerlukan izin backups:create.",
+    "delete_title": "Hapus cadangan",
+    "delete_body": "Hapus cadangan {where} {name}? Arsip dan metadata checksum dihapus. Tindakan ini tidak dapat dibatalkan.",
+    "delete_done": "{name} dihapus.",
+    "delete_failed": "Gagal menghapus: {error}",
+    "delete_in_progress": "Menghapus cadangan…"
   },
   "settings": {
     "title": "Pengaturan",
@@ -348,7 +354,13 @@
     "telegram_title": "Peringatan Telegram",
     "telegram_hint": "Mengirim lewat Bot API resmi (hanya api.telegram.org). Token bot dan id obrolan tetap di SecureStore dan tidak ditulis ke log notifikasi. Mati sampai Anda mengaktifkan Telegram di tab Pemantauan.",
     "telegram_token": "Token bot",
-    "telegram_chat_id": "Id obrolan"
+    "telegram_chat_id": "Id obrolan",
+    "local_backup_dir": "Direktori cadangan lokal",
+    "local_backup_dir_browse": "Telusuri…",
+    "local_backup_dir_browse_title": "Direktori cadangan lokal",
+    "local_backup_dir_hint": "Kosongkan untuk tetap memakai folder data aplikasi. Membuat, mencantumkan, memulihkan, dan cadangan lokal terjadwal memakai direktori ini.",
+    "local_backup_dir_invalid_title": "Direktori cadangan lokal",
+    "local_backup_dir_invalid": "Direktori cadangan lokal tidak disimpan: {reason}"
   },
   "about": {
     "title": "Tentang",

@@ -63,6 +63,8 @@ Expected for writes. Disable Safe Mode only when intentional. Error text resembl
 - **Backup is smaller than the Dashboard total size**: expected — the dashboard reports on-disk size (tables, indexes, free space), the backup is a compressed logical dump. See *Sizes* in [usage.md](usage.md#backups)
 - **Restore… stays disabled**: the signed-in role needs `backups:restore`. `monitor`, `viewer`, and `guest` cannot restore
 - **Restore stops at pre-flight**: wrong passphrase, checksum mismatch or a different database engine than the target; nothing was changed
+- **MariaDB restore: `libedit.so.2: cannot open shared object file`**: the `mariadb` binary on PATH (often `~/.local/bin/mariadb`) was built against libedit and that library is not installed. The app tries `mysql` next. Install the distro clients instead of copying `.so` files into the app: Arch/Garuda `sudo pacman -S --needed mariadb-clients libedit`. Put a working `mysql` or `mariadb` on PATH
+- **PostgreSQL restore: `grant options cannot be granted back to your own grantor` or `permission denied to change default privileges`**: a Supabase dump includes `GRANT … WITH GRANT OPTION` on catalog functions and `ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin`. Those ACLs are skipped. Tables the session owns are still restored. The status line says which ACLs were skipped. `permission denied for table` is still a failed restore
 - **Email alert checkbox disabled**: complete the SMTP settings in Settings → Notifications (host, sender, at least one recipient)
 
 ## Encryption / settings issues

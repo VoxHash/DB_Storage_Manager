@@ -57,6 +57,71 @@ def meta_path_for(backup_path: Path) -> Path:
     return Path(str(backup_path) + ".meta.json")
 
 
+def sidecar_paths_for(backup_path: Path) -> List[Path]:
+    """Metadata and checksum files that belong to one archive."""
+    return [
+        meta_path_for(backup_path),
+        Path(str(backup_path) + ".sha256"),
+    ]
+
+
+def local_backup_dir_problem(path: Path) -> Optional[str]:
+    """None when ``path`` is an existing writable directory.
+
+    A short-lived file is created and removed so a directory that looks
+    writable by mode but rejects writes (full disk, immutable flag) is
+    rejected before settings are stored.
+    """
+    try:
+        candidate = Path(path).expanduser()
+    except (OSError, RuntimeError, ValueError) as exc:
+        return str(exc) or "Path is not valid"
+    if not candidate.is_absolute():
+        return "Use an absolute directory path"
+    if not candidate.exists():
+        return "Directory does not exist"
+    if not candidate.is_dir():
+        return "Path is not a directory"
+    probe = None
+    try:
+        fd, name = tempfile.mkstemp(prefix=".dsm-write-", dir=candidate)
+        probe = Path(name)
+        os.close(fd)
+    except OSError as exc:
+        reason = exc.strerror or str(exc)
+        return f"Directory is not writable ({reason})"
+    finally:
+        if probe is not None:
+            try:
+                probe.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return None
+
+
+def resolve_local_backup_dir(settings: Optional[Dict[str, Any]] = None) -> Path:
+    """Directory local create, list, and restore use.
+
+    An empty setting keeps :data:`BACKUP_DIR`. A saved path is used only
+    while it is still an existing writable directory; otherwise the default
+    is used so a removed folder does not hide every backup.
+    """
+    if settings is None:
+        try:
+            from ..security.store import SecureStore
+
+            settings = SecureStore().get_settings()
+        except Exception:
+            settings = {}
+    raw = str((settings or {}).get("local_backup_dir") or "").strip()
+    if not raw:
+        return BACKUP_DIR
+    candidate = Path(raw).expanduser()
+    if local_backup_dir_problem(candidate):
+        return BACKUP_DIR
+    return candidate
+
+
 class LocalBackupAdapter(BackupAdapter):
     """Local file system backup adapter"""
 
@@ -337,17 +402,28 @@ class LocalBackupAdapter(BackupAdapter):
 
         return backups
 
+    def _is_inside_base(self, path: Path) -> bool:
+        """True when ``path`` is the backup directory or a file inside it."""
+        try:
+            root = self.base_path.resolve()
+            candidate = path.resolve()
+        except OSError:
+            return False
+        return candidate == root or root in candidate.parents
+
     async def delete_backup(self, backup_id: str) -> None:
-        """Delete a local backup"""
+        """Delete a local backup and its metadata / checksum sidecars."""
         backups = await self.list_backups()
         backup = next((b for b in backups if b.id == backup_id), None)
-
-        if backup:
-            path = Path(backup.path)
-            path.unlink(missing_ok=True)
-            meta_path_for(path).unlink(missing_ok=True)
-        else:
+        if backup is None:
             raise FileNotFoundError(f"Backup not found: {backup_id}")
+        path = Path(backup.path)
+        if not self._is_inside_base(path):
+            raise FileNotFoundError(f"Backup not found: {backup_id}")
+        path.unlink(missing_ok=True)
+        for sidecar in sidecar_paths_for(path):
+            if sidecar.is_file() and self._is_inside_base(sidecar):
+                sidecar.unlink(missing_ok=True)
 
     async def validate_options(self, options: BackupOptions) -> bool:
         """Validate backup options"""

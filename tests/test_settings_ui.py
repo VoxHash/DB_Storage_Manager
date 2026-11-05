@@ -487,3 +487,151 @@ def test_email_channel_needs_complete_smtp_and_autostart_watches(
     widget._stop_monitoring()
     widget.shutdown()
     widget.close()
+
+
+def test_local_backup_directory_is_saved_and_used(settings_widget, tmp_path, monkeypatch):
+    from db_storage_manager.backups import scheduler as scheduler_mod
+    from db_storage_manager.backups.local import resolve_local_backup_dir
+    from db_storage_manager.gui.backups import BackupsWidget
+
+    monkeypatch.setattr(config, "AUDIT_LOG_FILE", tmp_path / "audit-dir.log")
+    monkeypatch.setattr(
+        scheduler_mod, "SCHEDULED_BACKUPS_FILE", tmp_path / "schedules.json"
+    )
+    custom = tmp_path / "custom-backups"
+    custom.mkdir()
+    settings_widget.local_backup_dir_edit.setText(str(custom))
+    settings_widget._save_settings()
+    assert settings_widget.secure_store.get_settings()["local_backup_dir"] == str(custom)
+
+    widget = BackupsWidget([])
+    try:
+        assert Path(widget.backup_dir) == custom
+        (custom / "keep.backup").write_bytes(b"archive")
+        widget.refresh_backups()
+        widget.wait_idle()
+        assert any(item.name == "keep.backup" for item in widget._backups)
+    finally:
+        widget.shutdown()
+        widget.close()
+
+    settings_widget.local_backup_dir_edit.setText("/no/such/dsm-backup-dir")
+    settings_widget._save_settings()
+    assert settings_widget.secure_store.get_settings()["local_backup_dir"] == str(custom)
+
+    settings_widget.local_backup_dir_edit.setText("")
+    settings_widget._save_settings()
+    assert settings_widget.secure_store.get_settings()["local_backup_dir"] == ""
+    assert resolve_local_backup_dir() == config.BACKUP_DIR
+
+
+def test_delete_removes_local_backup_after_confirmation(app, backups, monkeypatch):
+    from PyQt6.QtCore import Qt
+
+    widget, _db, tmp_path = backups
+    _create_backup(app, widget)
+    assert widget.backups_table.rowCount() == 1
+    widget.backups_table.selectRow(0)
+    backup = widget._backups[0]
+    path = Path(backup.path)
+    sidecar = Path(str(path) + ".meta.json")
+    checksum = Path(str(path) + ".sha256")
+    checksum.write_text("abc", encoding="utf-8")
+    assert path.is_file() and sidecar.is_file()
+    assert (
+        widget.backups_table.contextMenuPolicy()
+        == Qt.ContextMenuPolicy.CustomContextMenu
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    widget.delete_selected()
+    widget.wait_idle()
+    assert not path.exists()
+    assert not sidecar.exists()
+    assert not checksum.exists()
+    assert widget.backups_table.rowCount() == 0
+    assert "backup.delete" in (tmp_path / "audit.log").read_text(encoding="utf-8")
+
+
+def test_delete_cancel_keeps_the_file(app, backups):
+    widget, _db, _tmp = backups
+    _create_backup(app, widget)
+    path = Path(widget._backups[0].path)
+    widget.backups_table.selectRow(0)
+    widget.delete_selected()
+    widget.wait_idle()
+    assert path.is_file()
+    assert widget.backups_table.rowCount() == 1
+
+
+def test_delete_cloud_backup_uses_the_adapter(app, backups, monkeypatch):
+    from datetime import datetime, timezone
+
+    from db_storage_manager.backups.base import BackupInfo
+
+    widget, _db, _tmp = backups
+    deleted = []
+
+    class Adapter:
+        async def delete_backup(self, backup_id):
+            deleted.append(backup_id)
+
+        async def list_backups(self):
+            return []
+
+    backup = BackupInfo(
+        id="cloud-1",
+        name="lab.backup.enc",
+        path="protondrive:DB-Storage-Manager/lab.backup.enc",
+        size=10,
+        createdAt=datetime.now(timezone.utc),
+        status="completed",
+        metadata={"destination": "protondrive"},
+    )
+    widget._list_source = "protondrive"
+    widget._backups = [backup]
+    widget._populate_table()
+    widget.backups_table.selectRow(0)
+    monkeypatch.setattr(widget.backup_manager, "get_adapter", lambda *a, **k: Adapter())
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    widget.delete_selected()
+    widget.wait_idle()
+    assert deleted == ["cloud-1"]
+    assert widget.backups_table.rowCount() == 0
+
+
+def test_delete_requires_backups_create(app, backups, isolated_secure_store):
+    from db_storage_manager.security.auth import (
+        AuthenticationManager,
+        UserRole,
+        reset_auth_manager,
+    )
+    from db_storage_manager.security import auth as auth_mod
+
+    widget, _db, _tmp = backups
+    _create_backup(app, widget)
+    path = Path(widget._backups[0].path)
+    store, _data = isolated_secure_store
+    auth = AuthenticationManager(store=store)
+    auth.bootstrap_admin("admin", "password123")
+    auth.authenticate("admin", "password123")
+    auth.create_user("viewer1", "password123", role=UserRole.VIEWER)
+    auth.logout()
+    auth.authenticate("viewer1", "password123")
+    auth_mod._auth_manager = auth
+    try:
+        widget.apply_rbac()
+        assert widget.delete_button.isEnabled() is False
+        widget.backups_table.selectRow(0)
+        widget.delete_selected()
+        widget.wait_idle()
+        assert path.is_file()
+    finally:
+        reset_auth_manager()

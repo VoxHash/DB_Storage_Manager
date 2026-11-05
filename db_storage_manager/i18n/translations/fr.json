@@ -157,7 +157,7 @@
     "last_run": "Dernière exécution:",
     "next_run": "Prochaine exécution:",
     "run_now": "Exécuter maintenant",
-    "delete": "Supprimer",
+    "delete": "Supprimer…",
     "backup_created": "Sauvegarde créée avec succès",
     "scratch_done": "La restauration d’essai s’est terminée dans {name}. La production n’a pas été modifiée.",
     "backup_failed": "Échec de la création de la sauvegarde",
@@ -263,7 +263,13 @@
     "s3_refresh_in_progress": "Liste des sauvegardes S3…",
     "restore_done_safety": "Restauration terminée. Sauvegarde de sécurité : {name}.",
     "restore_done": "Restauration terminée.",
-    "size_tip_raw": "dump brut"
+    "size_tip_raw": "dump brut",
+    "delete_tooltip": "Supprime la sauvegarde locale, Proton Drive ou S3 sélectionnée. Nécessite l’autorisation backups:create.",
+    "delete_title": "Supprimer la sauvegarde",
+    "delete_body": "Supprimer la sauvegarde {where} {name} ? L’archive et ses métadonnées de somme de contrôle sont retirées. Cette action est définitive.",
+    "delete_done": "{name} a été supprimée.",
+    "delete_failed": "Échec de la suppression : {error}",
+    "delete_in_progress": "Suppression de la sauvegarde…"
   },
   "settings": {
     "title": "Paramètres",
@@ -348,7 +354,13 @@
     "telegram_title": "Alertes Telegram",
     "telegram_hint": "Publie via l'API officielle des bots (api.telegram.org uniquement). Le jeton du bot et l'identifiant du chat restent dans SecureStore et ne sont pas écrits dans le journal des notifications. Désactivé tant que Telegram n'est pas activé dans l'onglet Surveillance.",
     "telegram_token": "Jeton du bot",
-    "telegram_chat_id": "Identifiant du chat"
+    "telegram_chat_id": "Identifiant du chat",
+    "local_backup_dir": "Dossier local des sauvegardes",
+    "local_backup_dir_browse": "Parcourir…",
+    "local_backup_dir_browse_title": "Dossier local des sauvegardes",
+    "local_backup_dir_hint": "Laissez vide pour conserver le dossier par défaut de l’application. La création, la liste, la restauration et les sauvegardes locales planifiées utilisent ce dossier.",
+    "local_backup_dir_invalid_title": "Dossier local des sauvegardes",
+    "local_backup_dir_invalid": "Le dossier local des sauvegardes n’a pas été enregistré : {reason}"
   },
   "about": {
     "title": "À propos",

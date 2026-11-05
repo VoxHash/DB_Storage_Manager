@@ -4,6 +4,7 @@ MySQL/MariaDB database connection
 
 import asyncio
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 import pymysql
@@ -23,18 +24,83 @@ _DUMP_CLIENT_CANDIDATES = ("mariadb-dump", "mysqldump")
 _CLIENT_CANDIDATES = ("mariadb", "mysql")
 _ARCH_CLIENTS_HINT = (
     "Install MariaDB/MySQL client tools "
-    "(Arch/Garuda: sudo pacman -S --needed mariadb-clients) "
-    "and ensure mariadb-dump or mysqldump is on PATH."
+    "(Arch/Garuda: sudo pacman -S --needed mariadb-clients libedit) "
+    "and ensure mariadb-dump or mysqldump is on PATH. "
+    "A user-local mariadb binary that cannot load libedit.so.2 is skipped; "
+    "a working mysql client on PATH is used instead."
+)
+
+# Dynamic linker failures. The binary is on PATH but cannot run; do not
+# bundle a copy of the missing library into the app.
+_LOADER_MARKERS = (
+    "error while loading shared libraries",
+    "cannot open shared object file",
 )
 
 
+def _loader_failure_text(text: str) -> Optional[str]:
+    """The linker line when ``text`` says a shared library could not be loaded."""
+    lowered = text.lower()
+    if not any(marker in lowered for marker in _LOADER_MARKERS):
+        return None
+    for line in text.splitlines():
+        if any(marker in line.lower() for marker in _LOADER_MARKERS):
+            return line.strip()[:500]
+    return text.strip()[:500]
+
+
+def _cli_starts(path: str) -> tuple[bool, str]:
+    """True when ``path --version`` actually starts.
+
+    A MariaDB client built against a missing ``libedit.so.2`` is on PATH and
+    still exits before it can read a dump. That binary is not usable.
+    """
+    try:
+        proc = subprocess.run(
+            [path, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=8,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return False, str(exc)
+    detail = ((proc.stderr or "") + "\n" + (proc.stdout or "")).strip()
+    broken = _loader_failure_text(detail)
+    if broken:
+        return False, broken
+    return True, ""
+
+
 def resolve_mysql_cli(candidates: Sequence[str] = _DUMP_CLIENT_CANDIDATES) -> Optional[str]:
-    """Return the first dump/client binary found on PATH, or None."""
+    """Return the first dump/client binary that starts, or None.
+
+    Names earlier in ``candidates`` win. A binary that cannot load its
+    shared libraries is skipped so the next name (``mysql`` after a broken
+    ``mariadb``) can be used.
+    """
     for name in candidates:
         path = shutil.which(name)
-        if path:
+        if path and _cli_starts(path)[0]:
             return path
     return None
+
+
+def _mysql_client_start_problems(candidates: Sequence[str]) -> List[str]:
+    """Binaries that were found but cannot start. Empty when none are on PATH."""
+    problems: List[str] = []
+    found = False
+    for name in candidates:
+        path = shutil.which(name)
+        if not path:
+            continue
+        found = True
+        ok, detail = _cli_starts(path)
+        if not ok:
+            problems.append(f"{name} ({path}): {detail}")
+    if not found:
+        return []
+    return problems
 
 
 def require_mysql_cli(
@@ -46,6 +112,12 @@ def require_mysql_cli(
     path = resolve_mysql_cli(candidates)
     if path:
         return path
+    problems = _mysql_client_start_problems(candidates)
+    if problems:
+        raise RuntimeError(
+            "MySQL/MariaDB client cannot start "
+            f"(required for {purpose}). " + " ".join(problems) + " " + _ARCH_CLIENTS_HINT
+        )
     names = " or ".join(candidates)
     raise FileNotFoundError(
         f"{names} not found on PATH (required for MySQL/MariaDB {purpose}). "
@@ -396,29 +468,55 @@ class MySQLConnection(DatabaseConnection):
 
         backup_data = backup_file.read_bytes()
 
-        client_bin = require_mysql_cli(_CLIENT_CANDIDATES, purpose="restore")
-        cmd = [
-            client_bin,
-            f"--host={self.config.host or 'localhost'}",
-            f"--port={self.config.port or 3306}",
-            f"--user={self.config.username}",
-            f"--password={self.config.password}",
-            self.config.database,
-        ]
+        failures: List[str] = []
+        tried: set[str] = set()
+        for name in _CLIENT_CANDIDATES:
+            client_bin = shutil.which(name)
+            if not client_bin or client_bin in tried:
+                continue
+            tried.add(client_bin)
+            ok, detail = _cli_starts(client_bin)
+            if not ok:
+                failures.append(f"{name} ({client_bin}): {detail}")
+                continue
+            cmd = [
+                client_bin,
+                f"--host={self.config.host or 'localhost'}",
+                f"--port={self.config.port or 3306}",
+                f"--user={self.config.username}",
+                f"--password={self.config.password}",
+                self.config.database,
+            ]
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            except FileNotFoundError as exc:
+                failures.append(f"{name} ({client_bin}): {exc}")
+                continue
 
-        try:
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-        except FileNotFoundError as exc:
+            _stdout, stderr = await process.communicate(input=backup_data)
+            if process.returncode == 0:
+                return
+            text = stderr.decode(errors="replace")
+            broken = _loader_failure_text(text)
+            if broken:
+                failures.append(f"{name} ({client_bin}): {broken}")
+                continue
+            raise RuntimeError(f"{Path(client_bin).name} restore failed: {text}")
+
+        if not tried:
+            names = " or ".join(_CLIENT_CANDIDATES)
             raise FileNotFoundError(
-                f"{client_bin} disappeared from PATH during restore. {_ARCH_CLIENTS_HINT}"
-            ) from exc
-
-        stdout, stderr = await process.communicate(input=backup_data)
-
-        if process.returncode != 0:
-            raise RuntimeError(f"{Path(client_bin).name} restore failed: {stderr.decode()}")
+                f"{names} not found on PATH (required for MySQL/MariaDB restore). "
+                f"{_ARCH_CLIENTS_HINT}"
+            )
+        raise RuntimeError(
+            "MySQL/MariaDB restore failed. "
+            + " ".join(failures)
+            + " "
+            + _ARCH_CLIENTS_HINT
+        )

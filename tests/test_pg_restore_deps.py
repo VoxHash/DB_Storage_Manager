@@ -70,6 +70,7 @@ def test_toc_parser_keeps_table_and_constraint_tags():
         "description": "TABLE",
         "schema": "auth",
         "tag": ["audit_log_entries"],
+        "owner": "dsm_auth",
     }
     data = parse_pg_restore_toc_entry(
         "3416; 0 16388 TABLE DATA auth audit_log_entries dsm_auth"
@@ -83,6 +84,7 @@ def test_toc_parser_keeps_table_and_constraint_tags():
     assert constraint["tag"] == ["audit_log_entries", "audit_log_entries_pkey"]
     extension = parse_pg_restore_toc_entry("2; 3079 16414 EXTENSION - pg_trgm ")
     assert extension["tag"] == ["pg_trgm"]
+    assert extension["owner"] == ""
     comment = parse_pg_restore_toc_entry(
         "3482; 0 0 COMMENT - EXTENSION pg_trgm "
     )
@@ -213,6 +215,88 @@ Command was: CREATE FUNCTION extensions.grant_pg_cron_access() RETURNS event_tri
 
 def test_platform_object_errors_are_not_a_hard_failure():
     assert pg_restore_errors_tolerated(_PLATFORM_STDERR) is True
+
+
+# Supabase-style dump: default privileges for supabase_admin, a catalog
+# GRANT ... WITH GRANT OPTION, and the table the session owns.
+ACL_LISTING = """\
+;
+; Selected TOC Entries:
+;
+217; 1255 16392 FUNCTION public app_label() dsm_app
+216; 1259 16393 TABLE public customers dsm_app
+3414; 0 16393 TABLE DATA public customers dsm_app
+5001; 826 16410 DEFAULT ACL public TABLE dsm_app
+5002; 826 16411 DEFAULT ACL public SEQUENCE supabase_admin
+5003; 826 16412 DEFAULT ACL extensions FUNCTION supabase_admin
+5004; 0 0 ACL public TABLE customers dsm_app
+5005; 0 0 ACL pg_catalog FUNCTION pg_reload_conf() postgres
+"""
+
+
+def test_filter_skips_foreign_default_acl_and_catalog_grants():
+    filtered = filter_pg_restore_list(
+        ACL_LISTING,
+        set(),
+        {},
+        set(),
+        None,
+        None,
+        None,
+        {"supabase_admin"},
+        True,
+    )
+    kept = [
+        line
+        for line in filtered.splitlines()
+        if line.strip() and not line.startswith(";")
+    ]
+    commented = [line for line in filtered.splitlines() if line.startswith(";")]
+    assert any("TABLE public customers " in line for line in kept)
+    assert any("TABLE DATA public customers " in line for line in kept)
+    assert any("FUNCTION public app_label()" in line for line in kept)
+    assert any("DEFAULT ACL public TABLE dsm_app" in line for line in kept)
+    assert any("ACL public TABLE customers " in line for line in kept)
+    assert any(
+        "DEFAULT ACL public SEQUENCE supabase_admin" in line for line in commented
+    )
+    assert any(
+        "DEFAULT ACL extensions FUNCTION supabase_admin" in line for line in commented
+    )
+    assert any(
+        "ACL pg_catalog FUNCTION pg_reload_conf()" in line for line in commented
+    )
+    notice = platform_skip_notice(
+        ACL_LISTING,
+        set(),
+        {},
+        set(),
+        None,
+        None,
+        None,
+        {"supabase_admin"},
+        True,
+    )
+    assert notice is not None
+    assert "Skipped ACLs" in notice
+    assert "supabase_admin" in notice
+    assert "catalog grants" in notice
+    assert "customers" not in notice
+    assert "app_label" not in notice
+
+
+_SUPABASE_ACL_STDERR = """\
+pg_restore: error: could not execute query: ERROR:  grant options cannot be granted back to your own grantor
+Command was: GRANT ALL ON FUNCTION pg_catalog.pg_reload_conf() TO postgres WITH GRANT OPTION;
+pg_restore: error: could not execute query: ERROR:  permission denied to change default privileges
+Command was: ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA extensions GRANT ALL ON FUNCTIONS TO postgres WITH GRANT OPTION;
+pg_restore: error: could not execute query: ERROR:  permission denied to change default privileges
+Command was: ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
+"""
+
+
+def test_grant_option_and_default_privilege_errors_do_not_fail_restore():
+    assert pg_restore_errors_tolerated(_SUPABASE_ACL_STDERR) is True
 
 
 def test_table_and_permission_errors_still_fail_the_restore():

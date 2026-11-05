@@ -172,8 +172,29 @@ def _is_platform_restore_error(line: str) -> bool:
     return False
 
 
+def _is_skippable_acl_error(error_line: str, command_line: Optional[str]) -> bool:
+    """GRANT OPTION loops and default privileges for a role the session is not.
+
+    These are ACL statements. A table or row permission error is not in this
+    set, so a failed ``COPY`` still fails the restore.
+    """
+    text = error_line.lower()
+    grant_loop = "grant options cannot be granted back to your own grantor" in text
+    default_priv = "permission denied to change default privileges" in text
+    if not grant_loop and not default_priv:
+        return False
+    if command_line is None:
+        return True
+    command = command_line[len("Command was:") :].lstrip().upper()
+    if grant_loop and not command.startswith("GRANT "):
+        return False
+    if default_priv and not command.startswith("ALTER DEFAULT PRIVILEGES"):
+        return False
+    return True
+
+
 def pg_restore_errors_tolerated(stderr: str) -> bool:
-    """True when every pg_restore error is version skew or an unowned platform object.
+    """True when every pg_restore error is version skew, an unowned platform object, or an ACL the session cannot apply.
 
     ``pg_restore`` applies the rest of the archive after these statements fail.
     ``must be owner of table`` and ``relation already exists`` still fail the
@@ -194,6 +215,8 @@ def pg_restore_errors_tolerated(stderr: str) -> bool:
             continue
         if _is_version_skew_error(line, command):
             continue
+        if _is_skippable_acl_error(line, command):
+            continue
         return False
     return True
 
@@ -204,6 +227,37 @@ def pg_restore_stderr_has_platform_object_errors(stderr: str) -> bool:
         for line in stderr.splitlines()
         if line.startswith("pg_restore: error:")
     )
+
+
+def pg_restore_stderr_has_skipped_acl(stderr: str) -> bool:
+    return any(
+        _is_skippable_acl_error(line, None)
+        for line in stderr.splitlines()
+        if line.startswith("pg_restore: error:")
+    )
+
+
+_CATALOG_SCHEMAS = {"pg_catalog", "information_schema"}
+_ACL_SKIP_NOTE = "Skipped ACLs the session cannot apply."
+
+
+def _entry_acl_blocked(
+    entry: dict,
+    blocked_acl_roles: set[str],
+    skip_catalog_acl: bool,
+) -> bool:
+    """DEFAULT ACL for another role, or an ACL on a catalog schema."""
+    description = entry["description"]
+    if description == "DEFAULT ACL":
+        owner = entry.get("owner") or ""
+        return bool(owner) and owner in blocked_acl_roles
+    if (
+        skip_catalog_acl
+        and description == "ACL"
+        and entry["schema"] in _CATALOG_SCHEMAS
+    ):
+        return True
+    return False
 
 
 # Longest descriptions first so "TABLE DATA" is not parsed as "TABLE".
@@ -302,19 +356,29 @@ def parse_pg_restore_toc_entry(line: str) -> Optional[dict]:
             return None
         schema = tail[0]
         payload = tail[1:]
+        owner = ""
         if len(payload) >= 2:
+            owner = payload[-1]
             tag = payload[:-1]
             if (
                 schema == "-"
                 and len(tag) == 1
                 and tag[0] in _DASH_TAG_KINDS
             ):
+                # Trailing space in the listing: the last token is the name,
+                # not an owner.
                 tag = payload
+                owner = ""
         else:
             tag = payload
         if not tag:
             return None
-        return {"description": desc, "schema": schema, "tag": tag}
+        return {
+            "description": desc,
+            "schema": schema,
+            "tag": tag,
+            "owner": owner,
+        }
     return None
 
 
@@ -333,10 +397,14 @@ def _toc_line_blocked(
     blocked_event_triggers: Optional[set[str]] = None,
     blocked_routines: Optional[Dict[str, set]] = None,
     blocked_schema_defs: Optional[set[str]] = None,
+    blocked_acl_roles: Optional[set[str]] = None,
+    skip_catalog_acl: bool = False,
 ) -> bool:
     entry = parse_pg_restore_toc_entry(line)
     if entry is None:
         return False
+    if _entry_acl_blocked(entry, blocked_acl_roles or set(), skip_catalog_acl):
+        return True
     schema = entry["schema"]
     tag: List[str] = entry["tag"]
     description = entry["description"]
@@ -387,6 +455,8 @@ def filter_pg_restore_list(
     blocked_event_triggers: Optional[set[str]] = None,
     blocked_routines: Optional[Dict[str, set]] = None,
     blocked_schema_defs: Optional[set[str]] = None,
+    blocked_acl_roles: Optional[set[str]] = None,
+    skip_catalog_acl: bool = False,
 ) -> str:
     """Comment out TOC entries the session must not drop or replace.
 
@@ -396,11 +466,16 @@ def filter_pg_restore_list(
     cannot drop, and extensions it cannot drop, are removed too. Event
     triggers, functions, and ``CREATE/DROP SCHEMA`` for schemas the session
     does not own are removed as well. Their dependents are not dropped with
-    ``CASCADE``. Everything else is unchanged.
+    ``CASCADE``. ``DEFAULT ACL`` entries for a role the session is not a
+    member of, and ``ACL`` entries in ``pg_catalog`` / ``information_schema``,
+    are removed too: those are the GRANT OPTION loops and
+    ``ALTER DEFAULT PRIVILEGES FOR ROLE`` statements a hosted restore cannot
+    apply. Everything else is unchanged.
     """
     event_triggers = blocked_event_triggers or set()
     routines = blocked_routines or {}
     schema_defs = blocked_schema_defs or set()
+    acl_roles = blocked_acl_roles or set()
     if (
         not blocked_schemas
         and not blocked_names
@@ -408,6 +483,8 @@ def filter_pg_restore_list(
         and not event_triggers
         and not any(routines.values())
         and not schema_defs
+        and not acl_roles
+        and not skip_catalog_acl
     ):
         return listing
     lines = []
@@ -420,6 +497,8 @@ def filter_pg_restore_list(
             event_triggers,
             routines,
             schema_defs,
+            acl_roles,
+            skip_catalog_acl,
         ):
             lines.append(";" + raw)
         else:
@@ -430,6 +509,42 @@ def filter_pg_restore_list(
     return text
 
 
+def _acl_skip_sentence(
+    listing: str,
+    blocked_acl_roles: set[str],
+    skip_catalog_acl: bool,
+) -> Optional[str]:
+    """One sentence when default-privilege or catalog ACL lines were skipped."""
+    if not blocked_acl_roles and not skip_catalog_acl:
+        return None
+    roles: list[str] = []
+    catalog = False
+    for raw in listing.splitlines():
+        entry = parse_pg_restore_toc_entry(raw)
+        if entry is None:
+            continue
+        if not _entry_acl_blocked(entry, blocked_acl_roles, skip_catalog_acl):
+            continue
+        if entry["description"] == "DEFAULT ACL":
+            owner = entry.get("owner") or ""
+            if owner:
+                roles.append(owner)
+        elif entry["description"] == "ACL":
+            catalog = True
+    unique = sorted(dict.fromkeys(roles))
+    bits: list[str] = []
+    if unique:
+        if len(unique) <= 3:
+            bits.append("default privileges for " + ", ".join(unique))
+        else:
+            bits.append(f"default privileges for {len(unique)} roles")
+    if catalog:
+        bits.append("catalog grants")
+    if not bits:
+        return None
+    return _ACL_SKIP_NOTE.rstrip(".") + ": " + "; ".join(bits) + "."
+
+
 def platform_skip_notice(
     listing: str,
     blocked_schemas: set[str],
@@ -438,11 +553,14 @@ def platform_skip_notice(
     blocked_event_triggers: Optional[set[str]] = None,
     blocked_routines: Optional[Dict[str, set]] = None,
     blocked_schema_defs: Optional[set[str]] = None,
+    blocked_acl_roles: Optional[set[str]] = None,
+    skip_catalog_acl: bool = False,
 ) -> Optional[str]:
     """One sentence naming platform objects removed from this restore list."""
     event_triggers = blocked_event_triggers or set()
     routines = blocked_routines or {}
     schema_defs = blocked_schema_defs or set()
+    acl_roles = blocked_acl_roles or set()
     events: list[str] = []
     schemas: list[str] = []
     functions: list[str] = []
@@ -459,6 +577,8 @@ def platform_skip_notice(
             event_triggers,
             routines,
             schema_defs,
+            acl_roles,
+            skip_catalog_acl,
         ):
             continue
         description = entry["description"]
@@ -500,13 +620,19 @@ def platform_skip_notice(
         )
         if part
     ]
-    if not parts:
+    acl_sentence = _acl_skip_sentence(listing, acl_roles, skip_catalog_acl)
+    if not parts and not acl_sentence:
         return None
-    return (
-        "Platform objects this session cannot replace were left in place: "
-        + "; ".join(parts)
-        + "."
-    )
+    text = ""
+    if parts:
+        text = (
+            "Platform objects this session cannot replace were left in place: "
+            + "; ".join(parts)
+            + "."
+        )
+    if acl_sentence:
+        text = (text + " " + acl_sentence).strip()
+    return text
 
 
 class PostgreSQLConnection(DatabaseConnection):
@@ -979,6 +1105,15 @@ class PostgreSQLConnection(DatabaseConnection):
             routines: Dict[str, set] = {}
             for schema, name in cursor.fetchall():
                 routines.setdefault(schema, set()).add(name)
+
+            cursor.execute(
+                """
+                SELECT rolname
+                FROM pg_roles
+                WHERE NOT pg_has_role(current_user, oid, 'MEMBER')
+                """
+            )
+            acl_roles = {row[0] for row in cursor.fetchall()}
         finally:
             cursor.close()
         stuck = set(names) | set(routines)
@@ -991,6 +1126,7 @@ class PostgreSQLConnection(DatabaseConnection):
             "event_triggers": event_triggers,
             "routines": routines,
             "schema_defs": schema_defs,
+            "acl_roles": acl_roles,
         }
 
     async def restore_backup(self, backup_path: str) -> None:
@@ -1020,6 +1156,7 @@ class PostgreSQLConnection(DatabaseConnection):
         blocked_event_triggers = blocks["event_triggers"]
         blocked_routines = blocks["routines"]
         blocked_schema_defs = blocks["schema_defs"]
+        blocked_acl_roles = blocks["acl_roles"]
         from psycopg2 import sql as pg_sql
 
         cursor = self.connection.cursor()
@@ -1044,6 +1181,8 @@ class PostgreSQLConnection(DatabaseConnection):
             blocked_event_triggers,
             blocked_routines,
             blocked_schema_defs,
+            blocked_acl_roles,
+            True,
         )
         self.restore_notice = platform_skip_notice(
             listing,
@@ -1053,6 +1192,8 @@ class PostgreSQLConnection(DatabaseConnection):
             blocked_event_triggers,
             blocked_routines,
             blocked_schema_defs,
+            blocked_acl_roles,
+            True,
         )
         list_path: Optional[Path] = None
         if filtered != listing:
@@ -1113,6 +1254,13 @@ class PostgreSQLConnection(DatabaseConnection):
                         "Platform objects this session cannot replace "
                         "were left in place."
                     )
+                if pg_restore_stderr_has_skipped_acl(message):
+                    if not self.restore_notice:
+                        self.restore_notice = _ACL_SKIP_NOTE
+                    elif "Skipped ACLs" not in self.restore_notice:
+                        self.restore_notice = (
+                            f"{self.restore_notice} {_ACL_SKIP_NOTE}"
+                        )
         finally:
             if list_path is not None:
                 list_path.unlink(missing_ok=True)

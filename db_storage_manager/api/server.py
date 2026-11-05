@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
-from ..config import BACKUP_DIR
+from ..backups.local import resolve_local_backup_dir
 from ..security.auth import PermissionDenied, get_auth_manager
 from ..security.pairing import resolve_api_bearer_ok
 from . import service
@@ -391,7 +391,9 @@ class CompanionHandler(BaseHTTPRequestHandler):
         values = query.get("backup_dir") or query.get("dir") or []
         if values and values[0]:
             return Path(values[0])
-        return self.companion.backup_dir
+        if getattr(self.companion, "_backup_dir_explicit", False):
+            return self.companion.backup_dir
+        return resolve_local_backup_dir()
 
     def _serve_static(self, relative: str) -> None:
         # Prevent path traversal
@@ -427,7 +429,10 @@ class CompanionServer(ThreadingHTTPServer):
         backup_dir: Optional[Path] = None,
     ):
         self.api_token = api_token if api_token is not None else _env_token()
-        self.backup_dir = Path(backup_dir) if backup_dir else BACKUP_DIR
+        self._backup_dir_explicit = backup_dir is not None
+        self.backup_dir = (
+            Path(backup_dir) if backup_dir is not None else resolve_local_backup_dir()
+        )
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         try:
             from ..security.pairing import get_companion_prefs

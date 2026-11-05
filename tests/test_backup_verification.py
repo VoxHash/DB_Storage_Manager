@@ -227,11 +227,15 @@ def test_delete_removes_sidecar(local_adapter: LocalBackupAdapter, tmp_path: Pat
         )
     )
     sidecar = meta_path_for(Path(info.path))
+    checksum = Path(str(info.path) + ".sha256")
+    checksum.write_text(info.metadata.get("sha256") or "abc", encoding="utf-8")
     assert Path(info.path).exists()
     assert sidecar.exists()
+    assert checksum.exists()
     asyncio.run(local_adapter.delete_backup(info.id))
     assert not Path(info.path).exists()
     assert not sidecar.exists()
+    assert not checksum.exists()
 
 
 def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_secure_store):

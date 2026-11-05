@@ -103,17 +103,27 @@ class BackupManager:
     def _get_adapter_locked(
         self, adapter_type: str, config: Optional[Dict[str, Any]] = None
     ) -> Optional[BackupAdapter]:
+        # Local path comes from Settings (SecureStore). Refresh when it
+        # changes so a cached adapter does not keep writing to the old folder.
+        if adapter_type == "local":
+            from .local import LocalBackupAdapter, resolve_local_backup_dir
+
+            path = resolve_local_backup_dir()
+            current = self.adapters.get("local")
+            if (
+                isinstance(current, LocalBackupAdapter)
+                and Path(current.base_path) == Path(path)
+            ):
+                return current
+            adapter = LocalBackupAdapter(base_path=path)
+            self.adapters["local"] = adapter
+            return adapter
+
         if adapter_type in self.adapters:
             return self.adapters[adapter_type]
 
         # Create adapter dynamically if not registered
-        if adapter_type == "local":
-            from .local import LocalBackupAdapter
-
-            adapter = LocalBackupAdapter()
-            self.register_adapter("local", adapter)
-            return adapter
-        elif adapter_type == "s3":
+        if adapter_type == "s3":
             from .s3 import S3BackupAdapter, resolve_s3_config
 
             resolved = dict(config or {})
