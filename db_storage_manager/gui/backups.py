@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from PyQt6.QtCore import QCoreApplication, Qt
+from PyQt6.QtCore import QCoreApplication, QSize, Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
@@ -69,6 +70,48 @@ _STATUS_COLORS = {
 
 # Backwards-compatible name (tests / callers import ``BackupJobWorker``).
 BackupJobWorker = JobWorker
+
+
+class _WrappingLabel(QLabel):
+    """Word-wrapped label whose height follows its width.
+
+    A plain ``QLabel`` reports a one-line minimum height. The restore size
+    explainer then paints over the table header when the row is narrower
+    than the sentence.
+    """
+
+    def __init__(self, text: str = "", parent: Optional[QWidget] = None) -> None:
+        super().__init__(text, parent)
+        self.setWordWrap(True)
+        self.setMinimumWidth(0)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setSizePolicy(
+            QSizePolicy.Policy.Preferred,
+            QSizePolicy.Policy.Minimum,
+        )
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        margins = self.contentsMargins()
+        inner = max(1, width - margins.left() - margins.right())
+        flags = int(Qt.AlignmentFlag.AlignLeft | Qt.TextFlag.TextWordWrap)
+        rect = self.fontMetrics().boundingRect(0, 0, inner, 10_000, flags, self.text())
+        return rect.height() + margins.top() + margins.bottom() + 4
+
+    def sizeHint(self) -> QSize:
+        width = self.width() if self.width() > 40 else 480
+        return QSize(max(width, 0), self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        width = self.width() if self.width() > 40 else 320
+        return QSize(0, self.heightForWidth(width))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.updateGeometry()
+
 
 # Independent job groups: one active job per group, groups run concurrently.
 _GROUP_CREATE = "create"
@@ -349,7 +392,7 @@ class BackupsWidget(QWidget):
         actions.addStretch()
         restore_layout.addLayout(actions)
 
-        self.size_explainer_label = QLabel(
+        self.size_explainer_label = _WrappingLabel(
             t(
                 "backups.size_explainer",
                 default=(
@@ -361,9 +404,9 @@ class BackupsWidget(QWidget):
                 ),
             )
         )
-        self.size_explainer_label.setWordWrap(True)
         self.size_explainer_label.setObjectName("backupSizeExplainer")
         restore_layout.addWidget(self.size_explainer_label)
+        restore_layout.addSpacing(8)
 
         self.backups_table = QTableWidget(0, 7)
         self.backups_table.setHorizontalHeaderLabels(
@@ -377,8 +420,17 @@ class BackupsWidget(QWidget):
                 t("backups.col_detail"),
             ]
         )
-        self.backups_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch
+        # Name keeps the leftover width and elides in the middle so the
+        # timestamp suffix stays visible. Created and the short columns
+        # size to their text instead of sharing that width equally.
+        backup_header = self.backups_table.horizontalHeader()
+        backup_header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        backup_header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        backup_header.setStretchLastSection(False)
+        backup_header.setMinimumSectionSize(72)
+        self.backups_table.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.backups_table.setHorizontalScrollMode(
+            QTableWidget.ScrollMode.ScrollPerPixel
         )
         self.backups_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
@@ -989,7 +1041,11 @@ class BackupsWidget(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, backup.id)
                 if col in (5, 6):
                     item.setForeground(QBrush(color))
-                if col in (1, 2):
+                if col == 0:
+                    item.setToolTip(str(value))
+                elif col == 3:
+                    item.setToolTip(created_text)
+                elif col in (1, 2):
                     item.setToolTip(self._size_tooltip(backup))
                 self.backups_table.setItem(row, col, item)
 

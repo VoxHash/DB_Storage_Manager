@@ -3,10 +3,11 @@ MySQL/MariaDB database connection
 """
 
 import asyncio
+import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pymysql
 from pymysql.cursors import DictCursor
 
@@ -24,17 +25,29 @@ _DUMP_CLIENT_CANDIDATES = ("mariadb-dump", "mysqldump")
 _CLIENT_CANDIDATES = ("mariadb", "mysql")
 _ARCH_CLIENTS_HINT = (
     "Install MariaDB/MySQL client tools "
-    "(Arch/Garuda: sudo pacman -S --needed mariadb-clients libedit) "
-    "and ensure mariadb-dump or mysqldump is on PATH. "
-    "A user-local mariadb binary that cannot load libedit.so.2 is skipped; "
-    "a working mysql client on PATH is used instead."
+    "(Arch/Garuda: sudo pacman -S --needed mariadb-clients libedit). "
+    "Every PATH entry is checked, then /usr/bin, /usr/local/bin, and /bin. "
+    "A binary that cannot start because a shared library is missing "
+    "(for example libedit.so.2) or that fails with WinError is skipped. "
+    "No shared library is bundled with the app."
 )
 
-# Dynamic linker failures. The binary is on PATH but cannot run; do not
-# bundle a copy of the missing library into the app.
+# Directories checked after PATH. A broken ~/.local/bin/mariadb must not
+# hide /usr/bin/mariadb when the distro client is installed.
+_SYSTEM_BIN_DIRS = (
+    "/usr/bin",
+    "/usr/local/bin",
+    "/bin",
+)
+
+# Dynamic linker / loader failures. The binary is on PATH but cannot run;
+# do not bundle a copy of the missing library into the app.
 _LOADER_MARKERS = (
     "error while loading shared libraries",
     "cannot open shared object file",
+    "winerror",
+    "the specified module could not be found",
+    "not a valid win32 application",
 )
 
 
@@ -72,34 +85,95 @@ def _cli_starts(path: str) -> tuple[bool, str]:
     return True, ""
 
 
+def _path_key(path: str) -> str:
+    """Stable identity so a symlink and its target are one binary."""
+    try:
+        return os.path.normcase(os.path.realpath(path))
+    except OSError:
+        return os.path.normcase(os.path.abspath(path))
+
+
+def _cli_search_dirs() -> List[str]:
+    """PATH entries, then common system directories not already listed."""
+    dirs: List[str] = []
+    seen: set[str] = set()
+
+    def add(directory: str) -> None:
+        if not directory:
+            return
+        key = os.path.normcase(os.path.abspath(directory))
+        if key in seen:
+            return
+        seen.add(key)
+        dirs.append(directory)
+
+    for entry in os.environ.get("PATH", "").split(os.pathsep):
+        add(entry)
+    for entry in _SYSTEM_BIN_DIRS:
+        add(entry)
+    return dirs
+
+
+def _iter_cli_paths(name: str) -> List[str]:
+    """Every executable named ``name``, in PATH order, then system dirs.
+
+    ``shutil.which`` returns only the first hit. A user-local ``mariadb``
+    that cannot load ``libedit.so.2`` must not hide ``/usr/bin/mariadb``
+    or a later PATH entry. The same inode is returned once.
+    """
+    found: List[str] = []
+    seen: set[str] = set()
+    for directory in _cli_search_dirs():
+        hit = shutil.which(name, path=directory)
+        if not hit:
+            continue
+        key = _path_key(hit)
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(hit)
+    return found
+
+
+def iter_mysql_cli_paths(
+    candidates: Sequence[str] = _DUMP_CLIENT_CANDIDATES,
+) -> List[Tuple[str, str]]:
+    """``(name, path)`` for each distinct binary, candidate order then PATH order."""
+    rows: List[Tuple[str, str]] = []
+    seen: set[str] = set()
+    for name in candidates:
+        for path in _iter_cli_paths(name):
+            key = _path_key(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append((name, path))
+    return rows
+
+
 def resolve_mysql_cli(candidates: Sequence[str] = _DUMP_CLIENT_CANDIDATES) -> Optional[str]:
     """Return the first dump/client binary that starts, or None.
 
-    Names earlier in ``candidates`` win. A binary that cannot load its
-    shared libraries is skipped so the next name (``mysql`` after a broken
-    ``mariadb``) can be used.
+    Names earlier in ``candidates`` win, but every PATH entry for that
+    name is probed. A binary that cannot load its shared libraries is
+    skipped so a later copy (or the next name) can be used.
     """
-    for name in candidates:
-        path = shutil.which(name)
-        if path and _cli_starts(path)[0]:
+    for _name, path in iter_mysql_cli_paths(candidates):
+        if _cli_starts(path)[0]:
             return path
     return None
 
 
 def _mysql_client_start_problems(candidates: Sequence[str]) -> List[str]:
     """Binaries that were found but cannot start. Empty when none are on PATH."""
+    rows = iter_mysql_cli_paths(candidates)
+    if not rows:
+        return []
     problems: List[str] = []
-    found = False
-    for name in candidates:
-        path = shutil.which(name)
-        if not path:
-            continue
-        found = True
+    for name, path in rows:
         ok, detail = _cli_starts(path)
         if not ok:
             problems.append(f"{name} ({path}): {detail}")
-    if not found:
-        return []
     return problems
 
 
@@ -470,11 +544,11 @@ class MySQLConnection(DatabaseConnection):
 
         failures: List[str] = []
         tried: set[str] = set()
-        for name in _CLIENT_CANDIDATES:
-            client_bin = shutil.which(name)
-            if not client_bin or client_bin in tried:
+        for name, client_bin in iter_mysql_cli_paths(_CLIENT_CANDIDATES):
+            key = _path_key(client_bin)
+            if key in tried:
                 continue
-            tried.add(client_bin)
+            tried.add(key)
             ok, detail = _cli_starts(client_bin)
             if not ok:
                 failures.append(f"{name} ({client_bin}): {detail}")
@@ -494,7 +568,8 @@ class MySQLConnection(DatabaseConnection):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-            except FileNotFoundError as exc:
+            except OSError as exc:
+                # FileNotFoundError, WinError 126/193, and other launch failures.
                 failures.append(f"{name} ({client_bin}): {exc}")
                 continue
 

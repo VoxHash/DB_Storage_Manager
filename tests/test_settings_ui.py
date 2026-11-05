@@ -13,7 +13,13 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 pytest.importorskip("PyQt6.QtWidgets")
 
-from PyQt6.QtWidgets import QApplication, QMessageBox  # noqa: E402
+from PyQt6.QtCore import Qt  # noqa: E402
+from PyQt6.QtWidgets import (  # noqa: E402
+    QApplication,
+    QHeaderView,
+    QMessageBox,
+    QTabWidget,
+)
 
 from db_storage_manager import config  # noqa: E402
 from db_storage_manager.experimental import ENV_VAR  # noqa: E402
@@ -303,6 +309,62 @@ def test_backup_table_explains_stored_vs_live_size(app, backups):
     assert "Stored file" in tip and "Live database" in tip and "Dump before" in tip
     assert "logical data" in tip
     assert widget.size_explainer_label.text().startswith("Size is the stored file")
+    assert widget.size_explainer_label.wordWrap()
+
+
+def test_restore_explainer_clears_the_table_and_keeps_created(app, backups):
+    """The size sentence stays above the grid, and Created is the local timestamp."""
+    from datetime import datetime
+
+    from db_storage_manager.backups.base import BackupInfo
+
+    widget, _, _ = backups
+    long_name = "asesoresyasociados.org_e5d275db_20261105_013014.backup.zst.enc"
+    created = datetime(2026, 11, 5, 1, 30, 14)
+    widget._backups = [
+        BackupInfo(
+            id="row-1",
+            name=long_name,
+            path="/tmp/row-1",
+            size=258007,
+            createdAt=created,
+            status="completed",
+            metadata={},
+        )
+    ]
+    widget._populate_table()
+
+    widget.resize(780, 720)
+    label = widget.size_explainer_label
+    table = widget.backups_table
+    tabs = widget.findChild(QTabWidget)
+    assert tabs is not None
+    tabs.setCurrentWidget(label.parentWidget())
+    label.parentWidget().layout().activate()
+    app.processEvents()
+
+    assert label.wordWrap()
+    assert label.hasHeightForWidth()
+    assert label.height() >= label.heightForWidth(label.width()) - 2
+    assert label.geometry().bottom() <= table.geometry().top()
+
+    narrow = label.height()
+    widget.resize(1400, 720)
+    label.parentWidget().layout().activate()
+    app.processEvents()
+    assert label.geometry().bottom() <= table.geometry().top()
+    assert narrow >= label.height()
+
+    header = table.horizontalHeader()
+    assert header.sectionResizeMode(0) == QHeaderView.ResizeMode.Stretch
+    assert header.sectionResizeMode(3) == QHeaderView.ResizeMode.ResizeToContents
+    assert table.textElideMode() == Qt.TextElideMode.ElideMiddle
+    name_item = table.item(0, 0)
+    assert name_item.text() == long_name
+    assert name_item.toolTip() == long_name
+    assert table.item(0, 3).text() == "2026-11-05 01:30:14"
+    assert table.item(0, 5).text() == "UNKNOWN"
+    assert table.item(0, 6).text() == "Not verified"
 
 
 def test_off_machine_adapters_force_encryption(app, backups):

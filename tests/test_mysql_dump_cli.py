@@ -85,7 +85,7 @@ def test_resolve_prefers_mariadb_dump(monkeypatch, tmp_path: Path):
     maria.write_text("#!/bin/sh\n", encoding="utf-8")
     maria.chmod(0o755)
 
-    def fake_which(name: str):
+    def fake_which(name: str, path=None):
         if name == "mysqldump":
             return str(dump)
         if name == "mariadb-dump":
@@ -102,7 +102,7 @@ def test_resolve_falls_back_to_mysqldump(monkeypatch, tmp_path: Path):
     dump.write_text("#!/bin/sh\n", encoding="utf-8")
     dump.chmod(0o755)
 
-    def fake_which(name: str):
+    def fake_which(name: str, path=None):
         if name == "mysqldump":
             return str(dump)
         return None
@@ -128,7 +128,7 @@ def test_resolve_skips_mariadb_that_cannot_load_libedit(monkeypatch, tmp_path: P
     )
     _script(good, "#!/bin/sh\necho 'mysql  Ver 8.0.0'\nexit 0\n")
 
-    def fake_which(name: str):
+    def fake_which(name: str, path=None):
         if name == "mariadb":
             return str(broken)
         if name == "mysql":
@@ -149,7 +149,7 @@ def test_require_broken_clients_names_libedit(monkeypatch, tmp_path: Path):
         "exit 127\n",
     )
 
-    def fake_which(name: str):
+    def fake_which(name: str, path=None):
         if name == "mariadb":
             return str(broken)
         return None
@@ -159,7 +159,10 @@ def test_require_broken_clients_names_libedit(monkeypatch, tmp_path: Path):
         require_mysql_cli(("mariadb", "mysql"), purpose="restore")
     message = str(excinfo.value)
     assert "mariadb-clients" in message
+    assert "libedit" in message
     assert "cannot start" in message
+    assert "is used instead" not in message
+    assert "/usr/bin" in message
 
 
 def test_restore_uses_mysql_when_mariadb_cannot_start(monkeypatch, tmp_path: Path):
@@ -178,7 +181,7 @@ def test_restore_uses_mysql_when_mariadb_cannot_start(monkeypatch, tmp_path: Pat
     dump = tmp_path / "dump.sql"
     dump.write_text("SELECT 1;\n", encoding="utf-8")
 
-    def fake_which(name: str):
+    def fake_which(name: str, path=None):
         if name == "mariadb":
             return str(broken)
         if name == "mysql":
@@ -226,10 +229,137 @@ def test_restore_uses_mysql_when_mariadb_cannot_start(monkeypatch, tmp_path: Pat
 
 
 def test_require_missing_mentions_install_hint(monkeypatch):
-    monkeypatch.setattr("db_storage_manager.db.mysql.shutil.which", lambda _name: None)
+    monkeypatch.setattr(
+        "db_storage_manager.db.mysql.shutil.which",
+        lambda _name, path=None: None,
+    )
     with pytest.raises(FileNotFoundError, match="mariadb-clients") as excinfo:
         require_mysql_cli()
     msg = str(excinfo.value)
     assert "mysqldump" in msg
     assert "mariadb-dump" in msg
     assert "not found on PATH" in msg
+
+
+_LIBEDIT_BODY = (
+    "#!/bin/sh\n"
+    "echo 'error while loading shared libraries: libedit.so.2: "
+    "cannot open shared object file' >&2\n"
+    "exit 127\n"
+)
+_OK_BODY = "#!/bin/sh\necho 'mysql  Ver 15.1 Distrib 10.11'\nexit 0\n"
+
+
+def _cli_file(directory: Path, name: str, body: str) -> Path:
+    """An executable ``name`` that ``shutil.which`` can see on this platform."""
+    filename = name + (".exe" if os.name == "nt" else "")
+    path = directory / filename
+    _script(path, body)
+    return path
+
+
+def _only_these_dirs(monkeypatch, *directories: Path) -> None:
+    """Search the given directories and nowhere else (not the real PATH).
+
+    The first directory is PATH. Any further directories stand in for
+    ``/usr/bin`` and the other system locations.
+    """
+    monkeypatch.setenv("PATH", str(directories[0]))
+    monkeypatch.setattr(
+        "db_storage_manager.db.mysql._SYSTEM_BIN_DIRS",
+        tuple(str(path) for path in directories[1:]),
+    )
+
+
+def test_resolve_skips_broken_path_entry_for_later_working_client(monkeypatch, tmp_path: Path):
+    first = tmp_path / "local-bin"
+    later = tmp_path / "usr-bin"
+    first.mkdir()
+    later.mkdir()
+    _cli_file(first, "mariadb", _LIBEDIT_BODY)
+    _cli_file(first, "mysql", _LIBEDIT_BODY)
+    good = _cli_file(later, "mysql", _OK_BODY)
+    _only_these_dirs(monkeypatch, first, later)
+
+    chosen = resolve_mysql_cli(("mariadb", "mysql"))
+    assert chosen is not None
+    assert os.path.realpath(chosen) == os.path.realpath(good)
+
+
+def test_resolve_dump_skips_broken_path_entry_for_later_working_dump(
+    monkeypatch, tmp_path: Path
+):
+    first = tmp_path / "local-bin"
+    later = tmp_path / "usr-bin"
+    first.mkdir()
+    later.mkdir()
+    _cli_file(first, "mariadb-dump", _LIBEDIT_BODY)
+    _cli_file(first, "mysqldump", _LIBEDIT_BODY)
+    good = _cli_file(later, "mysqldump", _OK_BODY)
+    _only_these_dirs(monkeypatch, first, later)
+
+    chosen = resolve_mysql_cli()
+    assert chosen is not None
+    assert os.path.realpath(chosen) == os.path.realpath(good)
+
+
+def test_resolve_skips_symlink_to_broken_client(monkeypatch, tmp_path: Path):
+    if os.name == "nt":
+        pytest.skip("symlink to a broken client is the POSIX failure mode")
+    first = tmp_path / "local-bin"
+    later = tmp_path / "usr-bin"
+    first.mkdir()
+    later.mkdir()
+    broken = _cli_file(first, "mariadb", _LIBEDIT_BODY)
+    mysql_link = first / "mysql"
+    mysql_link.symlink_to(broken)
+    good = _cli_file(later, "mysql", _OK_BODY)
+    _only_these_dirs(monkeypatch, first, later)
+
+    chosen = resolve_mysql_cli(("mariadb", "mysql"))
+    assert os.path.realpath(chosen) == os.path.realpath(good)
+
+
+def test_resolve_skips_winerror_and_uses_later_binary(monkeypatch, tmp_path: Path):
+    first = tmp_path / "local-bin"
+    later = tmp_path / "usr-bin"
+    first.mkdir()
+    later.mkdir()
+    broken = _cli_file(first, "mariadb", _OK_BODY)
+    good = _cli_file(later, "mariadb", _OK_BODY)
+    _only_these_dirs(monkeypatch, first, later)
+
+    def _run(args, *pos, **kwargs):
+        exe = args[0] if isinstance(args, (list, tuple)) and args else args
+        if os.path.realpath(str(exe)) == os.path.realpath(broken):
+            error = OSError("The specified module could not be found")
+            error.winerror = 126
+            raise error
+        return subprocess.CompletedProcess(
+            args=list(args) if isinstance(args, (list, tuple)) else [args],
+            returncode=0,
+            stdout="mysql  Ver 15.1 Distrib 10.11\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("db_storage_manager.db.mysql.subprocess.run", _run)
+    chosen = resolve_mysql_cli(("mariadb", "mysql"))
+    assert os.path.realpath(chosen) == os.path.realpath(good)
+
+
+def test_require_names_every_broken_path_when_none_start(monkeypatch, tmp_path: Path):
+    first = tmp_path / "local-bin"
+    later = tmp_path / "usr-bin"
+    first.mkdir()
+    later.mkdir()
+    local_bin = _cli_file(first, "mariadb", _LIBEDIT_BODY)
+    system_bin = _cli_file(later, "mysql", _LIBEDIT_BODY)
+    _only_these_dirs(monkeypatch, first, later)
+
+    with pytest.raises(RuntimeError, match="libedit.so.2") as excinfo:
+        require_mysql_cli(("mariadb", "mysql"), purpose="restore")
+    message = str(excinfo.value)
+    assert str(local_bin) in message
+    assert str(system_bin) in message
+    assert "mariadb-clients" in message
+    assert "is used instead" not in message
