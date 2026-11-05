@@ -359,7 +359,9 @@ def test_require_names_every_broken_path_when_none_start(monkeypatch, tmp_path: 
     with pytest.raises(RuntimeError, match="libedit.so.2") as excinfo:
         require_mysql_cli(("mariadb", "mysql"), purpose="restore")
     message = str(excinfo.value)
-    assert str(local_bin) in message
-    assert str(system_bin) in message
+    # shutil.which appends PATHEXT on Windows, so the reported file is .EXE.
+    folded = os.path.normcase(message)
+    assert os.path.normcase(str(local_bin)) in folded
+    assert os.path.normcase(str(system_bin)) in folded
     assert "mariadb-clients" in message
     assert "is used instead" not in message
