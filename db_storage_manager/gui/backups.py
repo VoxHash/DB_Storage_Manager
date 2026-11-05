@@ -171,8 +171,9 @@ class BackupsWidget(QWidget):
         self.refresh_button.setEnabled(can_read and not busy_list)
         self.refresh_proton_button.setEnabled(can_read and not busy_list)
         self.refresh_s3_button.setEnabled(can_read and not busy_list)
-        # Verify, dry-run, restore, and delete live on the row menu. Their
-        # enabled state is decided when the menu opens (one job per backup).
+        self.verify_all_button.setEnabled(self.menu_action_enabled("verify_all"))
+        # Per-row verify, dry-run, restore, and delete live on the row menu.
+        # Their enabled state is decided when the menu opens (one job per backup).
         can_settings = auth.has_permission("settings:write")
         for name in ("configure_proton_button", "configure_s3_button"):
             if hasattr(self, name):
@@ -335,6 +336,14 @@ class BackupsWidget(QWidget):
             lambda _checked=False: self.refresh_remote_backups("s3", queue=True)
         )
         actions.addWidget(self.refresh_s3_button)
+
+        self.verify_all_button = QPushButton(
+            t("backups.verify_all", default="Verify All")
+        )
+        self.verify_all_button.clicked.connect(
+            lambda _checked=False: self.verify_all()
+        )
+        actions.addWidget(self.verify_all_button)
         actions.addStretch()
         restore_layout.addLayout(actions)
 
@@ -1172,13 +1181,6 @@ class BackupsWidget(QWidget):
                     self.menu_action_enabled("verify"),
                 )
             )
-        entries.append(
-            (
-                "verify_all",
-                t("backups.verify_all"),
-                self.menu_action_enabled("verify_all"),
-            )
-        )
         if count == 1:
             entries.append(
                 (
@@ -1261,8 +1263,6 @@ class BackupsWidget(QWidget):
         kind = actions.get(chosen)
         if kind == "verify":
             self.verify_selected()
-        elif kind == "verify_all":
-            self.verify_all()
         elif kind == "dry_run":
             self.dry_run_selected()
         elif kind == "restore":

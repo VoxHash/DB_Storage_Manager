@@ -321,12 +321,14 @@ def test_multi_select_menu_names_the_batch(app, backups):
     entries = widget.context_menu_entries(3)
     labels = {kind: label for kind, label, _enabled in entries}
     assert "Verify 3 backups" in labels["verify"]
-    assert labels["verify_all"]
+    assert "verify_all" not in labels
     assert "Dry-run 3 backups" in labels["dry_run"]
     assert "Restore 3 backups" in labels["restore"]
     assert "Delete 3 backups" in labels["delete"]
     single = [kind for kind, _label, _enabled in widget.context_menu_entries(1)]
-    assert single == ["verify", "verify_all", "dry_run", "restore", "delete"]
+    assert single == ["verify", "dry_run", "restore", "delete"]
+    assert widget.verify_all_button.text() == widget.i18n.translate("backups.verify_all")
+    assert widget.verify_all_button.isEnabled() == widget.menu_action_enabled("verify_all")
 
 
 def test_two_restores_use_separate_workers(app, backups, monkeypatch, tmp_path):
