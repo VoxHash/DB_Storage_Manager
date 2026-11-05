@@ -147,6 +147,14 @@ def test_local_encrypted_create_restore_dry_run(
     assert fail["ok"] is False
     assert fail["stage"] == "decrypt"
 
+    wrong = BackupManager().dry_run_restore(info, encryption_key="not-the-backup-key")
+    assert wrong["ok"] is False
+    assert wrong["stage"] == "dry_run"
+    assert wrong["checksum"]["ok"] is True
+    assert "passphrase does not match" in wrong["error"]
+    assert "file is intact" in wrong["error"]
+    assert "corrupt" not in wrong["error"].lower()
+
     result = BackupManager().dry_run_restore(info, encryption_key=passphrase)
     assert result["ok"] is True
     assert result["integrity"] == "ok"

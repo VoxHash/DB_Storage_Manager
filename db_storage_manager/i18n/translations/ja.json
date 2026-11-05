@@ -269,7 +269,15 @@
     "delete_body": "{where} のバックアップ {name} を削除しますか？アーカイブとチェックサムのメタデータが削除されます。元に戻せません。",
     "delete_done": "{name} を削除しました。",
     "delete_failed": "削除に失敗しました: {error}",
-    "delete_in_progress": "バックアップを削除しています…"
+    "delete_in_progress": "バックアップを削除しています…",
+    "verify_n": "{count} 件のバックアップを検証",
+    "dry_run_n": "{count} 件をドライラン",
+    "restore_n": "{count} 件を復元…",
+    "delete_n": "{count} 件を削除…",
+    "delete_many_body": "これら {count} 件のバックアップを削除しますか？\n{names}\nアーカイブとチェックサムを削除します。元に戻せません。",
+    "verify_n_progress": "{count} 件を検証中…",
+    "dry_run_n_progress": "{count} 件をドライラン中…",
+    "restore_n_progress": "{count} 件を復元中…"
   },
   "settings": {
     "title": "設定",
@@ -753,7 +761,12 @@
     "scratch": "新しい一時データベースでリハーサルする（本番は変更されません）",
     "confirm_button": "復元",
     "type_to_confirm": "確認のため {phrase} と入力:",
-    "passphrase": "バックアップのパスフレーズ:"
+    "passphrase": "バックアップのパスフレーズ:",
+    "batch_title": "{count} 件を復元",
+    "batch_warning": "次の {count} 件を下の対象に復元します。それぞれがそのデータベースを上書きします。\n{names}",
+    "batch_passphrase": "{name} のパスフレーズ:",
+    "batch_confirm_button": "{count} 件を復元",
+    "final_batch_body": "{connection} のデータベース {database} をこれら {count} 件で上書きしますか？\n{names}\n元に戻せません。"
   },
   "s3": {
     "configure_title": "S3 バックアップの設定",

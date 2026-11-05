@@ -209,8 +209,6 @@ def test_compact_actions_are_icon_only_and_accessible(window):
 def test_critical_actions_keep_text_labels(window):
     critical = (
         window.connections_widget.delete_button,
-        window.backups_widget.restore_button,
-        window.backups_widget.dry_run_button,
         window.plugins_widget.uninstall_btn,
         window.plugins_widget.enable_btn,
         window.plugins_widget.disable_btn,
@@ -219,9 +217,23 @@ def test_critical_actions_keep_text_labels(window):
     )
     for button in critical:
         assert button.text().strip(), f"{button.objectName() or button} lost its label"
-    label = window.backups_widget.restore_button.text().lower()
-    assert "restore" in label or "restaur" in label
-    assert "experimental" not in label
+    menu = window.backups_widget.context_menu_entries(1)
+    labels = [label for _kind, label, _enabled in menu]
+    restore = next(label for kind, label, _enabled in menu if kind == "restore")
+    assert "restore" in restore.lower() or "restaur" in restore.lower()
+    assert "experimental" not in restore.lower()
+    assert any("dry" in label.lower() for label in labels)
+    toolbar = []
+    layout = window.backups_widget._restore_actions
+    for index in range(layout.count()):
+        child = layout.itemAt(index).widget()
+        if child is not None and child.text().strip():
+            toolbar.append(child.text().lower())
+    joined = " ".join(toolbar)
+    assert "refresh" in joined
+    assert "restore" not in joined
+    assert "dry-run" not in joined
+    assert "delete" not in joined
 
 
 def test_theme_switch_repaints_icons_and_restyles(window):

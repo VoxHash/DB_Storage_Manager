@@ -7,9 +7,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-from PyQt6.QtCore import QCoreApplication, QSize, Qt
+from PyQt6.QtCore import QCoreApplication, QItemSelectionModel, QSize, Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import (
     QCheckBox,
@@ -49,7 +49,7 @@ from ..i18n.manager import get_i18n_manager
 from ..security.auth import PermissionDenied, get_auth_manager
 from .icons import set_icon_only
 from .jobs import JobRunner, JobWorker
-from .restore_dialog import RestoreDialog
+from .restore_dialog import RestoreBatchDialog, RestoreDialog
 from .utils import (
     apply_glassmorphism,
     apply_page_layout,
@@ -65,6 +65,7 @@ _STATUS_COLORS = {
     "not_configured": QColor(190, 140, 40),
     "unknown": QColor(120, 120, 120),
     "idle": QColor(120, 120, 120),
+    "restoring": QColor(70, 120, 190),
 }
 
 
@@ -134,6 +135,12 @@ class BackupsWidget(QWidget):
         self.backup_dir = Path(backup_dir) if backup_dir is not None else resolve_local_backup_dir()
         self._backups: List[BackupInfo] = []
         self._verify_results: Dict[str, Dict[str, Any]] = {}
+        # Per-backup Status/Detail that must survive a list reload.
+        self._row_outcomes: Dict[str, Dict[str, str]] = {}
+        # Passphrases that opened a backup in this process. Not written to disk.
+        self._session_passphrases: Dict[str, str] = {}
+        self._restore_busy_targets: Set[str] = set()
+        self._restore_wait: Dict[str, List[Tuple[BackupInfo, Dict[str, Any]]]] = {}
         self._list_source = "local"
         self._jobs = JobRunner(self)
         self._jobs.state_changed.connect(self._refresh_job_buttons)
@@ -158,34 +165,14 @@ class BackupsWidget(QWidget):
         auth = get_auth_manager()
         can_read = auth.has_permission("backups:read")
         can_create = auth.has_permission("backups:create")
-        can_restore = auth.has_permission("backups:restore")
         busy_create = self._jobs.is_busy(_GROUP_CREATE)
         busy_list = self._jobs.is_busy(_GROUP_LIST)
-        busy_verify = self._jobs.is_busy(_GROUP_VERIFY)
-        busy_restore = self._jobs.is_busy(_GROUP_RESTORE)
-        busy_delete = self._jobs.is_busy(_GROUP_DELETE)
         self.create_button.setEnabled(can_create and not busy_create)
         self.refresh_button.setEnabled(can_read and not busy_list)
         self.refresh_proton_button.setEnabled(can_read and not busy_list)
         self.refresh_s3_button.setEnabled(can_read and not busy_list)
-        self.verify_selected_button.setEnabled(can_read and not busy_verify)
-        self.verify_all_button.setEnabled(can_read and not busy_verify)
-        self.dry_run_button.setEnabled(can_restore and not busy_verify)
-        # Full restore is stable. It still needs backups:restore (the manager
-        # re-checks the permission, confirmation, and safety backup).
-        self.restore_button.setVisible(is_restore_enabled())
-        self.restore_button.setEnabled(
-            can_restore
-            and is_restore_enabled()
-            and not busy_restore
-            and not busy_verify
-        )
-        # Interactive delete uses backups:create (retention pruning follows a
-        # policy saved with settings:write). There is no backups:delete role.
-        if hasattr(self, "delete_button"):
-            self.delete_button.setEnabled(
-                can_create and not busy_delete and not busy_list
-            )
+        # Verify, dry-run, restore, and delete live on the row menu. Their
+        # enabled state is decided when the menu opens (one job per backup).
         can_settings = auth.has_permission("settings:write")
         for name in ("configure_proton_button", "configure_s3_button"):
             if hasattr(self, name):
@@ -328,6 +315,7 @@ class BackupsWidget(QWidget):
         restore_layout.addWidget(self.verify_status_label)
 
         actions = QHBoxLayout()
+        self._restore_actions = actions
         self.refresh_button = QPushButton(t("backups.refresh"))
         self.refresh_button.clicked.connect(
             lambda _checked=False: self.refresh_backups(queue=True)
@@ -347,48 +335,6 @@ class BackupsWidget(QWidget):
             lambda _checked=False: self.refresh_remote_backups("s3", queue=True)
         )
         actions.addWidget(self.refresh_s3_button)
-
-        self.verify_selected_button = QPushButton(t("backups.verify_checksum"))
-        self.verify_selected_button.clicked.connect(self.verify_selected)
-        actions.addWidget(self.verify_selected_button)
-
-        self.verify_all_button = QPushButton(t("backups.verify_all"))
-        self.verify_all_button.clicked.connect(self.verify_all)
-        actions.addWidget(self.verify_all_button)
-
-        self.dry_run_button = QPushButton(t("backups.dry_run_restore"))
-        self.dry_run_button.clicked.connect(self.dry_run_selected)
-        actions.addWidget(self.dry_run_button)
-
-        self.restore_button = QPushButton(
-            t("backups.restore_full", default="Restore…")
-        )
-        self.restore_button.setToolTip(
-            t(
-                "backups.restore_full_tooltip",
-                default=(
-                    "Overwrites the target database. Needs the backups:restore "
-                    "permission, a typed confirmation, and a safety backup."
-                ),
-            )
-        )
-        self.restore_button.clicked.connect(self.restore_selected)
-        actions.addWidget(self.restore_button)
-
-        self.delete_button = QPushButton(
-            t("backups.delete", default="Delete…")
-        )
-        self.delete_button.setToolTip(
-            t(
-                "backups.delete_tooltip",
-                default=(
-                    "Deletes the selected local, Proton Drive, or S3 backup. "
-                    "Needs the backups:create permission."
-                ),
-            )
-        )
-        self.delete_button.clicked.connect(self.delete_selected)
-        actions.addWidget(self.delete_button)
         actions.addStretch()
         restore_layout.addLayout(actions)
 
@@ -435,7 +381,9 @@ class BackupsWidget(QWidget):
         self.backups_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
-        self.backups_table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self.backups_table.setSelectionMode(
+            QTableWidget.SelectionMode.ExtendedSelection
+        )
         self.backups_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.backups_table.setContextMenuPolicy(
             Qt.ContextMenuPolicy.CustomContextMenu
@@ -832,6 +780,7 @@ class BackupsWidget(QWidget):
             )
 
         def on_ok(info: BackupInfo) -> None:
+            self._remember_passphrase(info, enc_key)
             self.proton_status_label.setText(
                 t("backups.backup_created_detail", name=info.name, path=info.path)
             )
@@ -1016,18 +965,20 @@ class BackupsWidget(QWidget):
 
     def _populate_table(self) -> None:
         t = self.i18n.translate
-        selected_id = None
-        current = self._selected_backup()
-        if current is not None:
-            selected_id = current.id
+        selected_ids: Set[str] = set()
+        selection = self.backups_table.selectionModel()
+        if selection is not None:
+            for index in selection.selectedRows():
+                item = self.backups_table.item(index.row(), 0)
+                if item is not None:
+                    backup_id = item.data(Qt.ItemDataRole.UserRole)
+                    if backup_id:
+                        selected_ids.add(str(backup_id))
 
         self.backups_table.setRowCount(0)
-        restore_row = None
         for backup in self._backups:
             row = self.backups_table.rowCount()
             self.backups_table.insertRow(row)
-            if selected_id is not None and backup.id == selected_id:
-                restore_row = row
             sha = (backup.metadata or {}).get("sha256") or ""
             sha_short = f"{sha[:12]}…" if len(sha) > 12 else (sha or "—")
             created = backup.createdAt
@@ -1036,11 +987,16 @@ class BackupsWidget(QWidget):
             else:
                 created_text = str(created)
 
+            outcome = self._row_outcomes.get(backup.id)
             result = self._verify_results.get(backup.id) or self._verify_results.get(
                 backup.path
             )
-            if result:
-                status = str(
+            if outcome:
+                code = outcome.get("code") or "unknown"
+                status_text = outcome.get("status") or code
+                detail = outcome.get("detail") or ""
+            elif result:
+                code = str(
                     result.get("status") or ("pass" if result.get("ok") else "fail")
                 )
                 detail = result.get("error") or result.get("stage") or ""
@@ -1048,8 +1004,10 @@ class BackupsWidget(QWidget):
                     detail = f"integrity={result['integrity']}"
                 elif result.get("ok"):
                     detail = t("backups.status_pass")
+                status_text = code.upper()
             else:
-                status = "unknown"
+                code = "unknown"
+                status_text = "UNKNOWN"
                 detail = t("backups.status_unchecked")
 
             meta = backup.metadata or {}
@@ -1060,10 +1018,10 @@ class BackupsWidget(QWidget):
                 self._format_size(live_bytes) if live_bytes is not None else "—",
                 created_text,
                 sha_short,
-                status.upper(),
+                status_text,
                 str(detail),
             ]
-            color = _STATUS_COLORS.get(status, _STATUS_COLORS["unknown"])
+            color = _STATUS_COLORS.get(code, _STATUS_COLORS["unknown"])
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setData(Qt.ItemDataRole.UserRole, backup.id)
@@ -1077,8 +1035,19 @@ class BackupsWidget(QWidget):
                     item.setToolTip(self._size_tooltip(backup))
                 self.backups_table.setItem(row, col, item)
 
-        if restore_row is not None:
-            self.backups_table.selectRow(restore_row)
+        if selected_ids:
+            flags = (
+                QItemSelectionModel.SelectionFlag.Select
+                | QItemSelectionModel.SelectionFlag.Rows
+            )
+            model = self.backups_table.selectionModel()
+            for row in range(self.backups_table.rowCount()):
+                item = self.backups_table.item(row, 0)
+                if item is None:
+                    continue
+                if str(item.data(Qt.ItemDataRole.UserRole) or "") not in selected_ids:
+                    continue
+                model.select(self.backups_table.model().index(row, 0), flags)
 
     @staticmethod
     def _meta_bytes(value: Any) -> Optional[int]:
@@ -1141,29 +1110,225 @@ class BackupsWidget(QWidget):
         )
         return "\n".join(lines)
 
-    def _selected_backup(self) -> Optional[BackupInfo]:
+    def _selected_backups(self) -> List[BackupInfo]:
         rows = self.backups_table.selectionModel().selectedRows()
-        if not rows:
-            return None
-        row = rows[0].row()
-        item = self.backups_table.item(row, 0)
-        if item is None:
-            return None
-        backup_id = item.data(Qt.ItemDataRole.UserRole)
-        return next((b for b in self._backups if b.id == backup_id), None)
+        found: List[BackupInfo] = []
+        seen: Set[str] = set()
+        for index in sorted(rows, key=lambda item: item.row()):
+            cell = self.backups_table.item(index.row(), 0)
+            if cell is None:
+                continue
+            backup_id = cell.data(Qt.ItemDataRole.UserRole)
+            backup = next((b for b in self._backups if b.id == backup_id), None)
+            if backup is None or backup.id in seen:
+                continue
+            seen.add(backup.id)
+            found.append(backup)
+        return found
+
+    def _selected_backup(self) -> Optional[BackupInfo]:
+        found = self._selected_backups()
+        return found[0] if found else None
+
+    def menu_action_enabled(self, kind: str) -> bool:
+        """RBAC gate for a backup-table context action."""
+        auth = get_auth_manager()
+        if kind in ("verify", "verify_all"):
+            return auth.has_permission("backups:read")
+        if kind == "dry_run":
+            return auth.has_permission("backups:restore")
+        if kind == "restore":
+            return is_restore_enabled() and auth.has_permission("backups:restore")
+        if kind == "delete":
+            return (
+                auth.has_permission("backups:create")
+                and not self._jobs.is_busy(_GROUP_LIST)
+            )
+        return False
+
+    def context_menu_entries(self, count: int) -> List[Tuple[str, str, bool]]:
+        """Actions for ``count`` selected backups: ``(kind, label, enabled)``."""
+        t = self.i18n.translate
+        if count < 1:
+            return []
+        entries: List[Tuple[str, str, bool]] = []
+        if count == 1:
+            entries.append(
+                (
+                    "verify",
+                    t("backups.verify_checksum"),
+                    self.menu_action_enabled("verify"),
+                )
+            )
+        else:
+            entries.append(
+                (
+                    "verify",
+                    t(
+                        "backups.verify_n",
+                        default="Verify {count} backups",
+                        count=count,
+                    ),
+                    self.menu_action_enabled("verify"),
+                )
+            )
+        entries.append(
+            (
+                "verify_all",
+                t("backups.verify_all"),
+                self.menu_action_enabled("verify_all"),
+            )
+        )
+        if count == 1:
+            entries.append(
+                (
+                    "dry_run",
+                    t("backups.dry_run_restore"),
+                    self.menu_action_enabled("dry_run"),
+                )
+            )
+            if is_restore_enabled():
+                entries.append(
+                    (
+                        "restore",
+                        t("backups.restore_full", default="Restore…"),
+                        self.menu_action_enabled("restore"),
+                    )
+                )
+            entries.append(
+                (
+                    "delete",
+                    t("backups.delete", default="Delete…"),
+                    self.menu_action_enabled("delete"),
+                )
+            )
+        else:
+            entries.append(
+                (
+                    "dry_run",
+                    t(
+                        "backups.dry_run_n",
+                        default="Dry-run {count} backups",
+                        count=count,
+                    ),
+                    self.menu_action_enabled("dry_run"),
+                )
+            )
+            if is_restore_enabled():
+                entries.append(
+                    (
+                        "restore",
+                        t(
+                            "backups.restore_n",
+                            default="Restore {count} backups…",
+                            count=count,
+                        ),
+                        self.menu_action_enabled("restore"),
+                    )
+                )
+            entries.append(
+                (
+                    "delete",
+                    t(
+                        "backups.delete_n",
+                        default="Delete {count} backups…",
+                        count=count,
+                    ),
+                    self.menu_action_enabled("delete"),
+                )
+            )
+        return entries
 
     def _backup_context_menu(self, pos) -> None:
         index = self.backups_table.indexAt(pos)
         if not index.isValid():
             return
-        self.backups_table.selectRow(index.row())
-        t = self.i18n.translate
+        selected_rows = {
+            item.row() for item in self.backups_table.selectionModel().selectedRows()
+        }
+        if index.row() not in selected_rows:
+            self.backups_table.selectRow(index.row())
+        backups = self._selected_backups()
+        if not backups:
+            return
         menu = QMenu(self)
-        action = menu.addAction(t("backups.delete", default="Delete…"))
-        action.setEnabled(self.delete_button.isEnabled())
+        actions = {}
+        for kind, label, enabled in self.context_menu_entries(len(backups)):
+            action = menu.addAction(label)
+            action.setEnabled(enabled)
+            actions[action] = kind
         chosen = menu.exec(self.backups_table.viewport().mapToGlobal(pos))
-        if chosen is action:
+        kind = actions.get(chosen)
+        if kind == "verify":
+            self.verify_selected()
+        elif kind == "verify_all":
+            self.verify_all()
+        elif kind == "dry_run":
+            self.dry_run_selected()
+        elif kind == "restore":
+            self.restore_selected()
+        elif kind == "delete":
             self.delete_selected()
+
+    def _set_row_outcome(
+        self, backup_id: str, code: str, status: str, detail: str
+    ) -> None:
+        """Paint Status and Detail for one backup. Survives a list reload."""
+        if not backup_id:
+            return
+        self._row_outcomes[backup_id] = {
+            "code": code,
+            "status": status,
+            "detail": detail,
+        }
+        self._populate_table()
+
+    def _remember_passphrase(
+        self,
+        backup: Optional[BackupInfo],
+        passphrase: Optional[str],
+        *,
+        name: Optional[str] = None,
+    ) -> None:
+        """Keep a passphrase that opened a backup. Memory only, never disk."""
+        if not passphrase:
+            return
+        if backup is not None:
+            self._session_passphrases[backup.id] = passphrase
+            if backup.name:
+                self._session_passphrases["name:" + backup.name] = passphrase
+        if name:
+            self._session_passphrases["name:" + name] = passphrase
+
+    def _known_passphrase(self, backup: BackupInfo) -> str:
+        return (
+            self._session_passphrases.get(backup.id)
+            or self._session_passphrases.get("name:" + backup.name)
+            or self.encryption_key_edit.text().strip()
+        )
+
+    def _passphrase_candidates(self, backup: BackupInfo) -> List[str]:
+        """Keys to try, session key first, then the create-tab field."""
+        if not (backup.metadata or {}).get("encryption"):
+            return []
+        found: List[str] = []
+        for key in (backup.id, "name:" + backup.name):
+            value = self._session_passphrases.get(key)
+            if value and value not in found:
+                found.append(value)
+        typed = self.encryption_key_edit.text().strip()
+        if typed and typed not in found:
+            found.append(typed)
+        return found
+
+    def _busy_prefix(self, prefix: str) -> int:
+        return sum(
+            1 for group in self._jobs.busy_groups() if group.startswith(prefix)
+        )
+
+    @staticmethod
+    def _restore_target_key(target: ConnectionConfig) -> str:
+        return f"{target.id}\0{target.database}"
 
     def _delete_target(self, backup: BackupInfo):
         """Adapter that owns this row, and a short destination name for audit."""
@@ -1182,33 +1347,32 @@ class BackupsWidget(QWidget):
         return LocalBackupAdapter(base_path=self.backup_dir), "local"
 
     def delete_selected(self) -> None:
-        """Delete the selected local or cloud backup after confirmation."""
+        """Delete the selected local or cloud backups after confirmation."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:create")
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
-        backup = self._selected_backup()
-        if backup is None:
+        backups = self._selected_backups()
+        if not backups:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
-        try:
-            _adapter, destination = self._delete_target(backup)
-        except Exception as exc:
-            self._set_status(str(exc), "fail")
-            return
-        labels = {
-            "local": t("backups.local", default="Local"),
-            "protondrive": t("backups.proton_drive", default="Proton Drive"),
-            "s3": t("settings.adapter_s3", default="S3-compatible"),
-            "googledrive": "Google Drive",
-        }
-        where = labels.get(destination, destination)
-        confirm = QMessageBox.warning(
-            self,
-            t("backups.delete_title", default="Delete backup"),
-            t(
+        if len(backups) == 1:
+            backup = backups[0]
+            try:
+                _adapter, destination = self._delete_target(backup)
+            except Exception as exc:
+                self._set_status(str(exc), "fail")
+                return
+            labels = {
+                "local": t("backups.local", default="Local"),
+                "protondrive": t("backups.proton_drive", default="Proton Drive"),
+                "s3": t("settings.adapter_s3", default="S3-compatible"),
+                "googledrive": "Google Drive",
+            }
+            where = labels.get(destination, destination)
+            body = t(
                 "backups.delete_body",
                 default=(
                     "Delete {where} backup {name}? "
@@ -1217,13 +1381,36 @@ class BackupsWidget(QWidget):
                 ),
                 where=where,
                 name=backup.name,
-            ),
+            )
+        else:
+            listed = "\n".join(f"• {backup.name}" for backup in backups[:12])
+            if len(backups) > 12:
+                listed += f"\n• … {len(backups) - 12} more"
+            body = t(
+                "backups.delete_many_body",
+                default=(
+                    "Delete these {count} backups?\n{names}\n"
+                    "The archives and their checksum metadata are removed. "
+                    "This cannot be undone."
+                ),
+                count=len(backups),
+                names=listed,
+            )
+        confirm = QMessageBox.warning(
+            self,
+            t("backups.delete_title", default="Delete backup"),
+            body,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
         if confirm != QMessageBox.StandardButton.Yes:
             return
+        for backup in backups:
+            self._launch_delete(backup)
 
+    def _launch_delete(self, backup: BackupInfo) -> None:
+        """Delete one backup on its own worker. Does not touch other rows."""
+        t = self.i18n.translate
         backup_id = backup.id
         backup_name = backup.name
         local_dir = self.backup_dir
@@ -1255,6 +1442,7 @@ class BackupsWidget(QWidget):
             return dest
 
         def on_ok(dest: str) -> None:
+            self._row_outcomes.pop(backup_id, None)
             self._set_status(
                 t(
                     "backups.delete_done",
@@ -1270,18 +1458,18 @@ class BackupsWidget(QWidget):
 
         def on_fail(message: str) -> None:
             detail = (message or "").strip().replace("{", "{{").replace("}", "}}")
-            self._set_status(
-                t(
-                    "backups.delete_failed",
-                    default="Delete failed: {error}",
-                    error=detail or "unknown error",
-                ),
-                "fail",
+            text = t(
+                "backups.delete_failed",
+                default="Delete failed: {error}",
+                error=detail or "unknown error",
             )
+            self._set_row_outcome(backup_id, "fail", "FAIL", text)
+            self._set_status(text, "fail")
 
+        self._set_row_outcome(backup_id, "restoring", "Deleting…", "Deleting…")
         self._run_backup_job(
             job,
-            group=_GROUP_DELETE,
+            group=f"delete:{backup_id}",
             busy_message=t(
                 "backups.delete_in_progress",
                 default="Deleting backup…",
@@ -1291,35 +1479,59 @@ class BackupsWidget(QWidget):
         )
 
     def verify_selected(self) -> None:
-        """Verify SHA-256 for the selected backup (off GUI thread)."""
+        """Verify SHA-256 for each selected backup (one worker per backup)."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:read")
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
-        backup = self._selected_backup()
-        if backup is None:
+        backups = self._selected_backups()
+        if not backups:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
+        for backup in backups:
+            self._launch_verify(backup)
 
+    def _launch_verify(self, backup: BackupInfo) -> None:
+        t = self.i18n.translate
         manager = self.backup_manager
+        backup_id = backup.id
 
         def job() -> Dict[str, Any]:
             # Adapter-aware: Proton rows are remote objects, not local paths.
             return manager.verify_backup(backup)
 
         def on_ok(result: Dict[str, Any]) -> None:
+            current = self._row_outcomes.get(backup_id)
+            if current and current.get("status") == "Verifying…":
+                self._row_outcomes.pop(backup_id, None)
             self._verify_results[backup.id] = result
             self._verify_results[backup.path] = result
             self._populate_table()
-            self._present_checksum_result(result, single=True)
+            if self._busy_prefix("verify:"):
+                self._set_status(
+                    t(
+                        "backups.verify_n_progress",
+                        default="Verifying {count} backups…",
+                        count=self._busy_prefix("verify:"),
+                    ),
+                    "restoring",
+                )
+            else:
+                self._present_checksum_result(result, single=True)
 
+        def on_fail(message: str) -> None:
+            self._set_row_outcome(backup_id, "fail", "FAIL", message or "Verify failed")
+            self._set_status(message or "Verify failed", "fail")
+
+        self._set_row_outcome(backup_id, "restoring", "Verifying…", "Verifying…")
         self._run_backup_job(
             job,
-            group=_GROUP_VERIFY,
+            group=f"verify:{backup_id}",
             busy_message=t("backups.verify_in_progress", default="Verifying backup…"),
             on_ok=on_ok,
+            on_fail=on_fail,
         )
 
     def verify_all(self) -> None:
@@ -1396,34 +1608,54 @@ class BackupsWidget(QWidget):
         return text if ok and text else None
 
     def dry_run_selected(self) -> None:
-        """Checksum + payload dry-run restore for the selected backup."""
+        """Checksum + payload dry-run for each selected backup."""
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:restore")
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
-        backup = self._selected_backup()
-        if backup is None:
+        backups = self._selected_backups()
+        if not backups:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
+        for backup in backups:
+            candidates = self._passphrase_candidates(backup)
+            if (backup.metadata or {}).get("encryption") and not candidates:
+                prompted = self._prompt_passphrase(backup.name)
+                if not prompted:
+                    self._set_status(
+                        t(
+                            "backups.dry_run_passphrase_required",
+                            default="Encrypted backup: enter the encryption passphrase to run a dry-run restore.",
+                        ),
+                        "missing_checksum",
+                    )
+                    self._set_row_outcome(
+                        backup.id,
+                        "missing_checksum",
+                        "FAIL",
+                        t(
+                            "backups.dry_run_passphrase_required",
+                            default="Encrypted backup: enter the encryption passphrase to run a dry-run restore.",
+                        ),
+                    )
+                    continue
+                candidates = [prompted]
+            passphrase = candidates[0] if candidates else None
+            rest = candidates[1:]
+            self._launch_dry_run(backup, passphrase, rest)
 
-        passphrase: Optional[str] = None
-        if (backup.metadata or {}).get("encryption"):
-            passphrase = self.encryption_key_edit.text().strip() or None
-            if passphrase is None:
-                passphrase = self._prompt_passphrase(backup.name)
-            if not passphrase:
-                self._set_status(
-                    t(
-                        "backups.dry_run_passphrase_required",
-                        default="Encrypted backup: enter the encryption passphrase to run a dry-run restore.",
-                    ),
-                    "missing_checksum",
-                )
-                return
-
+    def _launch_dry_run(
+        self,
+        backup: BackupInfo,
+        passphrase: Optional[str],
+        rest: List[str],
+    ) -> None:
+        """Dry-run one backup. ``rest`` is tried if this passphrase is rejected."""
+        t = self.i18n.translate
         manager = self.backup_manager
+        backup_id = backup.id
 
         def job() -> Dict[str, Any]:
             local_info = backup
@@ -1455,22 +1687,55 @@ class BackupsWidget(QWidget):
                     temp_download.unlink(missing_ok=True)
 
         def on_ok(result: Any) -> None:
+            mismatch = (
+                isinstance(result, dict)
+                and not result.get("ok")
+                and "passphrase does not match" in str(result.get("error") or "")
+            )
+            if mismatch and rest:
+                self._launch_dry_run(backup, rest[0], rest[1:])
+                return
             try:
                 text, kind = self._dry_run_outcome(result)
             except Exception as exc:  # noqa: BLE001 — status must not stay on "in progress"
                 text, kind = self._dry_run_failure(str(exc) or type(exc).__name__), "fail"
-            self._set_status(text, kind)
+            if kind == "pass":
+                self._remember_passphrase(backup, passphrase)
+                detail = "Dry-run OK"
+                code = "pass"
+                label = "PASS"
+            else:
+                detail = ""
+                if isinstance(result, dict):
+                    detail = str(result.get("error") or "")
+                detail = detail or text
+                code = "fail"
+                label = "FAIL"
+            self._set_row_outcome(backup_id, code, label, detail)
             if isinstance(result, dict):
                 self._verify_results[backup.id] = result
                 self._verify_results[backup.path] = result
-                self._populate_table()
+            if self._busy_prefix("dry-run:"):
+                self._set_status(
+                    t(
+                        "backups.dry_run_n_progress",
+                        default="Dry-run {count} backups…",
+                        count=self._busy_prefix("dry-run:"),
+                    ),
+                    "restoring",
+                )
+            else:
+                self._set_status(text, kind)
 
         def on_fail(message: str) -> None:
-            self._set_status(self._dry_run_failure(message), "fail")
+            text = self._dry_run_failure(message)
+            self._set_row_outcome(backup_id, "fail", "FAIL", message or text)
+            self._set_status(text, "fail")
 
+        self._set_row_outcome(backup_id, "restoring", "Dry-run…", "Dry-run…")
         self._run_backup_job(
             job,
-            group=_GROUP_VERIFY,
+            group=f"dry-run:{backup_id}",
             busy_message=t(
                 "backups.dry_run_in_progress",
                 default="Dry-run restore in progress…",
@@ -1488,7 +1753,7 @@ class BackupsWidget(QWidget):
         return targets
 
     def restore_selected(self) -> None:
-        """Full restore of the selected backup (destructive)."""
+        """Full restore of each selected backup (one worker per backup)."""
         t = self.i18n.translate
         if not is_restore_enabled():
             self._set_status(
@@ -1504,8 +1769,8 @@ class BackupsWidget(QWidget):
         except PermissionDenied as exc:
             self._set_status(str(exc), "fail")
             return
-        backup = self._selected_backup()
-        if backup is None:
+        backups = self._selected_backups()
+        if not backups:
             self._set_status(t("backups.no_backup_selected"), "missing_checksum")
             return
         targets = self._restore_targets()
@@ -1513,36 +1778,105 @@ class BackupsWidget(QWidget):
             self._set_status(t("backups.no_connection_selected"), "fail")
             return
 
-        dialog = RestoreDialog(
-            backup,
+        if len(backups) == 1:
+            backup = backups[0]
+            dialog = RestoreDialog(
+                backup,
+                targets,
+                passphrase=self._known_passphrase(backup),
+                parent=self,
+            )
+            if dialog.exec() != RestoreDialog.DialogCode.Accepted:
+                return
+            values = dialog.result_values()
+            target: ConnectionConfig = values["target"]
+            final = QMessageBox.warning(
+                self,
+                t("restore.final_title", default="Final confirmation"),
+                t(
+                    "restore.final_body",
+                    default="Overwrite database {database} on {connection} with {backup}? This cannot be undone.",
+                    database=BackupManager.restore_confirmation_phrase(target),
+                    connection=target.name,
+                    backup=backup.name,
+                ),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if final != QMessageBox.StandardButton.Yes:
+                return
+            self._launch_restore(backup, values)
+            return
+
+        dialog = RestoreBatchDialog(
+            backups,
             targets,
-            passphrase=self.encryption_key_edit.text().strip(),
+            passphrases={
+                backup.id: self._known_passphrase(backup) for backup in backups
+            },
             parent=self,
         )
-        if dialog.exec() != RestoreDialog.DialogCode.Accepted:
+        if dialog.exec() != RestoreBatchDialog.DialogCode.Accepted:
             return
         values = dialog.result_values()
-        target: ConnectionConfig = values["target"]
-
+        target = values["target"]
+        listed = "\n".join(f"• {backup.name}" for backup in backups)
         final = QMessageBox.warning(
             self,
             t("restore.final_title", default="Final confirmation"),
             t(
-                "restore.final_body",
-                default="Overwrite database {database} on {connection} with {backup}? This cannot be undone.",
+                "restore.final_batch_body",
+                default=(
+                    "Overwrite database {database} on {connection} with these "
+                    "{count} backups?\n{names}\nThis cannot be undone."
+                ),
                 database=BackupManager.restore_confirmation_phrase(target),
                 connection=target.name,
-                backup=backup.name,
+                count=len(backups),
+                names=listed,
             ),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
         )
         if final != QMessageBox.StandardButton.Yes:
             return
+        per_pass = values.get("passphrases") or {}
+        for backup in backups:
+            one = dict(values)
+            if (backup.metadata or {}).get("encryption"):
+                one["passphrase"] = per_pass.get(backup.id) or self._known_passphrase(
+                    backup
+                )
+            else:
+                one["passphrase"] = None
+            self._launch_restore(backup, one)
+
+    def _launch_restore(self, backup: BackupInfo, values: Dict[str, Any]) -> None:
+        """Start one restore. A second restore of the same database waits."""
+        t = self.i18n.translate
+        target: ConnectionConfig = values["target"]
+        group = f"restore:{backup.id}"
+        if self._jobs.is_busy(group):
+            self._set_row_outcome(
+                backup.id,
+                "restoring",
+                "Restoring…",
+                "Already restoring this backup",
+            )
+            return
+        target_key = self._restore_target_key(target)
+        if target_key in self._restore_busy_targets:
+            waiting = self._restore_wait.setdefault(target_key, [])
+            if all(item[0].id != backup.id for item in waiting):
+                waiting.append((backup, values))
+            self._set_row_outcome(backup.id, "restoring", "Queued…", "Queued…")
+            return
+        self._restore_busy_targets.add(target_key)
 
         manager = self.backup_manager
         local_dir = self.backup_dir
         destination = manager.backup_destination(backup)
+        backup_id = backup.id
 
         def job() -> Dict[str, Any]:
             if destination:
@@ -1558,7 +1892,7 @@ class BackupsWidget(QWidget):
                         backup,
                         target,
                         confirmation=values["confirmation"],
-                        encryption_key=values["passphrase"],
+                        encryption_key=values.get("passphrase"),
                     )
                 )
             return asyncio.run(
@@ -1567,13 +1901,27 @@ class BackupsWidget(QWidget):
                     backup,
                     target,
                     confirmation=values["confirmation"],
-                    encryption_key=values["passphrase"],
+                    encryption_key=values.get("passphrase"),
                     safety_backup_dir=(
-                        Path(local_dir) if values["safety_backup"] else None
+                        Path(local_dir) if values.get("safety_backup") else None
                     ),
-                    safety_passphrase=values["safety_passphrase"],
+                    safety_passphrase=values.get("safety_passphrase"),
                 )
             )
+
+        def _after(text: str, kind: str) -> None:
+            self._finish_restore_target(target_key)
+            if self._busy_prefix("restore:"):
+                self._set_status(
+                    t(
+                        "backups.restore_n_progress",
+                        default="Restoring {count} backups…",
+                        count=self._busy_prefix("restore:"),
+                    ),
+                    "restoring",
+                )
+            else:
+                self._set_status(text, kind)
 
         def on_ok(result: Any) -> None:
             try:
@@ -1583,22 +1931,60 @@ class BackupsWidget(QWidget):
                     self._restore_failure_text(str(exc) or type(exc).__name__),
                     "fail",
                 )
-            self._set_status(text, kind)
             if kind == "pass":
+                self._remember_passphrase(backup, values.get("passphrase"))
+                if isinstance(result, dict) and result.get("safetyBackup"):
+                    self._remember_passphrase(
+                        None,
+                        values.get("safety_passphrase"),
+                        name=str(result.get("safetyBackup")),
+                    )
+                self._set_row_outcome(backup_id, "pass", "PASS", "Restored")
                 self.refresh_backups(queue=True, keep_status=True)
+            else:
+                self._set_row_outcome(
+                    backup_id,
+                    "fail",
+                    "FAIL",
+                    str(result.get("error") or text) if isinstance(result, dict) else text,
+                )
+            _after(text, kind)
 
         def on_fail(message: str) -> None:
-            self._set_status(self._restore_failure_text(message), "fail")
+            text = self._restore_failure_text(message)
+            self._set_row_outcome(backup_id, "fail", "FAIL", message or text)
+            _after(text, "fail")
 
-        self._run_backup_job(
+        self._set_row_outcome(backup_id, "restoring", "Restoring…", "Restoring…")
+        started = self._run_backup_job(
             job,
-            group=_GROUP_RESTORE,
+            group=group,
             busy_message=t(
                 "backups.restore_in_progress", default="Restoring backup…"
             ),
             on_ok=on_ok,
             on_fail=on_fail,
         )
+        if not started:
+            self._set_row_outcome(
+                backup_id,
+                "restoring",
+                "Restoring…",
+                "Already restoring this backup",
+            )
+            self._finish_restore_target(target_key)
+
+    def _finish_restore_target(self, target_key: str) -> None:
+        """Allow the next queued restore of this database to start."""
+        self._restore_busy_targets.discard(target_key)
+        waiting = self._restore_wait.get(target_key) or []
+        if not waiting:
+            self._restore_wait.pop(target_key, None)
+            return
+        nxt_backup, nxt_values = waiting.pop(0)
+        if not waiting:
+            self._restore_wait.pop(target_key, None)
+        self._launch_restore(nxt_backup, nxt_values)
 
     def _reload_schedules_table(self) -> None:
         """Refresh the scheduled backups table from disk."""

@@ -269,7 +269,15 @@
     "delete_body": "Excluir o backup {where} {name}? O arquivo e os metadados de checksum são removidos. Isto não pode ser desfeito.",
     "delete_done": "{name} foi excluído.",
     "delete_failed": "Falha ao excluir: {error}",
-    "delete_in_progress": "Excluindo backup…"
+    "delete_in_progress": "Excluindo backup…",
+    "verify_n": "Verificar {count} backups",
+    "dry_run_n": "Teste de {count} backups",
+    "restore_n": "Restaurar {count} backups…",
+    "delete_n": "Excluir {count} backups…",
+    "delete_many_body": "Excluir estes {count} backups?\n{names}\nOs arquivos e as somas de verificação são removidos. Isto não pode ser desfeito.",
+    "verify_n_progress": "Verificando {count} backups…",
+    "dry_run_n_progress": "Teste de {count} backups…",
+    "restore_n_progress": "Restaurando {count} backups…"
   },
   "settings": {
     "title": "Configurações",
@@ -753,7 +761,12 @@
     "scratch": "Ensaiar numa nova base temporária (a produção não é alterada)",
     "confirm_button": "Restaurar",
     "type_to_confirm": "Digite {phrase} para confirmar:",
-    "passphrase": "Senha do backup:"
+    "passphrase": "Senha do backup:",
+    "batch_title": "Restaurar {count} backups",
+    "batch_warning": "Restaura estes {count} backups no destino abaixo. Cada um substitui esse banco.\n{names}",
+    "batch_passphrase": "Senha de {name}:",
+    "batch_confirm_button": "Restaurar {count}",
+    "final_batch_body": "Substituir o banco {database} em {connection} por estes {count} backups?\n{names}\nIsto não pode ser desfeito."
   },
   "s3": {
     "configure_title": "Configurar backups no S3",

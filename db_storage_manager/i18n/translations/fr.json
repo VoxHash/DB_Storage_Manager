@@ -269,7 +269,15 @@
     "delete_body": "Supprimer la sauvegarde {where} {name} ? L’archive et ses métadonnées de somme de contrôle sont retirées. Cette action est définitive.",
     "delete_done": "{name} a été supprimée.",
     "delete_failed": "Échec de la suppression : {error}",
-    "delete_in_progress": "Suppression de la sauvegarde…"
+    "delete_in_progress": "Suppression de la sauvegarde…",
+    "verify_n": "Vérifier {count} sauvegardes",
+    "dry_run_n": "Essai de {count} sauvegardes",
+    "restore_n": "Restaurer {count} sauvegardes…",
+    "delete_n": "Supprimer {count} sauvegardes…",
+    "delete_many_body": "Supprimer ces {count} sauvegardes ?\n{names}\nLes archives et leurs sommes de contrôle sont retirées. Cette action est définitive.",
+    "verify_n_progress": "Vérification de {count} sauvegardes…",
+    "dry_run_n_progress": "Essai de {count} sauvegardes…",
+    "restore_n_progress": "Restauration de {count} sauvegardes…"
   },
   "settings": {
     "title": "Paramètres",
@@ -753,7 +761,12 @@
     "scratch": "Répéter dans une nouvelle base temporaire (la production n’est pas modifiée)",
     "confirm_button": "Restaurer",
     "type_to_confirm": "Saisissez {phrase} pour confirmer :",
-    "passphrase": "Phrase secrète de la sauvegarde :"
+    "passphrase": "Phrase secrète de la sauvegarde :",
+    "batch_title": "Restaurer {count} sauvegardes",
+    "batch_warning": "Restaure ces {count} sauvegardes dans la cible ci-dessous. Chacune écrase cette base.\n{names}",
+    "batch_passphrase": "Phrase secrète pour {name} :",
+    "batch_confirm_button": "Restaurer {count}",
+    "final_batch_body": "Écraser la base {database} sur {connection} avec ces {count} sauvegardes ?\n{names}\nCette action est définitive."
   },
   "s3": {
     "configure_title": "Configurer les sauvegardes S3",

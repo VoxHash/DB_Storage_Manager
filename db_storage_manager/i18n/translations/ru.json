@@ -269,7 +269,15 @@
     "delete_body": "Удалить копию {where} {name}? Архив и метаданные контрольной суммы будут удалены. Это нельзя отменить.",
     "delete_done": "{name} удалена.",
     "delete_failed": "Не удалось удалить: {error}",
-    "delete_in_progress": "Удаление копии…"
+    "delete_in_progress": "Удаление копии…",
+    "verify_n": "Проверить {count} копий",
+    "dry_run_n": "Пробный запуск {count} копий",
+    "restore_n": "Восстановить {count} копий…",
+    "delete_n": "Удалить {count} копий…",
+    "delete_many_body": "Удалить эти {count} копий?\n{names}\nАрхивы и их контрольные суммы будут удалены. Это нельзя отменить.",
+    "verify_n_progress": "Проверка {count} копий…",
+    "dry_run_n_progress": "Пробный запуск {count} копий…",
+    "restore_n_progress": "Восстановление {count} копий…"
   },
   "settings": {
     "title": "Настройки",
@@ -753,7 +761,12 @@
     "scratch": "Репетиция в новой временной базе (рабочая база не изменяется)",
     "confirm_button": "Восстановить",
     "type_to_confirm": "Для подтверждения введите {phrase}:",
-    "passphrase": "Парольная фраза копии:"
+    "passphrase": "Парольная фраза копии:",
+    "batch_title": "Восстановить {count} копий",
+    "batch_warning": "Восстановить эти {count} копий в цель ниже. Каждая перезапишет эту базу.\n{names}",
+    "batch_passphrase": "Парольная фраза для {name}:",
+    "batch_confirm_button": "Восстановить {count}",
+    "final_batch_body": "Перезаписать базу {database} на {connection} этими {count} копиями?\n{names}\nЭто нельзя отменить."
   },
   "s3": {
     "configure_title": "Настройка резервных копий S3",

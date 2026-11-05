@@ -269,7 +269,15 @@
     "delete_body": "{where} 백업 {name}을(를) 삭제할까요? 아카이브와 체크섬 메타데이터가 제거됩니다. 되돌릴 수 없습니다.",
     "delete_done": "{name}을(를) 삭제했습니다.",
     "delete_failed": "삭제 실패: {error}",
-    "delete_in_progress": "백업 삭제 중…"
+    "delete_in_progress": "백업 삭제 중…",
+    "verify_n": "백업 {count}개 검증",
+    "dry_run_n": "백업 {count}개 드라이런",
+    "restore_n": "백업 {count}개 복원…",
+    "delete_n": "백업 {count}개 삭제…",
+    "delete_many_body": "백업 {count}개를 삭제할까요?\n{names}\n보관 파일과 체크섬이 제거됩니다. 되돌릴 수 없습니다.",
+    "verify_n_progress": "백업 {count}개 검증 중…",
+    "dry_run_n_progress": "백업 {count}개 드라이런 중…",
+    "restore_n_progress": "백업 {count}개 복원 중…"
   },
   "settings": {
     "title": "설정",
@@ -753,7 +761,12 @@
     "scratch": "새 임시 데이터베이스에서 리허설 (운영 환경은 변경되지 않음)",
     "confirm_button": "복원",
     "type_to_confirm": "확인하려면 {phrase}을(를) 입력하세요:",
-    "passphrase": "백업 암호:"
+    "passphrase": "백업 암호:",
+    "batch_title": "백업 {count}개 복원",
+    "batch_warning": "아래 대상으로 백업 {count}개를 복원합니다. 각각 그 데이터베이스를 덮어씁니다.\n{names}",
+    "batch_passphrase": "{name} 암호:",
+    "batch_confirm_button": "{count}개 복원",
+    "final_batch_body": "{connection}의 데이터베이스 {database}을(를) 백업 {count}개로 덮어쓸까요?\n{names}\n되돌릴 수 없습니다."
   },
   "s3": {
     "configure_title": "S3 백업 설정",

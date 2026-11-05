@@ -269,7 +269,15 @@
     "delete_body": "¿Eliminar la copia {where} {name}? Se quitan el archivo y sus metadatos de suma de comprobación. Esta acción no se puede deshacer.",
     "delete_done": "Se eliminó {name}.",
     "delete_failed": "Error al eliminar: {error}",
-    "delete_in_progress": "Eliminando copia…"
+    "delete_in_progress": "Eliminando copia…",
+    "verify_n": "Verificar {count} copias",
+    "dry_run_n": "Prueba de {count} copias",
+    "restore_n": "Restaurar {count} copias…",
+    "delete_n": "Eliminar {count} copias…",
+    "delete_many_body": "¿Eliminar estas {count} copias?\n{names}\nSe quitan los archivos y sus sumas de comprobación. No se puede deshacer.",
+    "verify_n_progress": "Verificando {count} copias…",
+    "dry_run_n_progress": "Prueba de {count} copias…",
+    "restore_n_progress": "Restaurando {count} copias…"
   },
   "settings": {
     "title": "Configuración",
@@ -753,7 +761,12 @@
     "scratch": "Ensayar en una base de datos temporal nueva (la producción no se modifica)",
     "confirm_button": "Restaurar",
     "type_to_confirm": "Escribe {phrase} para confirmar:",
-    "passphrase": "Frase de acceso de la copia:"
+    "passphrase": "Frase de acceso de la copia:",
+    "batch_title": "Restaurar {count} copias",
+    "batch_warning": "Restaura estas {count} copias en el destino de abajo. Cada una sobrescribe esa base de datos.\n{names}",
+    "batch_passphrase": "Frase de acceso para {name}:",
+    "batch_confirm_button": "Restaurar {count}",
+    "final_batch_body": "¿Sobrescribir la base de datos {database} en {connection} con estas {count} copias?\n{names}\nNo se puede deshacer."
   },
   "s3": {
     "configure_title": "Configurar copias en S3",

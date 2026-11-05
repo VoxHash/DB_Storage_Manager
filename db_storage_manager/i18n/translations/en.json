@@ -352,6 +352,14 @@
     "s3_refresh_in_progress": "Listing S3 backups…",
     "restore_done_safety": "Restore finished. Safety backup: {name}.",
     "restore_done": "Restore finished.",
+    "verify_n": "Verify {count} backups",
+    "dry_run_n": "Dry-run {count} backups",
+    "restore_n": "Restore {count} backups…",
+    "delete_n": "Delete {count} backups…",
+    "delete_many_body": "Delete these {count} backups?\n{names}\nThe archives and their checksum metadata are removed. This cannot be undone.",
+    "verify_n_progress": "Verifying {count} backups…",
+    "dry_run_n_progress": "Dry-run {count} backups…",
+    "restore_n_progress": "Restoring {count} backups…",
     "size_tip_raw": "raw dump"
   },
   "settings": {
@@ -753,7 +761,12 @@
     "scratch": "Rehearse into a new scratch database (production is not modified)",
     "confirm_button": "Restore",
     "type_to_confirm": "Type {phrase} to confirm:",
-    "passphrase": "Backup passphrase:"
+    "passphrase": "Backup passphrase:",
+    "batch_title": "Restore {count} backups",
+    "batch_warning": "Restore these {count} backups into the target below. Each one overwrites that database when it runs.\n{names}",
+    "batch_passphrase": "Passphrase for {name}:",
+    "batch_confirm_button": "Restore {count}",
+    "final_batch_body": "Overwrite database {database} on {connection} with these {count} backups?\n{names}\nThis cannot be undone."
   },
   "s3": {
     "configure_title": "Configure S3 backups",

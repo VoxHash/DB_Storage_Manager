@@ -269,7 +269,15 @@
     "delete_body": "删除 {where} 备份 {name}？归档文件及其校验元数据会被移除。此操作无法撤销。",
     "delete_done": "已删除 {name}。",
     "delete_failed": "删除失败：{error}",
-    "delete_in_progress": "正在删除备份…"
+    "delete_in_progress": "正在删除备份…",
+    "verify_n": "校验 {count} 个备份",
+    "dry_run_n": "演练 {count} 个备份",
+    "restore_n": "还原 {count} 个备份…",
+    "delete_n": "删除 {count} 个备份…",
+    "delete_many_body": "删除这 {count} 个备份？\n{names}\n归档及其校验和会被移除。此操作无法撤销。",
+    "verify_n_progress": "正在校验 {count} 个备份…",
+    "dry_run_n_progress": "正在演练 {count} 个备份…",
+    "restore_n_progress": "正在还原 {count} 个备份…"
   },
   "settings": {
     "title": "设置",
@@ -753,7 +761,12 @@
     "scratch": "在新的临时数据库中演练（不修改生产库）",
     "confirm_button": "恢复",
     "type_to_confirm": "输入 {phrase} 以确认：",
-    "passphrase": "备份口令："
+    "passphrase": "备份口令：",
+    "batch_title": "还原 {count} 个备份",
+    "batch_warning": "将这 {count} 个备份还原到下方目标。每一个都会覆盖该数据库。\n{names}",
+    "batch_passphrase": "{name} 的口令：",
+    "batch_confirm_button": "还原 {count} 个",
+    "final_batch_body": "用这 {count} 个备份覆盖 {connection} 上的数据库 {database}？\n{names}\n此操作无法撤销。"
   },
   "s3": {
     "configure_title": "配置 S3 备份",

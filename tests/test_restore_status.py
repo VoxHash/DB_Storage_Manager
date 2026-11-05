@@ -246,3 +246,190 @@ def test_dry_run_success_failure_and_client_error(app, backups, monkeypatch, tmp
     widget.dry_run_selected()
     widget.wait_idle(10000)
     assert widget.verify_status_label.text().startswith("FAIL")
+
+
+def test_restore_outcome_stays_on_the_row_after_reload(app, backups, monkeypatch, tmp_path):
+    widget = backups
+    path = tmp_path / "bk" / "sample.backup"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"plain-dump")
+    meta = {
+        "id": "b-status",
+        "name": path.name,
+        "compression": "none",
+        "encryption": False,
+        "databaseType": "postgres",
+    }
+    (tmp_path / "bk" / (path.name + ".meta.json")).write_text(
+        __import__("json").dumps(meta),
+        encoding="utf-8",
+    )
+    info = BackupInfo(
+        id="b-status",
+        name=path.name,
+        path=str(path),
+        size=path.stat().st_size,
+        createdAt=datetime.now(),
+        status="completed",
+        metadata={"databaseType": "postgres"},
+    )
+    widget._backups = [info]
+    widget._populate_table()
+    widget.backups_table.selectRow(0)
+    _run_restore(
+        widget,
+        monkeypatch,
+        {"ok": True, "safetyBackup": None},
+    )
+    widget.wait_idle(10000)
+    assert widget.backups_table.rowCount() >= 1
+    status = widget.backups_table.item(0, 5).text()
+    detail = widget.backups_table.item(0, 6).text()
+    assert status == "PASS"
+    assert detail == "Restored"
+    assert widget.verify_status_label.text().startswith("Restore finished")
+    assert "UNKNOWN" not in status
+
+
+def test_row_shows_restoring_before_the_job_finishes(app, backups, monkeypatch, tmp_path):
+    widget = backups
+    _select_backup(widget, tmp_path)
+    started = {}
+
+    async def hold(*_args, **_kwargs):
+        started["yes"] = True
+        while not started.get("release"):
+            await __import__("asyncio").sleep(0.01)
+        return {"ok": True}
+
+    _accept_dialogs(monkeypatch)
+    widget.backup_manager.full_restore = hold
+    widget.restore_selected()
+    for _ in range(100):
+        app.processEvents()
+        if started.get("yes"):
+            break
+        __import__("time").sleep(0.01)
+    assert widget.backups_table.item(0, 5).text() == "Restoring…"
+    started["release"] = True
+    widget.wait_idle(10000)
+    assert widget._row_outcomes["b-status"]["status"] == "PASS"
+
+
+def test_multi_select_menu_names_the_batch(app, backups):
+    widget = backups
+    entries = widget.context_menu_entries(3)
+    labels = {kind: label for kind, label, _enabled in entries}
+    assert "Verify 3 backups" in labels["verify"]
+    assert labels["verify_all"]
+    assert "Dry-run 3 backups" in labels["dry_run"]
+    assert "Restore 3 backups" in labels["restore"]
+    assert "Delete 3 backups" in labels["delete"]
+    single = [kind for kind, _label, _enabled in widget.context_menu_entries(1)]
+    assert single == ["verify", "verify_all", "dry_run", "restore", "delete"]
+
+
+def test_two_restores_use_separate_workers(app, backups, monkeypatch, tmp_path):
+    widget = backups
+    infos = []
+    for index in (1, 2):
+        path = tmp_path / "bk" / f"sample-{index}.backup"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"dump")
+        infos.append(
+            BackupInfo(
+                id=f"b-{index}",
+                name=path.name,
+                path=str(path),
+                size=4,
+                createdAt=datetime.now(),
+                status="completed",
+                metadata={"databaseType": "postgres"},
+            )
+        )
+    widget._backups = infos
+    widget._populate_table()
+    from PyQt6.QtCore import QItemSelectionModel
+
+    widget.backups_table.selectRow(0)
+    widget.backups_table.selectionModel().select(
+        widget.backups_table.model().index(1, 0),
+        QItemSelectionModel.SelectionFlag.Select
+        | QItemSelectionModel.SelectionFlag.Rows,
+    )
+    assert len(widget._selected_backups()) == 2
+
+    groups = []
+    real_submit = widget._jobs.submit
+
+    def spy(group, job, on_ok, on_fail=None, **kwargs):
+        groups.append(group)
+        return real_submit(group, job, on_ok, on_fail, **kwargs)
+
+    monkeypatch.setattr(widget._jobs, "submit", spy)
+    from db_storage_manager.gui.restore_dialog import RestoreBatchDialog
+
+    class _Auto:
+        DialogCode = RestoreBatchDialog.DialogCode
+
+        def __init__(self, backups_in, targets, **kwargs):
+            self.targets = targets
+
+        def exec(self):
+            return self.DialogCode.Accepted
+
+        def result_values(self):
+            return {
+                "target": self.targets[0],
+                "confirmation": "lab.db",
+                "safety_backup": False,
+                "safety_passphrase": None,
+                "scratch": False,
+                "passphrases": {},
+            }
+
+    monkeypatch.setattr(
+        "db_storage_manager.gui.backups.RestoreBatchDialog", _Auto
+    )
+    monkeypatch.setattr(
+        QMessageBox,
+        "warning",
+        staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes),
+    )
+    seen = []
+
+    async def fake(adapter, backup, target, **kwargs):
+        seen.append(backup.id)
+        return {"ok": True}
+
+    widget.backup_manager.full_restore = fake
+    widget.restore_selected()
+    widget.wait_idle(10000)
+    assert seen == ["b-1", "b-2"] or set(seen) == {"b-1", "b-2"}
+    assert "restore:b-1" in groups
+    assert "restore:b-2" in groups
+    assert widget._row_outcomes["b-1"]["detail"] == "Restored"
+    assert widget._row_outcomes["b-2"]["detail"] == "Restored"
+
+
+def test_dry_run_uses_the_passphrase_that_opened_the_backup(app, backups, monkeypatch, tmp_path):
+    widget = backups
+    _select_backup(widget, tmp_path)
+    info = widget._backups[0]
+    info.metadata["encryption"] = True
+    widget._populate_table()
+    widget.backups_table.selectRow(0)
+    widget._session_passphrases[info.id] = "right-key"
+    widget.encryption_key_edit.setText("wrong-key")
+    seen = []
+
+    def fake(*_args, **kwargs):
+        seen.append(kwargs.get("encryption_key"))
+        return {"ok": True, "status": "pass", "stage": "complete", "integrity": ""}
+
+    widget.backup_manager.dry_run_restore = fake
+    widget.dry_run_selected()
+    widget.wait_idle(10000)
+    assert seen == ["right-key"]
+    assert widget.backups_table.item(0, 5).text() == "PASS"
+    assert widget.backups_table.item(0, 6).text() == "Dry-run OK"

@@ -269,7 +269,15 @@
     "delete_body": "{where}-Sicherung {name} löschen? Archiv und Prüfsummen-Metadaten werden entfernt. Das kann nicht rückgängig gemacht werden.",
     "delete_done": "{name} wurde gelöscht.",
     "delete_failed": "Löschen fehlgeschlagen: {error}",
-    "delete_in_progress": "Sicherung wird gelöscht…"
+    "delete_in_progress": "Sicherung wird gelöscht…",
+    "verify_n": "{count} Sicherungen prüfen",
+    "dry_run_n": "Probelauf für {count} Sicherungen",
+    "restore_n": "{count} Sicherungen wiederherstellen…",
+    "delete_n": "{count} Sicherungen löschen…",
+    "delete_many_body": "Diese {count} Sicherungen löschen?\n{names}\nDie Archive und ihre Prüfsummen werden entfernt. Das kann nicht rückgängig gemacht werden.",
+    "verify_n_progress": "{count} Sicherungen werden geprüft…",
+    "dry_run_n_progress": "Probelauf für {count} Sicherungen…",
+    "restore_n_progress": "{count} Sicherungen werden wiederhergestellt…"
   },
   "settings": {
     "title": "Einstellungen",
@@ -753,7 +761,12 @@
     "scratch": "In eine neue Testdatenbank proben (die Produktion wird nicht geändert)",
     "confirm_button": "Wiederherstellen",
     "type_to_confirm": "Zur Bestätigung {phrase} eingeben:",
-    "passphrase": "Backup-Passphrase:"
+    "passphrase": "Backup-Passphrase:",
+    "batch_title": "{count} Sicherungen wiederherstellen",
+    "batch_warning": "Diese {count} Sicherungen in das unten gewählte Ziel schreiben. Jede überschreibt diese Datenbank.\n{names}",
+    "batch_passphrase": "Passphrase für {name}:",
+    "batch_confirm_button": "{count} wiederherstellen",
+    "final_batch_body": "Datenbank {database} auf {connection} mit diesen {count} Sicherungen überschreiben?\n{names}\nDas kann nicht rückgängig gemacht werden."
   },
   "s3": {
     "configure_title": "S3-Backups konfigurieren",

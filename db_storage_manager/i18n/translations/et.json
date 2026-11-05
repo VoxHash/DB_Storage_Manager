@@ -269,7 +269,15 @@
     "delete_body": "Kas kustutada {where} varukoopia {name}? Arhiiv ja kontrollsumma metaandmed eemaldatakse. Seda ei saa tagasi võtta.",
     "delete_done": "{name} on kustutatud.",
     "delete_failed": "Kustutamine ebaõnnestus: {error}",
-    "delete_in_progress": "Varukoopia kustutamine…"
+    "delete_in_progress": "Varukoopia kustutamine…",
+    "verify_n": "Kontrolli {count} varukoopiat",
+    "dry_run_n": "Proovitaasta {count} varukoopiat",
+    "restore_n": "Taasta {count} varukoopiat…",
+    "delete_n": "Kustuta {count} varukoopiat…",
+    "delete_many_body": "Kas kustutada need {count} varukoopiat?\n{names}\nArhiivid ja nende kontrollsummad eemaldatakse. Seda ei saa tagasi võtta.",
+    "verify_n_progress": "Kontrollin {count} varukoopiat…",
+    "dry_run_n_progress": "Proovitaasta {count} varukoopiat…",
+    "restore_n_progress": "Taastan {count} varukoopiat…"
   },
   "settings": {
     "title": "Seaded",
@@ -753,7 +761,12 @@
     "scratch": "Harjuta uude ajutisse andmebaasi (tootmist ei muudeta)",
     "confirm_button": "Taasta",
     "type_to_confirm": "Kinnitamiseks sisesta {phrase}:",
-    "passphrase": "Varukoopia parool:"
+    "passphrase": "Varukoopia parool:",
+    "batch_title": "Taasta {count} varukoopiat",
+    "batch_warning": "Taasta need {count} varukoopiat allolevasse sihtkohta. Igaüks kirjutab selle andmebaasi üle.\n{names}",
+    "batch_passphrase": "Parool failile {name}:",
+    "batch_confirm_button": "Taasta {count}",
+    "final_batch_body": "Kas kirjutada andmebaas {database} ühendusel {connection} nende {count} varukoopiaga üle?\n{names}\nSeda ei saa tagasi võtta."
   },
   "s3": {
     "configure_title": "Seadista S3 varukoopiad",

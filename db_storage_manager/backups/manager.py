@@ -969,12 +969,21 @@ class BackupManager:
                 "error": None,
             }
         except Exception as exc:
+            error = str(exc)
+            # Checksum already matched, so the bytes on disk are the bytes
+            # that were written. An AES-GCM tag failure is the passphrase.
+            if checksum.get("ok") and "AES-GCM decrypt failed" in error:
+                error = (
+                    "AES-GCM decrypt failed: the passphrase does not match "
+                    "this DSMENC1 backup. The SHA-256 checksum matches, so "
+                    "the file is intact."
+                )
             return {
                 "ok": False,
                 "status": "fail",
                 "stage": "dry_run",
                 "checksum": checksum,
-                "error": str(exc),
+                "error": error,
             }
         finally:
             for temp_path in temps:

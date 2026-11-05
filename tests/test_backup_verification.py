@@ -268,8 +268,9 @@ def test_backups_widget_offscreen_smoke(tmp_path: Path, monkeypatch, isolated_se
     widget = BackupsWidget([], backup_dir=backup_dir)
     assert widget.backups_table.columnCount() == 7
     assert widget.backups_table.rowCount() == 1
-    assert widget.verify_selected_button.text()
-    assert widget.dry_run_button.text()
+    menu_labels = [label for _kind, label, _enabled in widget.context_menu_entries(1)]
+    assert any("Verify" in label or "checksum" in label.lower() for label in menu_labels)
+    assert any("Dry-run" in label or "dry" in label.lower() for label in menu_labels)
 
     widget.backups_table.selectRow(0)
     widget.verify_selected()

@@ -383,11 +383,27 @@ def test_off_machine_adapters_force_encryption(app, backups):
     assert widget.encrypt_checkbox.isEnabled()
 
 
+def _toolbar_labels(widget) -> list:
+    labels = []
+    layout = widget._restore_actions
+    for index in range(layout.count()):
+        child = layout.itemAt(index).widget()
+        if child is not None and child.text().strip():
+            labels.append(child.text())
+    return labels
+
+
 def test_restore_button_is_visible_by_default_and_hides_when_turned_off(app, backups):
     widget, _, _ = backups
     widget.refresh_destinations()
-    assert not widget.restore_button.isHidden()
-    assert widget.restore_button.isEnabled()
+    kinds = [kind for kind, _label, _enabled in widget.context_menu_entries(1)]
+    assert "restore" in kinds
+    assert widget.menu_action_enabled("restore")
+    toolbar = " ".join(_toolbar_labels(widget)).lower()
+    assert "refresh" in toolbar
+    assert "restore" not in toolbar
+    assert "dry-run" not in toolbar
+    assert "delete" not in toolbar
 
     from db_storage_manager.security.store import SecureStore
 
@@ -396,7 +412,8 @@ def test_restore_button_is_visible_by_default_and_hides_when_turned_off(app, bac
     data["experimental"] = {"restore": False}
     settings.set_settings(data)
     widget.refresh_destinations()
-    assert widget.restore_button.isHidden()
+    kinds = [kind for kind, _label, _enabled in widget.context_menu_entries(1)]
+    assert "restore" not in kinds
 
 
 def test_restore_dialog_requires_typed_name_and_passphrases(app, backups, monkeypatch):
@@ -694,7 +711,7 @@ def test_delete_requires_backups_create(app, backups, isolated_secure_store):
     auth_mod._auth_manager = auth
     try:
         widget.apply_rbac()
-        assert widget.delete_button.isEnabled() is False
+        assert widget.menu_action_enabled("delete") is False
         widget.backups_table.selectRow(0)
         widget.delete_selected()
         widget.wait_idle()

@@ -269,7 +269,15 @@
     "delete_body": "Hapus cadangan {where} {name}? Arsip dan metadata checksum dihapus. Tindakan ini tidak dapat dibatalkan.",
     "delete_done": "{name} dihapus.",
     "delete_failed": "Gagal menghapus: {error}",
-    "delete_in_progress": "Menghapus cadangan…"
+    "delete_in_progress": "Menghapus cadangan…",
+    "verify_n": "Verifikasi {count} cadangan",
+    "dry_run_n": "Uji pulih {count} cadangan",
+    "restore_n": "Pulihkan {count} cadangan…",
+    "delete_n": "Hapus {count} cadangan…",
+    "delete_many_body": "Hapus {count} cadangan ini?\n{names}\nArsip dan checksum-nya dihapus. Ini tidak dapat dibatalkan.",
+    "verify_n_progress": "Memverifikasi {count} cadangan…",
+    "dry_run_n_progress": "Uji pulih {count} cadangan…",
+    "restore_n_progress": "Memulihkan {count} cadangan…"
   },
   "settings": {
     "title": "Pengaturan",
@@ -753,7 +761,12 @@
     "scratch": "Latihan ke basis data sementara yang baru (produksi tidak diubah)",
     "confirm_button": "Pulihkan",
     "type_to_confirm": "Ketik {phrase} untuk mengonfirmasi:",
-    "passphrase": "Frasa sandi cadangan:"
+    "passphrase": "Frasa sandi cadangan:",
+    "batch_title": "Pulihkan {count} cadangan",
+    "batch_warning": "Pulihkan {count} cadangan ini ke target di bawah. Masing-masing menimpa basis data itu.\n{names}",
+    "batch_passphrase": "Frasa sandi untuk {name}:",
+    "batch_confirm_button": "Pulihkan {count}",
+    "final_batch_body": "Timpa basis data {database} di {connection} dengan {count} cadangan ini?\n{names}\nIni tidak dapat dibatalkan."
   },
   "s3": {
     "configure_title": "Konfigurasi cadangan S3",
