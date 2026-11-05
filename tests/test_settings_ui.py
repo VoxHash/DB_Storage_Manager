@@ -472,6 +472,10 @@ def test_restore_button_runs_a_real_restore_after_both_confirmations(app, backup
     conn.close()
     # The safety backup is listed next to the original after the post-restore refresh.
     assert widget.backups_table.rowCount() == 2
+    status = widget.verify_status_label.text()
+    assert "Restore finished" in status
+    assert "Safety backup" in status
+    assert "Restoring backup" not in status
     assert any(p.suffix == ".enc" or ".enc" in p.name for p in (tmp / "bk").iterdir())
     from db_storage_manager.audit import read_audit
 

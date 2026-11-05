@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Set, Tuple
 
-from PyQt6.QtCore import QObject, QThread, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QThread, pyqtSignal
 
 
 class JobWorker(QThread):
@@ -32,6 +32,42 @@ class JobWorker(QThread):
             self.failed.emit(str(exc) or type(exc).__name__)
             return
         self.finished_ok.emit(result)
+
+
+class _JobCallbacks(QObject):
+    """Deliver worker results on the runner's thread.
+
+    Connecting a worker signal to a plain function is always a direct
+    connection, so the callback would run on the worker. ``QLabel`` updates
+    from that thread never appear. These methods live on the GUI thread, and
+    the connections are queued, so success and failure both reach the status
+    line after the thread has finished.
+    """
+
+    def __init__(
+        self,
+        on_ok: Callable[[Any], None],
+        on_fail: Callable[[str], None],
+        on_finished: Callable[[], None],
+        parent: Optional[QObject] = None,
+    ):
+        super().__init__(parent)
+        self._on_ok = on_ok
+        self._on_fail = on_fail
+        self._on_finished: Optional[Callable[[], None]] = on_finished
+
+    def deliver_ok(self, result: object) -> None:
+        self._on_ok(result)
+
+    def deliver_fail(self, message: str) -> None:
+        self._on_fail(message)
+
+    def deliver_finished(self) -> None:
+        finished = self._on_finished
+        self._on_finished = None
+        if finished is not None:
+            finished()
+        self.deleteLater()
 
 
 _Queued = Tuple[
@@ -112,9 +148,11 @@ class JobRunner(QObject):
             worker.deleteLater()
             self.state_changed.emit()
 
-        worker.finished_ok.connect(_ok)
-        worker.failed.connect(_fail)
-        worker.finished.connect(_finished)
+        bridge = _JobCallbacks(_ok, _fail, _finished, parent=self)
+        queued = Qt.ConnectionType.QueuedConnection
+        worker.finished_ok.connect(bridge.deliver_ok, queued)
+        worker.failed.connect(bridge.deliver_fail, queued)
+        worker.finished.connect(bridge.deliver_finished, queued)
         if on_start is not None:
             on_start()
         worker.start()

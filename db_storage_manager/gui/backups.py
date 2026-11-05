@@ -657,8 +657,13 @@ class BackupsWidget(QWidget):
         create_tab: bool = False,
         on_fail: Optional[Callable[[str], None]] = None,
         queue: bool = False,
+        announce: bool = True,
     ) -> bool:
-        """Run ``job`` on a worker thread; other groups keep running concurrently."""
+        """Run ``job`` on a worker thread; other groups keep running concurrently.
+
+        ``announce=False`` leaves the current status line alone (a restore
+        outcome must stay visible while the backup list reloads).
+        """
 
         def _fail(message: str) -> None:
             if on_fail is not None:
@@ -678,10 +683,14 @@ class BackupsWidget(QWidget):
             job,
             on_ok,
             _fail,
-            on_start=lambda: self._announce(busy_message, create_tab=create_tab),
+            on_start=(
+                (lambda: self._announce(busy_message, create_tab=create_tab))
+                if announce
+                else None
+            ),
             queue=queue,
         )
-        if not started:
+        if not started and announce:
             self._announce(
                 self.i18n.translate(
                     "backups.job_in_progress",
@@ -873,13 +882,18 @@ class BackupsWidget(QWidget):
             self._populate_table()
             self._set_status(t("backups.refresh_failed", error=str(exc)), "fail")
 
-    def refresh_backups(self, *, queue: bool = False) -> None:
-        """Reload local backups into the table (off the GUI thread)."""
+    def refresh_backups(self, *, queue: bool = False, keep_status: bool = False) -> None:
+        """Reload local backups into the table (off the GUI thread).
+
+        ``keep_status`` reloads the table without replacing the line a restore
+        just wrote (success, skipped ACLs, or a failure).
+        """
         t = self.i18n.translate
         try:
             get_auth_manager().require("backups:read")
         except PermissionDenied as exc:
-            self._set_status(str(exc), "fail")
+            if not keep_status:
+                self._set_status(str(exc), "fail")
             return
         self._list_source = "local"
         local_dir = self.backup_dir
@@ -891,10 +905,22 @@ class BackupsWidget(QWidget):
             self._backups = backups
             self._verify_results.clear()
             self._populate_table()
+            if keep_status:
+                return
             self._set_status(
                 t("backups.verify_idle_count", count=len(self._backups)),
                 "idle",
             )
+
+        def on_fail(message: str) -> None:
+            detail = self._status_detail(message, "unknown error")
+            failed = t(
+                "backups.refresh_failed",
+                default="Failed to refresh backups: {error}",
+                error=detail,
+            )
+            current = self.verify_status_label.text().strip()
+            self._set_status(f"{current} {failed}".strip() or failed, "fail")
 
         self._run_backup_job(
             job,
@@ -904,7 +930,9 @@ class BackupsWidget(QWidget):
                 default="Refreshing local backups…",
             ),
             on_ok=on_ok,
+            on_fail=on_fail if keep_status else None,
             queue=queue,
+            announce=not keep_status,
         )
 
     def refresh_proton_backups(self, *, queue: bool = False) -> None:
@@ -1426,25 +1454,19 @@ class BackupsWidget(QWidget):
                 if temp_download is not None:
                     temp_download.unlink(missing_ok=True)
 
-        def on_ok(result: Dict[str, Any]) -> None:
-            self._verify_results[backup.id] = result
-            self._verify_results[backup.path] = result
-            self._populate_table()
-            if result.get("ok"):
-                integrity = result.get("integrity")
-                detail = (
-                    t("backups.dry_run_pass_integrity", integrity=integrity)
-                    if integrity
-                    else t("backups.dry_run_pass")
-                )
-                self._set_status(detail, "pass")
-            else:
-                stage = result.get("stage") or "dry_run"
-                error = result.get("error") or t("backups.dry_run_failed")
-                self._set_status(
-                    t("backups.dry_run_fail", stage=stage, error=error),
-                    str(result.get("status") or "fail"),
-                )
+        def on_ok(result: Any) -> None:
+            try:
+                text, kind = self._dry_run_outcome(result)
+            except Exception as exc:  # noqa: BLE001 — status must not stay on "in progress"
+                text, kind = self._dry_run_failure(str(exc) or type(exc).__name__), "fail"
+            self._set_status(text, kind)
+            if isinstance(result, dict):
+                self._verify_results[backup.id] = result
+                self._verify_results[backup.path] = result
+                self._populate_table()
+
+        def on_fail(message: str) -> None:
+            self._set_status(self._dry_run_failure(message), "fail")
 
         self._run_backup_job(
             job,
@@ -1454,6 +1476,7 @@ class BackupsWidget(QWidget):
                 default="Dry-run restore in progress…",
             ),
             on_ok=on_ok,
+            on_fail=on_fail,
         )
 
     def _restore_targets(self) -> List[ConnectionConfig]:
@@ -1552,45 +1575,20 @@ class BackupsWidget(QWidget):
                 )
             )
 
-        def on_ok(result: Dict[str, Any]) -> None:
-            notice = (result.get("restoreNotice") or "").strip()
-
-            def finish(text: str) -> None:
-                if notice:
-                    text = f"{text} {notice}"
-                self._set_status(text, "pass")
-                self.refresh_backups(queue=True)
-
-            if result.get("scratch"):
-                finish(
-                    t(
-                        "backups.scratch_done",
-                        default="Scratch restore finished in {name}. Production was not modified.",
-                        name=result.get("scratchDatabase") or "",
-                    )
+        def on_ok(result: Any) -> None:
+            try:
+                text, kind = self._restore_outcome(result)
+            except Exception as exc:  # noqa: BLE001 — status must not stay on "in progress"
+                text, kind = (
+                    self._restore_failure_text(str(exc) or type(exc).__name__),
+                    "fail",
                 )
-                return
-            safety = result.get("safetyBackup")
-            finish(
-                t(
-                    "backups.restore_done_safety",
-                    default="Restore finished. Safety backup: {name}.",
-                    name=safety,
-                )
-                if safety
-                else t("backups.restore_done", default="Restore finished.")
-            )
+            self._set_status(text, kind)
+            if kind == "pass":
+                self.refresh_backups(queue=True, keep_status=True)
 
         def on_fail(message: str) -> None:
-            detail = (message or "").strip().replace("{", "{{").replace("}", "}}")
-            self._set_status(
-                t(
-                    "backups.restore_failed",
-                    default="Restore failed: {error}",
-                    error=detail or "unknown error",
-                ),
-                "fail",
-            )
+            self._set_status(self._restore_failure_text(message), "fail")
 
         self._run_backup_job(
             job,
@@ -1777,9 +1775,116 @@ class BackupsWidget(QWidget):
             "fail",
         )
 
+    @staticmethod
+    def _status_detail(message: str, fallback: str) -> str:
+        """One line safe to pass through ``str.format`` placeholders."""
+        detail = (message or "").strip().replace("{", "{{").replace("}", "}}")
+        return detail or fallback
+
+    def _restore_failure_text(self, message: str) -> str:
+        t = self.i18n.translate
+        detail = self._status_detail(message, "unknown error")
+        text = t(
+            "backups.restore_failed",
+            default="Restore failed: {error}",
+            error=detail,
+        )
+        return (text or "").strip() or f"Restore failed: {detail}"
+
+    def _restore_outcome(self, result: Any) -> tuple:
+        """Success or failure text for a finished full or scratch restore.
+
+        A missing message, a notice-only result, and a PostgreSQL skipped-ACL
+        note all become a visible line. ``ok: False`` (including an empty
+        error) is a failure. ``None`` is a finished restore with no extra note.
+        """
+        t = self.i18n.translate
+        if isinstance(result, dict) and result.get("ok") is False:
+            return self._restore_failure_text(str(result.get("error") or "")), "fail"
+        if result is not None and not isinstance(result, dict):
+            return (
+                self._restore_failure_text("Restore finished without a result."),
+                "fail",
+            )
+        notice = ""
+        if isinstance(result, dict):
+            notice = str(result.get("restoreNotice") or "").strip()
+            if result.get("scratch"):
+                text = t(
+                    "backups.scratch_done",
+                    default="Scratch restore finished in {name}. Production was not modified.",
+                    name=result.get("scratchDatabase") or "",
+                )
+            else:
+                safety = result.get("safetyBackup")
+                text = (
+                    t(
+                        "backups.restore_done_safety",
+                        default="Restore finished. Safety backup: {name}.",
+                        name=safety,
+                    )
+                    if safety
+                    else t("backups.restore_done", default="Restore finished.")
+                )
+        else:
+            text = t("backups.restore_done", default="Restore finished.")
+        text = (text or "").strip()
+        if notice:
+            text = f"{text} {notice}".strip()
+        if not text:
+            text = (
+                t("backups.restore_done", default="Restore finished.").strip()
+                or "Restore finished."
+            )
+        return text, "pass"
+
+    def _dry_run_failure(self, message: str, stage: str = "dry_run") -> str:
+        t = self.i18n.translate
+        error = self._status_detail(
+            message,
+            t("backups.dry_run_failed", default="Dry-run restore failed"),
+        )
+        text = t(
+            "backups.dry_run_fail",
+            default="FAIL — dry-run restore failed at {stage}: {error}",
+            stage=stage or "dry_run",
+            error=error,
+        )
+        shown = (text or "").strip()
+        return shown or f"FAIL — dry-run restore failed at {stage}: {error}"
+
+    def _dry_run_outcome(self, result: Any) -> tuple:
+        """Success or failure text for a finished dry-run restore."""
+        t = self.i18n.translate
+        if not isinstance(result, dict):
+            return self._dry_run_failure(""), "fail"
+        if result.get("ok"):
+            integrity = result.get("integrity")
+            detail = (
+                t("backups.dry_run_pass_integrity", integrity=integrity)
+                if integrity
+                else t(
+                    "backups.dry_run_pass",
+                    default="PASS — dry-run restore succeeded (checksum OK, payload readable).",
+                )
+            )
+            detail = (detail or "").strip() or "PASS — dry-run restore succeeded."
+            return detail, "pass"
+        stage = str(result.get("stage") or "dry_run")
+        error = str(
+            result.get("error")
+            or t("backups.dry_run_failed", default="Dry-run restore failed")
+        )
+        return self._dry_run_failure(error, stage), str(result.get("status") or "fail")
+
     def _set_status(self, text: str, status: str) -> None:
-        color = _STATUS_COLORS.get(status, _STATUS_COLORS["unknown"])
-        self.verify_status_label.setText(text)
+        shown = (text or "").strip()
+        kind = status or "fail"
+        if not shown:
+            shown = self._restore_failure_text("")
+            kind = "fail"
+        color = _STATUS_COLORS.get(kind, _STATUS_COLORS["unknown"])
+        self.verify_status_label.setText(shown)
         self.verify_status_label.setStyleSheet(
             f"color: {color.name()}; font-weight: 600;"
         )
